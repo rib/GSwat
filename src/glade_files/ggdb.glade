@@ -5,11 +5,14 @@
 <requires lib="gnome"/>
 <requires lib="bonobo"/>
 
-<widget class="GnomeApp" id="app1">
+<widget class="GnomeApp" id="gg_main_window">
   <property name="visible">True</property>
+  <property name="title" translatable="yes">GGdb</property>
   <property name="type">GTK_WINDOW_TOPLEVEL</property>
   <property name="window_position">GTK_WIN_POS_NONE</property>
   <property name="modal">False</property>
+  <property name="default_width">640</property>
+  <property name="default_height">480</property>
   <property name="resizable">True</property>
   <property name="destroy_with_parent">False</property>
   <property name="decorated">True</property>
@@ -51,7 +54,6 @@
 			  <property name="stock_item">GNOMEUIINFO_MENU_NEW_ITEM</property>
 			  <property name="label" translatable="yes">_New</property>
 			  <property name="use_underline">True</property>
-			  <signal name="activate" handler="on_new1_activate" last_modification_time="Tue, 04 Jul 2006 20:07:05 GMT"/>
 			</widget>
 		      </child>
 
@@ -59,7 +61,6 @@
 			<widget class="GtkImageMenuItem" id="open1">
 			  <property name="visible">True</property>
 			  <property name="stock_item">GNOMEUIINFO_MENU_OPEN_ITEM</property>
-			  <signal name="activate" handler="on_open1_activate" last_modification_time="Tue, 04 Jul 2006 20:07:05 GMT"/>
 			</widget>
 		      </child>
 
@@ -67,7 +68,6 @@
 			<widget class="GtkImageMenuItem" id="save1">
 			  <property name="visible">True</property>
 			  <property name="stock_item">GNOMEUIINFO_MENU_SAVE_ITEM</property>
-			  <signal name="activate" handler="on_save1_activate" last_modification_time="Tue, 04 Jul 2006 20:07:05 GMT"/>
 			</widget>
 		      </child>
 
@@ -75,7 +75,6 @@
 			<widget class="GtkImageMenuItem" id="save_as1">
 			  <property name="visible">True</property>
 			  <property name="stock_item">GNOMEUIINFO_MENU_SAVE_AS_ITEM</property>
-			  <signal name="activate" handler="on_save_as1_activate" last_modification_time="Tue, 04 Jul 2006 20:07:05 GMT"/>
 			</widget>
 		      </child>
 
@@ -86,10 +85,10 @@
 		      </child>
 
 		      <child>
-			<widget class="GtkImageMenuItem" id="quit1">
+			<widget class="GtkImageMenuItem" id="quit">
 			  <property name="visible">True</property>
 			  <property name="stock_item">GNOMEUIINFO_MENU_EXIT_ITEM</property>
-			  <signal name="activate" handler="on_quit1_activate" last_modification_time="Tue, 04 Jul 2006 20:07:05 GMT"/>
+			  <signal name="activate" handler="gg_main_on_quit_activate" last_modification_time="Tue, 04 Jul 2006 21:33:57 GMT"/>
 			</widget>
 		      </child>
 		    </widget>
@@ -109,7 +108,6 @@
 			<widget class="GtkImageMenuItem" id="cut1">
 			  <property name="visible">True</property>
 			  <property name="stock_item">GNOMEUIINFO_MENU_CUT_ITEM</property>
-			  <signal name="activate" handler="on_cut1_activate" last_modification_time="Tue, 04 Jul 2006 20:07:05 GMT"/>
 			</widget>
 		      </child>
 
@@ -117,7 +115,6 @@
 			<widget class="GtkImageMenuItem" id="copy1">
 			  <property name="visible">True</property>
 			  <property name="stock_item">GNOMEUIINFO_MENU_COPY_ITEM</property>
-			  <signal name="activate" handler="on_copy1_activate" last_modification_time="Tue, 04 Jul 2006 20:07:05 GMT"/>
 			</widget>
 		      </child>
 
@@ -125,7 +122,6 @@
 			<widget class="GtkImageMenuItem" id="paste1">
 			  <property name="visible">True</property>
 			  <property name="stock_item">GNOMEUIINFO_MENU_PASTE_ITEM</property>
-			  <signal name="activate" handler="on_paste1_activate" last_modification_time="Tue, 04 Jul 2006 20:07:05 GMT"/>
 			</widget>
 		      </child>
 
@@ -133,7 +129,6 @@
 			<widget class="GtkImageMenuItem" id="clear1">
 			  <property name="visible">True</property>
 			  <property name="stock_item">GNOMEUIINFO_MENU_CLEAR_ITEM</property>
-			  <signal name="activate" handler="on_clear1_activate" last_modification_time="Tue, 04 Jul 2006 20:07:05 GMT"/>
 			</widget>
 		      </child>
 
@@ -147,7 +142,6 @@
 			<widget class="GtkImageMenuItem" id="properties1">
 			  <property name="visible">True</property>
 			  <property name="stock_item">GNOMEUIINFO_MENU_PROPERTIES_ITEM</property>
-			  <signal name="activate" handler="on_properties1_activate" last_modification_time="Tue, 04 Jul 2006 20:07:05 GMT"/>
 			</widget>
 		      </child>
 
@@ -161,7 +155,6 @@
 			<widget class="GtkImageMenuItem" id="preferences1">
 			  <property name="visible">True</property>
 			  <property name="stock_item">GNOMEUIINFO_MENU_PREFERENCES_ITEM</property>
-			  <signal name="activate" handler="on_preferences1_activate" last_modification_time="Tue, 04 Jul 2006 20:07:05 GMT"/>
 			</widget>
 		      </child>
 		    </widget>
@@ -263,6 +256,7 @@
 		  <property name="visible_horizontal">True</property>
 		  <property name="visible_vertical">True</property>
 		  <property name="is_important">False</property>
+		  <signal name="clicked" handler="gg_main_toolbar_save_click" last_modification_time="Tue, 04 Jul 2006 21:41:46 GMT"/>
 		</widget>
 		<packing>
 		  <property name="expand">False</property>
@@ -401,6 +395,27 @@
       <property name="expand">True</property>
       <property name="fill">True</property>
     </packing>
+  </child>
+</widget>
+
+<widget class="GtkWindow" id="gg_new_session_window">
+  <property name="visible">True</property>
+  <property name="title" translatable="yes">New Debug Session</property>
+  <property name="type">GTK_WINDOW_TOPLEVEL</property>
+  <property name="window_position">GTK_WIN_POS_NONE</property>
+  <property name="modal">False</property>
+  <property name="resizable">True</property>
+  <property name="destroy_with_parent">False</property>
+  <property name="decorated">True</property>
+  <property name="skip_taskbar_hint">False</property>
+  <property name="skip_pager_hint">False</property>
+  <property name="type_hint">GDK_WINDOW_TYPE_HINT_NORMAL</property>
+  <property name="gravity">GDK_GRAVITY_NORTH_WEST</property>
+  <property name="focus_on_map">True</property>
+  <property name="urgency_hint">False</property>
+
+  <child>
+    <placeholder/>
   </child>
 </widget>
 

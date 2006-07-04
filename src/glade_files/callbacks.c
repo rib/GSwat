@@ -42,7 +42,7 @@ on_save_as1_activate                   (GtkMenuItem     *menuitem,
 
 
 void
-on_quit1_activate                      (GtkMenuItem     *menuitem,
+gg_main_on_quit_activate               (GtkMenuItem     *menuitem,
                                         gpointer         user_data)
 {
 
@@ -99,6 +99,14 @@ on_preferences1_activate               (GtkMenuItem     *menuitem,
 
 void
 on_about1_activate                     (GtkMenuItem     *menuitem,
+                                        gpointer         user_data)
+{
+
+}
+
+
+void
+gg_main_toolbar_save_click             (GtkToolButton   *toolbutton,
                                         gpointer         user_data)
 {
 

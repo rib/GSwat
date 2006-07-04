@@ -28,25 +28,25 @@
 
 static GnomeUIInfo file1_menu_uiinfo[] =
 {
-  GNOMEUIINFO_MENU_NEW_ITEM (N_("_New"), NULL, on_new1_activate, NULL),
-  GNOMEUIINFO_MENU_OPEN_ITEM (on_open1_activate, NULL),
-  GNOMEUIINFO_MENU_SAVE_ITEM (on_save1_activate, NULL),
-  GNOMEUIINFO_MENU_SAVE_AS_ITEM (on_save_as1_activate, NULL),
+  GNOMEUIINFO_MENU_NEW_ITEM (N_("_New"), NULL, NULL, NULL),
+  GNOMEUIINFO_MENU_OPEN_ITEM (NULL, NULL),
+  GNOMEUIINFO_MENU_SAVE_ITEM (NULL, NULL),
+  GNOMEUIINFO_MENU_SAVE_AS_ITEM (NULL, NULL),
   GNOMEUIINFO_SEPARATOR,
-  GNOMEUIINFO_MENU_EXIT_ITEM (on_quit1_activate, NULL),
+  GNOMEUIINFO_MENU_EXIT_ITEM (gg_main_on_quit_activate, NULL),
   GNOMEUIINFO_END
 };
 
 static GnomeUIInfo edit1_menu_uiinfo[] =
 {
-  GNOMEUIINFO_MENU_CUT_ITEM (on_cut1_activate, NULL),
-  GNOMEUIINFO_MENU_COPY_ITEM (on_copy1_activate, NULL),
-  GNOMEUIINFO_MENU_PASTE_ITEM (on_paste1_activate, NULL),
-  GNOMEUIINFO_MENU_CLEAR_ITEM (on_clear1_activate, NULL),
+  GNOMEUIINFO_MENU_CUT_ITEM (NULL, NULL),
+  GNOMEUIINFO_MENU_COPY_ITEM (NULL, NULL),
+  GNOMEUIINFO_MENU_PASTE_ITEM (NULL, NULL),
+  GNOMEUIINFO_MENU_CLEAR_ITEM (NULL, NULL),
   GNOMEUIINFO_SEPARATOR,
-  GNOMEUIINFO_MENU_PROPERTIES_ITEM (on_properties1_activate, NULL),
+  GNOMEUIINFO_MENU_PROPERTIES_ITEM (NULL, NULL),
   GNOMEUIINFO_SEPARATOR,
-  GNOMEUIINFO_MENU_PREFERENCES_ITEM (on_preferences1_activate, NULL),
+  GNOMEUIINFO_MENU_PREFERENCES_ITEM (NULL, NULL),
   GNOMEUIINFO_END
 };
 
@@ -71,9 +71,9 @@ static GnomeUIInfo menubar1_uiinfo[] =
 };
 
 GtkWidget*
-create_app1 (void)
+create_gg_main_window (void)
 {
-  GtkWidget *app1;
+  GtkWidget *gg_main_window;
   GtkWidget *bonobodock1;
   GtkWidget *toolbar1;
   GtkIconSize tmp_toolbar_icon_size;
@@ -93,16 +93,17 @@ create_app1 (void)
 
   tooltips = gtk_tooltips_new ();
 
-  app1 = gnome_app_new ("GGdb", NULL);
+  gg_main_window = gnome_app_new ("GGdb", _("GGdb"));
+  gtk_window_set_default_size (GTK_WINDOW (gg_main_window), 640, 480);
 
-  bonobodock1 = GNOME_APP (app1)->dock;
+  bonobodock1 = GNOME_APP (gg_main_window)->dock;
   gtk_widget_show (bonobodock1);
 
-  gnome_app_create_menus (GNOME_APP (app1), menubar1_uiinfo);
+  gnome_app_create_menus (GNOME_APP (gg_main_window), menubar1_uiinfo);
 
   toolbar1 = gtk_toolbar_new ();
   gtk_widget_show (toolbar1);
-  gnome_app_add_toolbar (GNOME_APP (app1), GTK_TOOLBAR (toolbar1), "toolbar1",
+  gnome_app_add_toolbar (GNOME_APP (gg_main_window), GTK_TOOLBAR (toolbar1), "toolbar1",
                                 BONOBO_DOCK_ITEM_BEH_EXCLUSIVE
                                 | BONOBO_DOCK_ITEM_BEH_LOCKED,
                                 BONOBO_DOCK_TOP, 1, 0, 0);
@@ -148,7 +149,7 @@ create_app1 (void)
 
   vpaned1 = gtk_vpaned_new ();
   gtk_widget_show (vpaned1);
-  gnome_app_set_contents (GNOME_APP (app1), vpaned1);
+  gnome_app_set_contents (GNOME_APP (gg_main_window), vpaned1);
   gtk_paned_set_position (GTK_PANED (vpaned1), 0);
 
   scrolledwindow1 = gtk_scrolled_window_new (NULL, NULL);
@@ -162,46 +163,63 @@ create_app1 (void)
 
   appbar1 = gnome_appbar_new (TRUE, TRUE, GNOME_PREFERENCES_NEVER);
   gtk_widget_show (appbar1);
-  gnome_app_set_statusbar (GNOME_APP (app1), appbar1);
+  gnome_app_set_statusbar (GNOME_APP (gg_main_window), appbar1);
 
-  gnome_app_install_menu_hints (GNOME_APP (app1), menubar1_uiinfo);
+  gnome_app_install_menu_hints (GNOME_APP (gg_main_window), menubar1_uiinfo);
+  g_signal_connect ((gpointer) toolbutton5, "clicked",
+                    G_CALLBACK (gg_main_toolbar_save_click),
+                    NULL);
 
   /* Store pointers to all widgets, for use by lookup_widget(). */
-  GLADE_HOOKUP_OBJECT_NO_REF (app1, app1, "app1");
-  GLADE_HOOKUP_OBJECT (app1, bonobodock1, "bonobodock1");
-  GLADE_HOOKUP_OBJECT (app1, menubar1_uiinfo[0].widget, "file1");
-  GLADE_HOOKUP_OBJECT (app1, file1_menu_uiinfo[0].widget, "new1");
-  GLADE_HOOKUP_OBJECT (app1, file1_menu_uiinfo[1].widget, "open1");
-  GLADE_HOOKUP_OBJECT (app1, file1_menu_uiinfo[2].widget, "save1");
-  GLADE_HOOKUP_OBJECT (app1, file1_menu_uiinfo[3].widget, "save_as1");
-  GLADE_HOOKUP_OBJECT (app1, file1_menu_uiinfo[4].widget, "separator3");
-  GLADE_HOOKUP_OBJECT (app1, file1_menu_uiinfo[5].widget, "quit1");
-  GLADE_HOOKUP_OBJECT (app1, menubar1_uiinfo[1].widget, "edit1");
-  GLADE_HOOKUP_OBJECT (app1, edit1_menu_uiinfo[0].widget, "cut1");
-  GLADE_HOOKUP_OBJECT (app1, edit1_menu_uiinfo[1].widget, "copy1");
-  GLADE_HOOKUP_OBJECT (app1, edit1_menu_uiinfo[2].widget, "paste1");
-  GLADE_HOOKUP_OBJECT (app1, edit1_menu_uiinfo[3].widget, "clear1");
-  GLADE_HOOKUP_OBJECT (app1, edit1_menu_uiinfo[4].widget, "separator4");
-  GLADE_HOOKUP_OBJECT (app1, edit1_menu_uiinfo[5].widget, "properties1");
-  GLADE_HOOKUP_OBJECT (app1, edit1_menu_uiinfo[6].widget, "separator5");
-  GLADE_HOOKUP_OBJECT (app1, edit1_menu_uiinfo[7].widget, "preferences1");
-  GLADE_HOOKUP_OBJECT (app1, menubar1_uiinfo[2].widget, "view1");
-  GLADE_HOOKUP_OBJECT (app1, menubar1_uiinfo[3].widget, "help1");
-  GLADE_HOOKUP_OBJECT (app1, help1_menu_uiinfo[0].widget, "about1");
-  GLADE_HOOKUP_OBJECT (app1, toolbar1, "toolbar1");
-  GLADE_HOOKUP_OBJECT (app1, toolbutton3, "toolbutton3");
-  GLADE_HOOKUP_OBJECT (app1, toolbutton4, "toolbutton4");
-  GLADE_HOOKUP_OBJECT (app1, toolbutton5, "toolbutton5");
-  GLADE_HOOKUP_OBJECT (app1, separatortoolitem1, "separatortoolitem1");
-  GLADE_HOOKUP_OBJECT (app1, step_button, "step_button");
-  GLADE_HOOKUP_OBJECT (app1, next_button, "next_button");
-  GLADE_HOOKUP_OBJECT (app1, break_button, "break_button");
-  GLADE_HOOKUP_OBJECT (app1, vpaned1, "vpaned1");
-  GLADE_HOOKUP_OBJECT (app1, scrolledwindow1, "scrolledwindow1");
-  GLADE_HOOKUP_OBJECT (app1, backtrace_widget, "backtrace_widget");
-  GLADE_HOOKUP_OBJECT (app1, appbar1, "appbar1");
-  GLADE_HOOKUP_OBJECT_NO_REF (app1, tooltips, "tooltips");
+  GLADE_HOOKUP_OBJECT_NO_REF (gg_main_window, gg_main_window, "gg_main_window");
+  GLADE_HOOKUP_OBJECT (gg_main_window, bonobodock1, "bonobodock1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, menubar1_uiinfo[0].widget, "file1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[0].widget, "new1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[1].widget, "open1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[2].widget, "save1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[3].widget, "save_as1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[4].widget, "separator3");
+  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[5].widget, "quit");
+  GLADE_HOOKUP_OBJECT (gg_main_window, menubar1_uiinfo[1].widget, "edit1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[0].widget, "cut1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[1].widget, "copy1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[2].widget, "paste1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[3].widget, "clear1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[4].widget, "separator4");
+  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[5].widget, "properties1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[6].widget, "separator5");
+  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[7].widget, "preferences1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, menubar1_uiinfo[2].widget, "view1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, menubar1_uiinfo[3].widget, "help1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, help1_menu_uiinfo[0].widget, "about1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, toolbar1, "toolbar1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, toolbutton3, "toolbutton3");
+  GLADE_HOOKUP_OBJECT (gg_main_window, toolbutton4, "toolbutton4");
+  GLADE_HOOKUP_OBJECT (gg_main_window, toolbutton5, "toolbutton5");
+  GLADE_HOOKUP_OBJECT (gg_main_window, separatortoolitem1, "separatortoolitem1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, step_button, "step_button");
+  GLADE_HOOKUP_OBJECT (gg_main_window, next_button, "next_button");
+  GLADE_HOOKUP_OBJECT (gg_main_window, break_button, "break_button");
+  GLADE_HOOKUP_OBJECT (gg_main_window, vpaned1, "vpaned1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, scrolledwindow1, "scrolledwindow1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, backtrace_widget, "backtrace_widget");
+  GLADE_HOOKUP_OBJECT (gg_main_window, appbar1, "appbar1");
+  GLADE_HOOKUP_OBJECT_NO_REF (gg_main_window, tooltips, "tooltips");
 
-  return app1;
+  return gg_main_window;
+}
+
+GtkWidget*
+create_gg_new_session_window (void)
+{
+  GtkWidget *gg_new_session_window;
+
+  gg_new_session_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_title (GTK_WINDOW (gg_new_session_window), _("New Debug Session"));
+
+  /* Store pointers to all widgets, for use by lookup_widget(). */
+  GLADE_HOOKUP_OBJECT_NO_REF (gg_new_session_window, gg_new_session_window, "gg_new_session_window");
+
+  return gg_new_session_window;
 }
 

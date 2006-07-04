@@ -58,7 +58,7 @@ dnl AC_PROG_INSTALL
 dnl Checks for programs.
 
 dnl Checks for libraries.
-PKG_CHECK_MODULES(DEPS, gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 libglade-2.0 >= 2.0 gthread-2.0)
+PKG_CHECK_MODULES(DEPS, libgnomeui-2.0 gtk+-2.0 >= 2.2 glib-2.0 >= 2.2 libglade-2.0 >= 2.0 gthread-2.0)
 
 
 dnl Checks for header files.
