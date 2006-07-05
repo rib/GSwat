@@ -72,13 +72,14 @@ on_gg_connect_connect_button_clicked(GtkButton       *button,
                         )
                     );
     
-    const gchar *command = gtk_entry_get_text(command_entry);
+    //const gchar *command = gtk_entry_get_text(command_entry);
 
+/*
     g_shell_parse_argv(command,
                        &command_argc,
                        &command_argv,
                        NULL);
-
+*/
     //gg_gdb_connect(command_argc, command_argv);
 
     gg_gdb_send_command();
