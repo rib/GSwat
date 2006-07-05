@@ -1,8 +1,7 @@
 #include <gnome.h>
-#include <glade/glade.h>
 
 #include "global.h"
-#include "gdb.h"
+#include "gg_main_window.h"
 
 
 
@@ -23,7 +22,7 @@ main(int argc, char **argv)
 	GOptionContext *option_context;
 	GnomeProgram *my_app;
 
-	option_context = g_option_context_new ("ggdb");
+	option_context = g_option_context_new("ggdb");
 
 	/* if you are using any libraries that have command line options
 	 * of their own and provide a GOptionGroup with them, you can
@@ -36,10 +35,6 @@ main(int argc, char **argv)
 	 */
 	g_option_context_add_main_entries (option_context, option_entries, NULL);
 
-	/* We assume PACKAGE and VERSION are set to the program name and version
-	 * number respectively. Also, assume that 'option_entries' is a global
-	 * array of GOptionEntry structures.
-	 */
 	my_app = gnome_program_init(PACKAGE, VERSION,
 	                            LIBGNOMEUI_MODULE, argc, argv,
 	                            GNOME_PARAM_GOPTION_CONTEXT, option_context,
@@ -60,31 +55,7 @@ main(int argc, char **argv)
 	}
 
 
-    
-    GladeXML *xml;
-
-    /* load the main window (which is named app1) */
-    xml = glade_xml_new("ggdb.glade", "gg_main_window", NULL);
-
-    /* in case we can't load the interface, bail */
-    if(!xml) {
-        g_warning("We could not load the interface!");
-        return 1;
-    } 
-
-    
-    glade_xml_signal_autoconnect(xml);
-    
-    g_object_unref(xml);
-
-
-    DEBUG("Initialisation finished");
-
-    DEBUG("Entering main even loop");
-
-    gg_gdb_connect(); 
-    
-    gg_gdb_send_command();
+    gg_main_window_init("ggdb.glade");
 
     gtk_main();
 }

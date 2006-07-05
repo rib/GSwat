@@ -29,9 +29,6 @@
 static GnomeUIInfo file1_menu_uiinfo[] =
 {
   GNOMEUIINFO_MENU_NEW_ITEM (N_("_New"), NULL, NULL, NULL),
-  GNOMEUIINFO_MENU_OPEN_ITEM (NULL, NULL),
-  GNOMEUIINFO_MENU_SAVE_ITEM (NULL, NULL),
-  GNOMEUIINFO_MENU_SAVE_AS_ITEM (NULL, NULL),
   GNOMEUIINFO_SEPARATOR,
   GNOMEUIINFO_MENU_EXIT_ITEM (gg_main_on_quit_activate, NULL),
   GNOMEUIINFO_END
@@ -50,7 +47,7 @@ static GnomeUIInfo edit1_menu_uiinfo[] =
   GNOMEUIINFO_END
 };
 
-static GnomeUIInfo view1_menu_uiinfo[] =
+static GnomeUIInfo view1_uiinfo[] =
 {
   GNOMEUIINFO_END
 };
@@ -65,7 +62,7 @@ static GnomeUIInfo menubar1_uiinfo[] =
 {
   GNOMEUIINFO_MENU_FILE_TREE (file1_menu_uiinfo),
   GNOMEUIINFO_MENU_EDIT_TREE (edit1_menu_uiinfo),
-  GNOMEUIINFO_MENU_VIEW_TREE (view1_menu_uiinfo),
+  GNOMEUIINFO_MENU_VIEW_TREE (view1_uiinfo),
   GNOMEUIINFO_MENU_HELP_TREE (help1_menu_uiinfo),
   GNOMEUIINFO_END
 };
@@ -77,15 +74,15 @@ create_gg_main_window (void)
   GtkWidget *bonobodock1;
   GtkWidget *toolbar1;
   GtkIconSize tmp_toolbar_icon_size;
-  GtkWidget *toolbutton3;
-  GtkWidget *toolbutton4;
-  GtkWidget *toolbutton5;
-  GtkWidget *separatortoolitem1;
   GtkWidget *tmp_image;
+  GtkWidget *gg_main_connect_button;
+  GtkWidget *separatortoolitem1;
   GtkWidget *step_button;
   GtkWidget *next_button;
   GtkWidget *break_button;
   GtkWidget *vpaned1;
+  GtkWidget *scrolledwindow3;
+  GtkWidget *gg_main_source_text_view;
   GtkWidget *scrolledwindow1;
   GtkWidget *backtrace_widget;
   GtkWidget *appbar1;
@@ -93,8 +90,8 @@ create_gg_main_window (void)
 
   tooltips = gtk_tooltips_new ();
 
-  gg_main_window = gnome_app_new ("GGdb", _("GGdb"));
-  gtk_window_set_default_size (GTK_WINDOW (gg_main_window), 640, 480);
+  gg_main_window = gnome_app_new ("Ggdb", _("GGdb"));
+  gtk_window_set_default_size (GTK_WINDOW (gg_main_window), 640, 800);
 
   bonobodock1 = GNOME_APP (gg_main_window)->dock;
   gtk_widget_show (bonobodock1);
@@ -110,20 +107,12 @@ create_gg_main_window (void)
   gtk_toolbar_set_style (GTK_TOOLBAR (toolbar1), GTK_TOOLBAR_BOTH);
   tmp_toolbar_icon_size = gtk_toolbar_get_icon_size (GTK_TOOLBAR (toolbar1));
 
-  toolbutton3 = (GtkWidget*) gtk_tool_button_new_from_stock ("gtk-new");
-  gtk_widget_show (toolbutton3);
-  gtk_container_add (GTK_CONTAINER (toolbar1), toolbutton3);
-  gtk_tool_item_set_tooltip (GTK_TOOL_ITEM (toolbutton3), tooltips, _("New File"), NULL);
-
-  toolbutton4 = (GtkWidget*) gtk_tool_button_new_from_stock ("gtk-open");
-  gtk_widget_show (toolbutton4);
-  gtk_container_add (GTK_CONTAINER (toolbar1), toolbutton4);
-  gtk_tool_item_set_tooltip (GTK_TOOL_ITEM (toolbutton4), tooltips, _("Open File"), NULL);
-
-  toolbutton5 = (GtkWidget*) gtk_tool_button_new_from_stock ("gtk-save");
-  gtk_widget_show (toolbutton5);
-  gtk_container_add (GTK_CONTAINER (toolbar1), toolbutton5);
-  gtk_tool_item_set_tooltip (GTK_TOOL_ITEM (toolbutton5), tooltips, _("Save File"), NULL);
+  tmp_image = gtk_image_new_from_stock ("gtk-connect", tmp_toolbar_icon_size);
+  gtk_widget_show (tmp_image);
+  gg_main_connect_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Attach"));
+  gtk_widget_show (gg_main_connect_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gg_main_connect_button);
+  gtk_tool_item_set_tooltip (GTK_TOOL_ITEM (gg_main_connect_button), tooltips, _("New File"), NULL);
 
   separatortoolitem1 = (GtkWidget*) gtk_separator_tool_item_new ();
   gtk_widget_show (separatortoolitem1);
@@ -150,7 +139,16 @@ create_gg_main_window (void)
   vpaned1 = gtk_vpaned_new ();
   gtk_widget_show (vpaned1);
   gnome_app_set_contents (GNOME_APP (gg_main_window), vpaned1);
-  gtk_paned_set_position (GTK_PANED (vpaned1), 0);
+  gtk_paned_set_position (GTK_PANED (vpaned1), 402);
+
+  scrolledwindow3 = gtk_scrolled_window_new (NULL, NULL);
+  gtk_widget_show (scrolledwindow3);
+  gtk_paned_pack1 (GTK_PANED (vpaned1), scrolledwindow3, FALSE, TRUE);
+  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolledwindow3), GTK_SHADOW_IN);
+
+  gg_main_source_text_view = gtk_text_view_new ();
+  gtk_widget_show (gg_main_source_text_view);
+  gtk_container_add (GTK_CONTAINER (scrolledwindow3), gg_main_source_text_view);
 
   scrolledwindow1 = gtk_scrolled_window_new (NULL, NULL);
   gtk_widget_show (scrolledwindow1);
@@ -166,8 +164,8 @@ create_gg_main_window (void)
   gnome_app_set_statusbar (GNOME_APP (gg_main_window), appbar1);
 
   gnome_app_install_menu_hints (GNOME_APP (gg_main_window), menubar1_uiinfo);
-  g_signal_connect ((gpointer) toolbutton5, "clicked",
-                    G_CALLBACK (gg_main_toolbar_save_click),
+  g_signal_connect ((gpointer) gg_main_connect_button, "clicked",
+                    G_CALLBACK (on_gg_main_connect_button_clicked),
                     NULL);
 
   /* Store pointers to all widgets, for use by lookup_widget(). */
@@ -175,11 +173,8 @@ create_gg_main_window (void)
   GLADE_HOOKUP_OBJECT (gg_main_window, bonobodock1, "bonobodock1");
   GLADE_HOOKUP_OBJECT (gg_main_window, menubar1_uiinfo[0].widget, "file1");
   GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[0].widget, "new1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[1].widget, "open1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[2].widget, "save1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[3].widget, "save_as1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[4].widget, "separator3");
-  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[5].widget, "quit");
+  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[1].widget, "separator3");
+  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[2].widget, "quit");
   GLADE_HOOKUP_OBJECT (gg_main_window, menubar1_uiinfo[1].widget, "edit1");
   GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[0].widget, "cut1");
   GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[1].widget, "copy1");
@@ -193,14 +188,14 @@ create_gg_main_window (void)
   GLADE_HOOKUP_OBJECT (gg_main_window, menubar1_uiinfo[3].widget, "help1");
   GLADE_HOOKUP_OBJECT (gg_main_window, help1_menu_uiinfo[0].widget, "about1");
   GLADE_HOOKUP_OBJECT (gg_main_window, toolbar1, "toolbar1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, toolbutton3, "toolbutton3");
-  GLADE_HOOKUP_OBJECT (gg_main_window, toolbutton4, "toolbutton4");
-  GLADE_HOOKUP_OBJECT (gg_main_window, toolbutton5, "toolbutton5");
+  GLADE_HOOKUP_OBJECT (gg_main_window, gg_main_connect_button, "gg_main_connect_button");
   GLADE_HOOKUP_OBJECT (gg_main_window, separatortoolitem1, "separatortoolitem1");
   GLADE_HOOKUP_OBJECT (gg_main_window, step_button, "step_button");
   GLADE_HOOKUP_OBJECT (gg_main_window, next_button, "next_button");
   GLADE_HOOKUP_OBJECT (gg_main_window, break_button, "break_button");
   GLADE_HOOKUP_OBJECT (gg_main_window, vpaned1, "vpaned1");
+  GLADE_HOOKUP_OBJECT (gg_main_window, scrolledwindow3, "scrolledwindow3");
+  GLADE_HOOKUP_OBJECT (gg_main_window, gg_main_source_text_view, "gg_main_source_text_view");
   GLADE_HOOKUP_OBJECT (gg_main_window, scrolledwindow1, "scrolledwindow1");
   GLADE_HOOKUP_OBJECT (gg_main_window, backtrace_widget, "backtrace_widget");
   GLADE_HOOKUP_OBJECT (gg_main_window, appbar1, "appbar1");
@@ -210,16 +205,307 @@ create_gg_main_window (void)
 }
 
 GtkWidget*
-create_gg_new_session_window (void)
+create_gg_connect_window (void)
 {
-  GtkWidget *gg_new_session_window;
+  GtkWidget *gg_connect_window;
+  GtkWidget *hbox1;
+  GtkWidget *vbox1;
+  GtkWidget *frame1;
+  GtkWidget *alignment1;
+  GtkWidget *notebook1;
+  GtkWidget *gg_connect_direct_gdb_label;
+  GtkWidget *label6;
+  GtkWidget *table1;
+  GtkWidget *label10;
+  GtkWidget *label11;
+  GtkWidget *entry5;
+  GtkWidget *entry6;
+  GtkWidget *label7;
+  GtkWidget *label2;
+  GtkWidget *frame4;
+  GtkWidget *alignment4;
+  GtkWidget *hbox4;
+  GtkWidget *gg_connect_wkdir_text;
+  GtkWidget *gg_connect_wkdir_browse_button;
+  GtkWidget *label9;
+  GtkWidget *frame3;
+  GtkWidget *alignment3;
+  GtkWidget *vbox2;
+  GtkWidget *hbox3;
+  GtkWidget *gg_connect_inherit_env_button;
+  GtkWidget *gg_connect_env_clear_button;
+  GtkWidget *scrolledwindow2;
+  GtkWidget *gg_connect_treeview;
+  GtkWidget *label4;
+  GtkWidget *frame2;
+  GtkWidget *alignment2;
+  GtkWidget *hbox2;
+  GtkWidget *gg_connect_program_text;
+  GtkWidget *gg_connect_program_browse_button;
+  GtkWidget *label3;
+  GtkWidget *gg_connect_connect_button;
 
-  gg_new_session_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_title (GTK_WINDOW (gg_new_session_window), _("New Debug Session"));
+  gg_connect_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_title (GTK_WINDOW (gg_connect_window), _("New Debug Session"));
+  gtk_window_set_modal (GTK_WINDOW (gg_connect_window), TRUE);
+
+  hbox1 = gtk_hbox_new (FALSE, 0);
+  gtk_widget_show (hbox1);
+  gtk_container_add (GTK_CONTAINER (gg_connect_window), hbox1);
+
+  vbox1 = gtk_vbox_new (FALSE, 0);
+  gtk_widget_show (vbox1);
+  gtk_box_pack_start (GTK_BOX (hbox1), vbox1, TRUE, TRUE, 0);
+
+  frame1 = gtk_frame_new (NULL);
+  gtk_widget_show (frame1);
+  gtk_box_pack_start (GTK_BOX (vbox1), frame1, FALSE, TRUE, 0);
+  gtk_frame_set_shadow_type (GTK_FRAME (frame1), GTK_SHADOW_NONE);
+
+  alignment1 = gtk_alignment_new (0.5, 0.5, 1, 1);
+  gtk_widget_show (alignment1);
+  gtk_container_add (GTK_CONTAINER (frame1), alignment1);
+  gtk_alignment_set_padding (GTK_ALIGNMENT (alignment1), 0, 0, 12, 0);
+
+  notebook1 = gtk_notebook_new ();
+  gtk_widget_show (notebook1);
+  gtk_container_add (GTK_CONTAINER (alignment1), notebook1);
+
+  gg_connect_direct_gdb_label = gtk_label_new (_("Connection Status"));
+  gtk_widget_show (gg_connect_direct_gdb_label);
+  gtk_container_add (GTK_CONTAINER (notebook1), gg_connect_direct_gdb_label);
+  gtk_misc_set_padding (GTK_MISC (gg_connect_direct_gdb_label), 0, 9);
+
+  label6 = gtk_label_new (_("Direct GDB"));
+  gtk_widget_show (label6);
+  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook1), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook1), 0), label6);
+
+  table1 = gtk_table_new (2, 2, FALSE);
+  gtk_widget_show (table1);
+  gtk_container_add (GTK_CONTAINER (notebook1), table1);
+
+  label10 = gtk_label_new (_("Hostname"));
+  gtk_widget_show (label10);
+  gtk_table_attach (GTK_TABLE (table1), label10, 0, 1, 0, 1,
+                    (GtkAttachOptions) (GTK_FILL),
+                    (GtkAttachOptions) (0), 0, 0);
+  gtk_misc_set_alignment (GTK_MISC (label10), 0, 0.5);
+
+  label11 = gtk_label_new (_("Port"));
+  gtk_widget_show (label11);
+  gtk_table_attach (GTK_TABLE (table1), label11, 1, 2, 0, 1,
+                    (GtkAttachOptions) (GTK_FILL),
+                    (GtkAttachOptions) (0), 0, 0);
+  gtk_misc_set_alignment (GTK_MISC (label11), 0, 0.5);
+
+  entry5 = gtk_entry_new ();
+  gtk_widget_show (entry5);
+  gtk_table_attach (GTK_TABLE (table1), entry5, 0, 1, 1, 2,
+                    (GtkAttachOptions) (GTK_EXPAND | GTK_FILL),
+                    (GtkAttachOptions) (0), 0, 0);
+
+  entry6 = gtk_entry_new ();
+  gtk_widget_show (entry6);
+  gtk_table_attach (GTK_TABLE (table1), entry6, 1, 2, 1, 2,
+                    (GtkAttachOptions) (GTK_EXPAND | GTK_FILL),
+                    (GtkAttachOptions) (0), 0, 0);
+
+  label7 = gtk_label_new (_("Remote GDB"));
+  gtk_widget_show (label7);
+  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook1), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook1), 1), label7);
+
+  label2 = gtk_label_new (_("<b>Target</b>"));
+  gtk_widget_show (label2);
+  gtk_frame_set_label_widget (GTK_FRAME (frame1), label2);
+  gtk_label_set_use_markup (GTK_LABEL (label2), TRUE);
+
+  frame4 = gtk_frame_new (NULL);
+  gtk_widget_show (frame4);
+  gtk_box_pack_start (GTK_BOX (vbox1), frame4, FALSE, TRUE, 0);
+  gtk_frame_set_shadow_type (GTK_FRAME (frame4), GTK_SHADOW_NONE);
+
+  alignment4 = gtk_alignment_new (0.5, 0.5, 1, 1);
+  gtk_widget_show (alignment4);
+  gtk_container_add (GTK_CONTAINER (frame4), alignment4);
+  gtk_alignment_set_padding (GTK_ALIGNMENT (alignment4), 0, 0, 12, 0);
+
+  hbox4 = gtk_hbox_new (FALSE, 0);
+  gtk_widget_show (hbox4);
+  gtk_container_add (GTK_CONTAINER (alignment4), hbox4);
+
+  gg_connect_wkdir_text = gtk_entry_new ();
+  gtk_widget_show (gg_connect_wkdir_text);
+  gtk_box_pack_start (GTK_BOX (hbox4), gg_connect_wkdir_text, TRUE, TRUE, 0);
+
+  gg_connect_wkdir_browse_button = gtk_button_new_with_mnemonic (_("Browse..."));
+  gtk_widget_show (gg_connect_wkdir_browse_button);
+  gtk_box_pack_start (GTK_BOX (hbox4), gg_connect_wkdir_browse_button, FALSE, FALSE, 0);
+
+  label9 = gtk_label_new (_("<b>Working Directory</b>"));
+  gtk_widget_show (label9);
+  gtk_frame_set_label_widget (GTK_FRAME (frame4), label9);
+  gtk_label_set_use_markup (GTK_LABEL (label9), TRUE);
+
+  frame3 = gtk_frame_new (NULL);
+  gtk_widget_show (frame3);
+  gtk_box_pack_start (GTK_BOX (vbox1), frame3, TRUE, TRUE, 0);
+  gtk_frame_set_shadow_type (GTK_FRAME (frame3), GTK_SHADOW_NONE);
+
+  alignment3 = gtk_alignment_new (0.5, 0.5, 1, 1);
+  gtk_widget_show (alignment3);
+  gtk_container_add (GTK_CONTAINER (frame3), alignment3);
+  gtk_alignment_set_padding (GTK_ALIGNMENT (alignment3), 0, 0, 12, 0);
+
+  vbox2 = gtk_vbox_new (FALSE, 0);
+  gtk_widget_show (vbox2);
+  gtk_container_add (GTK_CONTAINER (alignment3), vbox2);
+
+  hbox3 = gtk_hbox_new (FALSE, 0);
+  gtk_widget_show (hbox3);
+  gtk_box_pack_start (GTK_BOX (vbox2), hbox3, FALSE, TRUE, 0);
+
+  gg_connect_inherit_env_button = gtk_button_new_with_mnemonic (_("Inherit from Ggdb"));
+  gtk_widget_show (gg_connect_inherit_env_button);
+  gtk_box_pack_start (GTK_BOX (hbox3), gg_connect_inherit_env_button, FALSE, FALSE, 0);
+
+  gg_connect_env_clear_button = gtk_button_new_with_mnemonic (_("Clear"));
+  gtk_widget_show (gg_connect_env_clear_button);
+  gtk_box_pack_start (GTK_BOX (hbox3), gg_connect_env_clear_button, FALSE, FALSE, 0);
+
+  scrolledwindow2 = gtk_scrolled_window_new (NULL, NULL);
+  gtk_widget_show (scrolledwindow2);
+  gtk_box_pack_start (GTK_BOX (vbox2), scrolledwindow2, TRUE, TRUE, 0);
+  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolledwindow2), GTK_SHADOW_IN);
+
+  gg_connect_treeview = gtk_tree_view_new ();
+  gtk_widget_show (gg_connect_treeview);
+  gtk_container_add (GTK_CONTAINER (scrolledwindow2), gg_connect_treeview);
+
+  label4 = gtk_label_new (_("<b>Environment</b>"));
+  gtk_widget_show (label4);
+  gtk_frame_set_label_widget (GTK_FRAME (frame3), label4);
+  gtk_label_set_use_markup (GTK_LABEL (label4), TRUE);
+
+  frame2 = gtk_frame_new (NULL);
+  gtk_widget_show (frame2);
+  gtk_box_pack_start (GTK_BOX (vbox1), frame2, FALSE, FALSE, 0);
+  gtk_frame_set_shadow_type (GTK_FRAME (frame2), GTK_SHADOW_NONE);
+
+  alignment2 = gtk_alignment_new (0.5, 0.5, 1, 1);
+  gtk_widget_show (alignment2);
+  gtk_container_add (GTK_CONTAINER (frame2), alignment2);
+  gtk_alignment_set_padding (GTK_ALIGNMENT (alignment2), 0, 0, 12, 0);
+
+  hbox2 = gtk_hbox_new (FALSE, 0);
+  gtk_widget_show (hbox2);
+  gtk_container_add (GTK_CONTAINER (alignment2), hbox2);
+
+  gg_connect_program_text = gtk_entry_new ();
+  gtk_widget_show (gg_connect_program_text);
+  gtk_box_pack_start (GTK_BOX (hbox2), gg_connect_program_text, TRUE, TRUE, 0);
+
+  gg_connect_program_browse_button = gtk_button_new_with_mnemonic (_("Browse..."));
+  gtk_widget_show (gg_connect_program_browse_button);
+  gtk_box_pack_start (GTK_BOX (hbox2), gg_connect_program_browse_button, FALSE, FALSE, 0);
+
+  label3 = gtk_label_new (_("<b>Command</b>"));
+  gtk_widget_show (label3);
+  gtk_frame_set_label_widget (GTK_FRAME (frame2), label3);
+  gtk_label_set_use_markup (GTK_LABEL (label3), TRUE);
+
+  gg_connect_connect_button = gtk_button_new_with_mnemonic (_("Connect"));
+  gtk_widget_show (gg_connect_connect_button);
+  gtk_box_pack_start (GTK_BOX (vbox1), gg_connect_connect_button, FALSE, FALSE, 0);
+
+  g_signal_connect ((gpointer) gg_connect_wkdir_browse_button, "activate",
+                    G_CALLBACK (on_gg_connect_wkdir_browse_button_activate),
+                    NULL);
+  g_signal_connect ((gpointer) gg_connect_program_browse_button, "activate",
+                    G_CALLBACK (on_gg_connect_program_browse_button_activate),
+                    NULL);
+  g_signal_connect ((gpointer) gg_connect_connect_button, "clicked",
+                    G_CALLBACK (on_gg_connect_connect_button_clicked),
+                    NULL);
 
   /* Store pointers to all widgets, for use by lookup_widget(). */
-  GLADE_HOOKUP_OBJECT_NO_REF (gg_new_session_window, gg_new_session_window, "gg_new_session_window");
+  GLADE_HOOKUP_OBJECT_NO_REF (gg_connect_window, gg_connect_window, "gg_connect_window");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, hbox1, "hbox1");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, vbox1, "vbox1");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, frame1, "frame1");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, alignment1, "alignment1");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, notebook1, "notebook1");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_direct_gdb_label, "gg_connect_direct_gdb_label");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, label6, "label6");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, table1, "table1");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, label10, "label10");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, label11, "label11");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, entry5, "entry5");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, entry6, "entry6");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, label7, "label7");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, label2, "label2");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, frame4, "frame4");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, alignment4, "alignment4");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, hbox4, "hbox4");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_wkdir_text, "gg_connect_wkdir_text");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_wkdir_browse_button, "gg_connect_wkdir_browse_button");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, label9, "label9");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, frame3, "frame3");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, alignment3, "alignment3");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, vbox2, "vbox2");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, hbox3, "hbox3");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_inherit_env_button, "gg_connect_inherit_env_button");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_env_clear_button, "gg_connect_env_clear_button");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, scrolledwindow2, "scrolledwindow2");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_treeview, "gg_connect_treeview");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, label4, "label4");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, frame2, "frame2");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, alignment2, "alignment2");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, hbox2, "hbox2");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_program_text, "gg_connect_program_text");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_program_browse_button, "gg_connect_program_browse_button");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, label3, "label3");
+  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_connect_button, "gg_connect_connect_button");
 
-  return gg_new_session_window;
+  return gg_connect_window;
+}
+
+GtkWidget*
+create_gg_file_chooser_dialog (void)
+{
+  GtkWidget *gg_file_chooser_dialog;
+  GtkWidget *dialog_vbox1;
+  GtkWidget *dialog_action_area1;
+  GtkWidget *button2;
+  GtkWidget *button3;
+
+  gg_file_chooser_dialog = gtk_file_chooser_dialog_new ("", NULL, GTK_FILE_CHOOSER_ACTION_OPEN, NULL);
+  gtk_window_set_type_hint (GTK_WINDOW (gg_file_chooser_dialog), GDK_WINDOW_TYPE_HINT_DIALOG);
+
+  dialog_vbox1 = GTK_DIALOG (gg_file_chooser_dialog)->vbox;
+  gtk_widget_show (dialog_vbox1);
+
+  dialog_action_area1 = GTK_DIALOG (gg_file_chooser_dialog)->action_area;
+  gtk_widget_show (dialog_action_area1);
+  gtk_button_box_set_layout (GTK_BUTTON_BOX (dialog_action_area1), GTK_BUTTONBOX_END);
+
+  button2 = gtk_button_new_from_stock ("gtk-open");
+  gtk_widget_show (button2);
+  gtk_dialog_add_action_widget (GTK_DIALOG (gg_file_chooser_dialog), button2, GTK_RESPONSE_OK);
+  GTK_WIDGET_SET_FLAGS (button2, GTK_CAN_DEFAULT);
+
+  button3 = gtk_button_new_with_mnemonic (_("button3"));
+  gtk_widget_show (button3);
+  gtk_dialog_add_action_widget (GTK_DIALOG (gg_file_chooser_dialog), button3, 0);
+  GTK_WIDGET_SET_FLAGS (button3, GTK_CAN_DEFAULT);
+
+  /* Store pointers to all widgets, for use by lookup_widget(). */
+  GLADE_HOOKUP_OBJECT_NO_REF (gg_file_chooser_dialog, gg_file_chooser_dialog, "gg_file_chooser_dialog");
+  GLADE_HOOKUP_OBJECT_NO_REF (gg_file_chooser_dialog, dialog_vbox1, "dialog_vbox1");
+  GLADE_HOOKUP_OBJECT_NO_REF (gg_file_chooser_dialog, dialog_action_area1, "dialog_action_area1");
+  GLADE_HOOKUP_OBJECT (gg_file_chooser_dialog, button2, "button2");
+  GLADE_HOOKUP_OBJECT (gg_file_chooser_dialog, button3, "button3");
+
+  gtk_widget_grab_default (button2);
+  return gg_file_chooser_dialog;
 }
 

@@ -2,47 +2,7 @@
 
 
 void
-on_new1_activate                       (GtkMenuItem     *menuitem,
-                                        gpointer         user_data);
-
-void
-on_open1_activate                      (GtkMenuItem     *menuitem,
-                                        gpointer         user_data);
-
-void
-on_save1_activate                      (GtkMenuItem     *menuitem,
-                                        gpointer         user_data);
-
-void
-on_save_as1_activate                   (GtkMenuItem     *menuitem,
-                                        gpointer         user_data);
-
-void
 gg_main_on_quit_activate               (GtkMenuItem     *menuitem,
-                                        gpointer         user_data);
-
-void
-on_cut1_activate                       (GtkMenuItem     *menuitem,
-                                        gpointer         user_data);
-
-void
-on_copy1_activate                      (GtkMenuItem     *menuitem,
-                                        gpointer         user_data);
-
-void
-on_paste1_activate                     (GtkMenuItem     *menuitem,
-                                        gpointer         user_data);
-
-void
-on_clear1_activate                     (GtkMenuItem     *menuitem,
-                                        gpointer         user_data);
-
-void
-on_properties1_activate                (GtkMenuItem     *menuitem,
-                                        gpointer         user_data);
-
-void
-on_preferences1_activate               (GtkMenuItem     *menuitem,
                                         gpointer         user_data);
 
 void
@@ -50,5 +10,31 @@ on_about1_activate                     (GtkMenuItem     *menuitem,
                                         gpointer         user_data);
 
 void
-gg_main_toolbar_save_click             (GtkToolButton   *toolbutton,
+on_gg_connect_program_browse_button_activate
+                                        (GtkButton       *button,
+                                        gpointer         user_data);
+
+void
+on_gg_connect_wkdir_browse_button_activate
+                                        (GtkButton       *button,
+                                        gpointer         user_data);
+
+void
+on_gg_connect_connect_button_activate  (GtkButton       *button,
+                                        gpointer         user_data);
+
+void
+on_toolbutton3_clicked                 (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gg_main_connect_button_clicked      (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gg_connect_connect_button_activate  (GtkButton       *button,
+                                        gpointer         user_data);
+
+void
+on_gg_connect_connect_button_clicked   (GtkButton       *button,
                                         gpointer         user_data);
