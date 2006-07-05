@@ -90,11 +90,3 @@ main(int argc, char **argv)
 }
 
 
-
-
-void
-gg_deinit(void)
-{
-    DEBUG("Bye Bye..");
-}
-
