@@ -38,3 +38,7 @@ on_gg_connect_connect_button_activate  (GtkButton       *button,
 void
 on_gg_connect_connect_button_clicked   (GtkButton       *button,
                                         gpointer         user_data);
+
+void
+on_gg_run_dialog_ok_button_clicked     (GtkButton       *button,
+                                        gpointer         user_data);

@@ -82,7 +82,7 @@ create_gg_main_window (void)
   GtkWidget *break_button;
   GtkWidget *vpaned1;
   GtkWidget *scrolledwindow3;
-  GtkWidget *gg_main_source_text_view;
+  GtkWidget *viewport1;
   GtkWidget *scrolledwindow1;
   GtkWidget *backtrace_widget;
   GtkWidget *appbar1;
@@ -146,9 +146,9 @@ create_gg_main_window (void)
   gtk_paned_pack1 (GTK_PANED (vpaned1), scrolledwindow3, FALSE, TRUE);
   gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolledwindow3), GTK_SHADOW_IN);
 
-  gg_main_source_text_view = gtk_text_view_new ();
-  gtk_widget_show (gg_main_source_text_view);
-  gtk_container_add (GTK_CONTAINER (scrolledwindow3), gg_main_source_text_view);
+  viewport1 = gtk_viewport_new (NULL, NULL);
+  gtk_widget_show (viewport1);
+  gtk_container_add (GTK_CONTAINER (scrolledwindow3), viewport1);
 
   scrolledwindow1 = gtk_scrolled_window_new (NULL, NULL);
   gtk_widget_show (scrolledwindow1);
@@ -195,7 +195,7 @@ create_gg_main_window (void)
   GLADE_HOOKUP_OBJECT (gg_main_window, break_button, "break_button");
   GLADE_HOOKUP_OBJECT (gg_main_window, vpaned1, "vpaned1");
   GLADE_HOOKUP_OBJECT (gg_main_window, scrolledwindow3, "scrolledwindow3");
-  GLADE_HOOKUP_OBJECT (gg_main_window, gg_main_source_text_view, "gg_main_source_text_view");
+  GLADE_HOOKUP_OBJECT (gg_main_window, viewport1, "viewport1");
   GLADE_HOOKUP_OBJECT (gg_main_window, scrolledwindow1, "scrolledwindow1");
   GLADE_HOOKUP_OBJECT (gg_main_window, backtrace_widget, "backtrace_widget");
   GLADE_HOOKUP_OBJECT (gg_main_window, appbar1, "appbar1");
@@ -507,5 +507,76 @@ create_gg_file_chooser_dialog (void)
 
   gtk_widget_grab_default (button2);
   return gg_file_chooser_dialog;
+}
+
+GtkWidget*
+create_gg_run_dialog (void)
+{
+  GtkWidget *gg_run_dialog;
+  GtkWidget *dialog_vbox2;
+  GtkWidget *frame;
+  GtkWidget *alignment5;
+  GtkWidget *gg_run_dialog_text_entry;
+  GtkWidget *label12;
+  GtkWidget *dialog_action_area2;
+  GtkWidget *cancelbutton1;
+  GtkWidget *gg_run_dialog_ok_button;
+
+  gg_run_dialog = gtk_dialog_new ();
+  gtk_window_set_title (GTK_WINDOW (gg_run_dialog), _("Run"));
+  gtk_window_set_type_hint (GTK_WINDOW (gg_run_dialog), GDK_WINDOW_TYPE_HINT_DIALOG);
+
+  dialog_vbox2 = GTK_DIALOG (gg_run_dialog)->vbox;
+  gtk_widget_show (dialog_vbox2);
+
+  frame = gtk_frame_new (NULL);
+  gtk_widget_show (frame);
+  gtk_box_pack_start (GTK_BOX (dialog_vbox2), frame, TRUE, TRUE, 0);
+  gtk_frame_set_shadow_type (GTK_FRAME (frame), GTK_SHADOW_NONE);
+
+  alignment5 = gtk_alignment_new (0.5, 0.5, 1, 1);
+  gtk_widget_show (alignment5);
+  gtk_container_add (GTK_CONTAINER (frame), alignment5);
+  gtk_alignment_set_padding (GTK_ALIGNMENT (alignment5), 0, 0, 12, 0);
+
+  gg_run_dialog_text_entry = gtk_entry_new ();
+  gtk_widget_show (gg_run_dialog_text_entry);
+  gtk_container_add (GTK_CONTAINER (alignment5), gg_run_dialog_text_entry);
+
+  label12 = gtk_label_new (_("<b>Command</b>"));
+  gtk_widget_show (label12);
+  gtk_frame_set_label_widget (GTK_FRAME (frame), label12);
+  gtk_label_set_use_markup (GTK_LABEL (label12), TRUE);
+
+  dialog_action_area2 = GTK_DIALOG (gg_run_dialog)->action_area;
+  gtk_widget_show (dialog_action_area2);
+  gtk_button_box_set_layout (GTK_BUTTON_BOX (dialog_action_area2), GTK_BUTTONBOX_END);
+
+  cancelbutton1 = gtk_button_new_from_stock ("gtk-cancel");
+  gtk_widget_show (cancelbutton1);
+  gtk_dialog_add_action_widget (GTK_DIALOG (gg_run_dialog), cancelbutton1, GTK_RESPONSE_CANCEL);
+  GTK_WIDGET_SET_FLAGS (cancelbutton1, GTK_CAN_DEFAULT);
+
+  gg_run_dialog_ok_button = gtk_button_new_from_stock ("gtk-ok");
+  gtk_widget_show (gg_run_dialog_ok_button);
+  gtk_dialog_add_action_widget (GTK_DIALOG (gg_run_dialog), gg_run_dialog_ok_button, GTK_RESPONSE_OK);
+  GTK_WIDGET_SET_FLAGS (gg_run_dialog_ok_button, GTK_CAN_DEFAULT);
+
+  g_signal_connect ((gpointer) gg_run_dialog_ok_button, "clicked",
+                    G_CALLBACK (on_gg_run_dialog_ok_button_clicked),
+                    NULL);
+
+  /* Store pointers to all widgets, for use by lookup_widget(). */
+  GLADE_HOOKUP_OBJECT_NO_REF (gg_run_dialog, gg_run_dialog, "gg_run_dialog");
+  GLADE_HOOKUP_OBJECT_NO_REF (gg_run_dialog, dialog_vbox2, "dialog_vbox2");
+  GLADE_HOOKUP_OBJECT (gg_run_dialog, frame, "frame");
+  GLADE_HOOKUP_OBJECT (gg_run_dialog, alignment5, "alignment5");
+  GLADE_HOOKUP_OBJECT (gg_run_dialog, gg_run_dialog_text_entry, "gg_run_dialog_text_entry");
+  GLADE_HOOKUP_OBJECT (gg_run_dialog, label12, "label12");
+  GLADE_HOOKUP_OBJECT_NO_REF (gg_run_dialog, dialog_action_area2, "dialog_action_area2");
+  GLADE_HOOKUP_OBJECT (gg_run_dialog, cancelbutton1, "cancelbutton1");
+  GLADE_HOOKUP_OBJECT (gg_run_dialog, gg_run_dialog_ok_button, "gg_run_dialog_ok_button");
+
+  return gg_run_dialog;
 }
 

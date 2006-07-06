@@ -5,3 +5,4 @@
 GtkWidget* create_gg_main_window (void);
 GtkWidget* create_gg_connect_window (void);
 GtkWidget* create_gg_file_chooser_dialog (void);
+GtkWidget* create_gg_run_dialog (void);
