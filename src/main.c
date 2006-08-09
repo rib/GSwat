@@ -1,9 +1,15 @@
 #include <gnome.h>
 
 #include "global.h"
-#include "gg_main_window.h"
+#include "gswat-main-window.h"
+#include "gswat-spawn.h"
+#include "gswat-session.h"
 
 
+
+static gint pid = -1;
+
+static GSwatSession *session;
 
 int
 main(int argc, char **argv)
@@ -11,7 +17,16 @@ main(int argc, char **argv)
     gchar **remaining_args = NULL;
 
 	GOptionEntry option_entries[] = {
+    
 		/* ... your application's command line options go here ... */
+
+        { "pid",
+          0,
+          G_OPTION_FLAG_OPTIONAL_ARG,
+          G_OPTION_ARG_INT,
+          &pid,
+          "A private mechanism!", NULL },
+
 		/* last but not least a special option that collects filenames */
 		{ G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY,
 		  &remaining_args,
@@ -22,7 +37,7 @@ main(int argc, char **argv)
 	GOptionContext *option_context;
 	GnomeProgram *my_app;
 
-	option_context = g_option_context_new("ggdb");
+	option_context = g_option_context_new("gswat");
 
 	/* if you are using any libraries that have command line options
 	 * of their own and provide a GOptionGroup with them, you can
@@ -33,7 +48,7 @@ main(int argc, char **argv)
 	 * are using gettext for translations, you should be using
 	 * GETTEXT_PACKAGE here instead of NULL
 	 */
-	g_option_context_add_main_entries (option_context, option_entries, NULL);
+	g_option_context_add_main_entries(option_context, option_entries, NULL);
 
 	my_app = gnome_program_init(PACKAGE, VERSION,
 	                            LIBGNOMEUI_MODULE, argc, argv,
@@ -43,6 +58,7 @@ main(int argc, char **argv)
 	/* parse remaining command-line arguments that are not
 	 * options (e.g. filenames or URIs or whatever), if any
 	 */
+#if 0
 	if (remaining_args != NULL) {
 	    gint i, num_args;
 
@@ -53,11 +69,37 @@ main(int argc, char **argv)
 		g_strfreev (remaining_args);
 		remaining_args = NULL;
 	}
+#endif
 
 
-    gg_main_window_init("ggdb.glade");
+    /* First we see if the user has described a new session
+     * on the command line
+     */
+    if(pid != -1 || remaining_args != NULL)
+    {
+        session = gswat_session_new();
+        gswat_session_set_pid(session, pid);
+        
+        /* fixme support parsing arguments to a program
+         * on the command line
+         */
+        gswat_session_set_command(session, remaining_args[0]);
+    }
+
+    /* Normal case: display GUI */
+    gswat_main_window_init(session);
+
+    
+    if (remaining_args != NULL) {
+   		g_strfreev (remaining_args);
+		remaining_args = NULL;
+	}
+
 
     gtk_main();
+
+
+    return 0;
 }
 
 

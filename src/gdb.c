@@ -53,7 +53,7 @@ gdb_stderr_io_watcher(GIOChannel *source, GIOCondition condition, gpointer data)
 
 /* TODO return a GDBSession object */
 void
-gg_gdb_connect(void)
+ggswat_gdb_connect(void)
 {
     gchar *gdb_argv[] = { "gdb", "--interpreter=mi2", NULL };
     GPid gdb_pid;
@@ -95,7 +95,7 @@ gg_gdb_connect(void)
     g_io_channel_set_flags(gdb_stdin, G_IO_FLAG_NONBLOCK, NULL);
     g_io_channel_set_flags(gdb_stdout, G_IO_FLAG_NONBLOCK, NULL);
     g_io_channel_set_flags(gdb_stderr, G_IO_FLAG_NONBLOCK, NULL);
-
+    
 
     /* Have the main loop watch stdout and stderr */
     g_io_add_watch(gdb_stdout,
@@ -111,7 +111,7 @@ gg_gdb_connect(void)
 
 
 void
-gg_gdb_send_command(void)
+ggswat_gdb_send_command(void)
 {
     guint written;
     g_io_channel_write(gdb_stdin,

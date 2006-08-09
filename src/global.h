@@ -49,13 +49,13 @@
   Macros to terminate execution
           with an error
 *******************************/
-#define DIE(X) {DEBUG(X);fprintf(stderr,#X "\n");gg_deinit();exit(EXIT_FAILURE);}
-#define DIEf(X, args...) {DEBUGf(X, args);fprintf(stderr, PACKAGE ": " X "\n", args);gg_deinit();exit(EXIT_FAILURE);}
+#define DIE(X) {DEBUG(X);fprintf(stderr,#X "\n");gswat_deinit();exit(EXIT_FAILURE);}
+#define DIEf(X, args...) {DEBUGf(X, args);fprintf(stderr, PACKAGE ": " X "\n", args);gswat_deinit();exit(EXIT_FAILURE);}
 
 #define CASE(X) case X: DEBUG("CASE: " #X);
 
 
-void gg_deinit(void);
+void gswat_deinit(void);
 
 #define False 0
 #define True 1

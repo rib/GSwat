@@ -30,7 +30,7 @@ static GnomeUIInfo file1_menu_uiinfo[] =
 {
   GNOMEUIINFO_MENU_NEW_ITEM (N_("_New"), NULL, NULL, NULL),
   GNOMEUIINFO_SEPARATOR,
-  GNOMEUIINFO_MENU_EXIT_ITEM (gg_main_on_quit_activate, NULL),
+  GNOMEUIINFO_MENU_EXIT_ITEM (gswat_main_on_quit_activate, NULL),
   GNOMEUIINFO_END
 };
 
@@ -68,51 +68,58 @@ static GnomeUIInfo menubar1_uiinfo[] =
 };
 
 GtkWidget*
-create_gg_main_window (void)
+create_gswat_main_window (void)
 {
-  GtkWidget *gg_main_window;
+  GtkWidget *gswat_main_window;
   GtkWidget *bonobodock1;
   GtkWidget *toolbar1;
   GtkIconSize tmp_toolbar_icon_size;
-  GtkWidget *tmp_image;
-  GtkWidget *gg_main_connect_button;
+  GtkWidget *gswat_main_new_button;
   GtkWidget *separatortoolitem1;
-  GtkWidget *step_button;
-  GtkWidget *next_button;
-  GtkWidget *break_button;
+  GtkWidget *tmp_image;
+  GtkWidget *gswat_main_step_button;
+  GtkWidget *gswat_main_next_button;
+  GtkWidget *gswat_main_continue_button;
+  GtkWidget *gswat_main_finish_button;
+  GtkWidget *gswat_main_break_button;
+  GtkWidget *gswat_main_run_button;
+  GtkWidget *debug_button;
   GtkWidget *vpaned1;
-  GtkWidget *scrolledwindow3;
-  GtkWidget *viewport1;
+  GtkWidget *hpaned1;
+  GtkWidget *gswat_main_scrolled_window;
+  GtkWidget *vpaned2;
+  GtkWidget *image1;
   GtkWidget *scrolledwindow1;
   GtkWidget *backtrace_widget;
+  GtkWidget *scrolledwindow3;
+  GtkWidget *viewport1;
+  GtkWidget *drawingarea1;
   GtkWidget *appbar1;
   GtkTooltips *tooltips;
 
   tooltips = gtk_tooltips_new ();
 
-  gg_main_window = gnome_app_new ("Ggdb", _("GGdb"));
-  gtk_window_set_default_size (GTK_WINDOW (gg_main_window), 640, 800);
+  gswat_main_window = gnome_app_new ("Glade_files", _("GGdb"));
+  gtk_window_set_default_size (GTK_WINDOW (gswat_main_window), 1024, 768);
 
-  bonobodock1 = GNOME_APP (gg_main_window)->dock;
+  bonobodock1 = GNOME_APP (gswat_main_window)->dock;
   gtk_widget_show (bonobodock1);
 
-  gnome_app_create_menus (GNOME_APP (gg_main_window), menubar1_uiinfo);
+  gnome_app_create_menus (GNOME_APP (gswat_main_window), menubar1_uiinfo);
 
   toolbar1 = gtk_toolbar_new ();
   gtk_widget_show (toolbar1);
-  gnome_app_add_toolbar (GNOME_APP (gg_main_window), GTK_TOOLBAR (toolbar1), "toolbar1",
+  gnome_app_add_toolbar (GNOME_APP (gswat_main_window), GTK_TOOLBAR (toolbar1), "toolbar1",
                                 BONOBO_DOCK_ITEM_BEH_EXCLUSIVE
                                 | BONOBO_DOCK_ITEM_BEH_LOCKED,
                                 BONOBO_DOCK_TOP, 1, 0, 0);
   gtk_toolbar_set_style (GTK_TOOLBAR (toolbar1), GTK_TOOLBAR_BOTH);
   tmp_toolbar_icon_size = gtk_toolbar_get_icon_size (GTK_TOOLBAR (toolbar1));
 
-  tmp_image = gtk_image_new_from_stock ("gtk-connect", tmp_toolbar_icon_size);
-  gtk_widget_show (tmp_image);
-  gg_main_connect_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Attach"));
-  gtk_widget_show (gg_main_connect_button);
-  gtk_container_add (GTK_CONTAINER (toolbar1), gg_main_connect_button);
-  gtk_tool_item_set_tooltip (GTK_TOOL_ITEM (gg_main_connect_button), tooltips, _("New File"), NULL);
+  gswat_main_new_button = (GtkWidget*) gtk_tool_button_new_from_stock ("gtk-new");
+  gtk_widget_show (gswat_main_new_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_new_button);
+  gtk_tool_item_set_tooltip (GTK_TOOL_ITEM (gswat_main_new_button), tooltips, _("New File"), NULL);
 
   separatortoolitem1 = (GtkWidget*) gtk_separator_tool_item_new ();
   gtk_widget_show (separatortoolitem1);
@@ -120,94 +127,170 @@ create_gg_main_window (void)
 
   tmp_image = gtk_image_new_from_stock ("gtk-jump-to", tmp_toolbar_icon_size);
   gtk_widget_show (tmp_image);
-  step_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Step In"));
-  gtk_widget_show (step_button);
-  gtk_container_add (GTK_CONTAINER (toolbar1), step_button);
+  gswat_main_step_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Step In"));
+  gtk_widget_show (gswat_main_step_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_step_button);
 
   tmp_image = gtk_image_new_from_stock ("gtk-go-forward", tmp_toolbar_icon_size);
   gtk_widget_show (tmp_image);
-  next_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Next"));
-  gtk_widget_show (next_button);
-  gtk_container_add (GTK_CONTAINER (toolbar1), next_button);
+  gswat_main_next_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Next"));
+  gtk_widget_show (gswat_main_next_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_next_button);
+
+  tmp_image = gtk_image_new_from_stock ("gtk-media-forward", tmp_toolbar_icon_size);
+  gtk_widget_show (tmp_image);
+  gswat_main_continue_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Continue"));
+  gtk_widget_show (gswat_main_continue_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_continue_button);
+
+  tmp_image = gtk_image_new_from_stock ("gtk-go-up", tmp_toolbar_icon_size);
+  gtk_widget_show (tmp_image);
+  gswat_main_finish_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Finish\nFrame"));
+  gtk_widget_show (gswat_main_finish_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_finish_button);
 
   tmp_image = gtk_image_new_from_stock ("gtk-stop", tmp_toolbar_icon_size);
   gtk_widget_show (tmp_image);
-  break_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Stop"));
-  gtk_widget_show (break_button);
-  gtk_container_add (GTK_CONTAINER (toolbar1), break_button);
+  gswat_main_break_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Break"));
+  gtk_widget_show (gswat_main_break_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_break_button);
+
+  tmp_image = gtk_image_new_from_stock ("gtk-media-play", tmp_toolbar_icon_size);
+  gtk_widget_show (tmp_image);
+  gswat_main_run_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Restart"));
+  gtk_widget_show (gswat_main_run_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_run_button);
+
+  tmp_image = gtk_image_new_from_stock ("gtk-dialog-warning", tmp_toolbar_icon_size);
+  gtk_widget_show (tmp_image);
+  debug_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("debug"));
+  gtk_widget_show (debug_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), debug_button);
 
   vpaned1 = gtk_vpaned_new ();
   gtk_widget_show (vpaned1);
-  gnome_app_set_contents (GNOME_APP (gg_main_window), vpaned1);
-  gtk_paned_set_position (GTK_PANED (vpaned1), 402);
+  gnome_app_set_contents (GNOME_APP (gswat_main_window), vpaned1);
+  gtk_paned_set_position (GTK_PANED (vpaned1), 564);
 
-  scrolledwindow3 = gtk_scrolled_window_new (NULL, NULL);
-  gtk_widget_show (scrolledwindow3);
-  gtk_paned_pack1 (GTK_PANED (vpaned1), scrolledwindow3, FALSE, TRUE);
-  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolledwindow3), GTK_SHADOW_IN);
+  hpaned1 = gtk_hpaned_new ();
+  gtk_widget_show (hpaned1);
+  gtk_paned_pack1 (GTK_PANED (vpaned1), hpaned1, FALSE, TRUE);
+  gtk_paned_set_position (GTK_PANED (hpaned1), 533);
 
-  viewport1 = gtk_viewport_new (NULL, NULL);
-  gtk_widget_show (viewport1);
-  gtk_container_add (GTK_CONTAINER (scrolledwindow3), viewport1);
+  gswat_main_scrolled_window = gtk_scrolled_window_new (NULL, NULL);
+  gtk_widget_show (gswat_main_scrolled_window);
+  gtk_paned_pack1 (GTK_PANED (hpaned1), gswat_main_scrolled_window, FALSE, TRUE);
+  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (gswat_main_scrolled_window), GTK_SHADOW_IN);
+
+  vpaned2 = gtk_vpaned_new ();
+  gtk_widget_show (vpaned2);
+  gtk_paned_pack2 (GTK_PANED (hpaned1), vpaned2, TRUE, TRUE);
+  gtk_paned_set_position (GTK_PANED (vpaned2), 231);
+
+  image1 = create_pixmap (gswat_main_window, NULL);
+  gtk_widget_show (image1);
+  gtk_paned_pack1 (GTK_PANED (vpaned2), image1, FALSE, TRUE);
 
   scrolledwindow1 = gtk_scrolled_window_new (NULL, NULL);
   gtk_widget_show (scrolledwindow1);
-  gtk_paned_pack2 (GTK_PANED (vpaned1), scrolledwindow1, TRUE, TRUE);
+  gtk_paned_pack2 (GTK_PANED (vpaned2), scrolledwindow1, TRUE, TRUE);
   gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolledwindow1), GTK_SHADOW_IN);
 
   backtrace_widget = gtk_tree_view_new ();
   gtk_widget_show (backtrace_widget);
   gtk_container_add (GTK_CONTAINER (scrolledwindow1), backtrace_widget);
 
+  scrolledwindow3 = gtk_scrolled_window_new (NULL, NULL);
+  gtk_widget_show (scrolledwindow3);
+  gtk_paned_pack2 (GTK_PANED (vpaned1), scrolledwindow3, TRUE, TRUE);
+
+  viewport1 = gtk_viewport_new (NULL, NULL);
+  gtk_widget_show (viewport1);
+  gtk_container_add (GTK_CONTAINER (scrolledwindow3), viewport1);
+
+  drawingarea1 = gtk_drawing_area_new ();
+  gtk_widget_show (drawingarea1);
+  gtk_container_add (GTK_CONTAINER (viewport1), drawingarea1);
+
   appbar1 = gnome_appbar_new (TRUE, TRUE, GNOME_PREFERENCES_NEVER);
   gtk_widget_show (appbar1);
-  gnome_app_set_statusbar (GNOME_APP (gg_main_window), appbar1);
+  gnome_app_set_statusbar (GNOME_APP (gswat_main_window), appbar1);
 
-  gnome_app_install_menu_hints (GNOME_APP (gg_main_window), menubar1_uiinfo);
-  g_signal_connect ((gpointer) gg_main_connect_button, "clicked",
-                    G_CALLBACK (on_gg_main_connect_button_clicked),
+  gnome_app_install_menu_hints (GNOME_APP (gswat_main_window), menubar1_uiinfo);
+  g_signal_connect ((gpointer) gswat_main_new_button, "clicked",
+                    G_CALLBACK (on_gswat_main_new_button_clicked),
+                    NULL);
+  g_signal_connect ((gpointer) gswat_main_step_button, "clicked",
+                    G_CALLBACK (on_gswat_main_step_button_clicked),
+                    NULL);
+  g_signal_connect ((gpointer) gswat_main_next_button, "clicked",
+                    G_CALLBACK (on_gswat_main_next_button_clicked),
+                    NULL);
+  g_signal_connect ((gpointer) gswat_main_continue_button, "clicked",
+                    G_CALLBACK (on_gswat_main_continue_button_clicked),
+                    NULL);
+  g_signal_connect ((gpointer) gswat_main_finish_button, "clicked",
+                    G_CALLBACK (on_gswat_main_finish_button_clicked),
+                    NULL);
+  g_signal_connect ((gpointer) gswat_main_break_button, "clicked",
+                    G_CALLBACK (on_gswat_main_break_button_clicked),
+                    NULL);
+  g_signal_connect ((gpointer) gswat_main_run_button, "clicked",
+                    G_CALLBACK (on_gswat_main_run_button_clicked),
+                    NULL);
+  g_signal_connect ((gpointer) debug_button, "clicked",
+                    G_CALLBACK (on_debug_button_clicked),
                     NULL);
 
   /* Store pointers to all widgets, for use by lookup_widget(). */
-  GLADE_HOOKUP_OBJECT_NO_REF (gg_main_window, gg_main_window, "gg_main_window");
-  GLADE_HOOKUP_OBJECT (gg_main_window, bonobodock1, "bonobodock1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, menubar1_uiinfo[0].widget, "file1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[0].widget, "new1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[1].widget, "separator3");
-  GLADE_HOOKUP_OBJECT (gg_main_window, file1_menu_uiinfo[2].widget, "quit");
-  GLADE_HOOKUP_OBJECT (gg_main_window, menubar1_uiinfo[1].widget, "edit1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[0].widget, "cut1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[1].widget, "copy1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[2].widget, "paste1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[3].widget, "clear1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[4].widget, "separator4");
-  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[5].widget, "properties1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[6].widget, "separator5");
-  GLADE_HOOKUP_OBJECT (gg_main_window, edit1_menu_uiinfo[7].widget, "preferences1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, menubar1_uiinfo[2].widget, "view1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, menubar1_uiinfo[3].widget, "help1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, help1_menu_uiinfo[0].widget, "about1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, toolbar1, "toolbar1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, gg_main_connect_button, "gg_main_connect_button");
-  GLADE_HOOKUP_OBJECT (gg_main_window, separatortoolitem1, "separatortoolitem1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, step_button, "step_button");
-  GLADE_HOOKUP_OBJECT (gg_main_window, next_button, "next_button");
-  GLADE_HOOKUP_OBJECT (gg_main_window, break_button, "break_button");
-  GLADE_HOOKUP_OBJECT (gg_main_window, vpaned1, "vpaned1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, scrolledwindow3, "scrolledwindow3");
-  GLADE_HOOKUP_OBJECT (gg_main_window, viewport1, "viewport1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, scrolledwindow1, "scrolledwindow1");
-  GLADE_HOOKUP_OBJECT (gg_main_window, backtrace_widget, "backtrace_widget");
-  GLADE_HOOKUP_OBJECT (gg_main_window, appbar1, "appbar1");
-  GLADE_HOOKUP_OBJECT_NO_REF (gg_main_window, tooltips, "tooltips");
+  GLADE_HOOKUP_OBJECT_NO_REF (gswat_main_window, gswat_main_window, "gswat_main_window");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, bonobodock1, "bonobodock1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, menubar1_uiinfo[0].widget, "file1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, file1_menu_uiinfo[0].widget, "new1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, file1_menu_uiinfo[1].widget, "separator3");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, file1_menu_uiinfo[2].widget, "quit");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, menubar1_uiinfo[1].widget, "edit1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, edit1_menu_uiinfo[0].widget, "cut1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, edit1_menu_uiinfo[1].widget, "copy1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, edit1_menu_uiinfo[2].widget, "paste1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, edit1_menu_uiinfo[3].widget, "clear1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, edit1_menu_uiinfo[4].widget, "separator4");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, edit1_menu_uiinfo[5].widget, "properties1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, edit1_menu_uiinfo[6].widget, "separator5");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, edit1_menu_uiinfo[7].widget, "preferences1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, menubar1_uiinfo[2].widget, "view1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, menubar1_uiinfo[3].widget, "help1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, help1_menu_uiinfo[0].widget, "about1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, toolbar1, "toolbar1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_new_button, "gswat_main_new_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, separatortoolitem1, "separatortoolitem1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_step_button, "gswat_main_step_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_next_button, "gswat_main_next_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_continue_button, "gswat_main_continue_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_finish_button, "gswat_main_finish_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_break_button, "gswat_main_break_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_run_button, "gswat_main_run_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, debug_button, "debug_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, vpaned1, "vpaned1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, hpaned1, "hpaned1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_scrolled_window, "gswat_main_scrolled_window");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, vpaned2, "vpaned2");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, image1, "image1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, scrolledwindow1, "scrolledwindow1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, backtrace_widget, "backtrace_widget");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, scrolledwindow3, "scrolledwindow3");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, viewport1, "viewport1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, drawingarea1, "drawingarea1");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, appbar1, "appbar1");
+  GLADE_HOOKUP_OBJECT_NO_REF (gswat_main_window, tooltips, "tooltips");
 
-  return gg_main_window;
+  return gswat_main_window;
 }
 
 GtkWidget*
-create_gg_connect_window (void)
+create_gswat_new_session_window (void)
 {
-  GtkWidget *gg_connect_window;
+  GtkWidget *gswat_new_session_window;
   GtkWidget *hbox1;
   GtkWidget *vbox1;
   GtkWidget *frame1;
@@ -245,13 +328,13 @@ create_gg_connect_window (void)
   GtkWidget *label3;
   GtkWidget *gg_connect_connect_button;
 
-  gg_connect_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_title (GTK_WINDOW (gg_connect_window), _("New Debug Session"));
-  gtk_window_set_modal (GTK_WINDOW (gg_connect_window), TRUE);
+  gswat_new_session_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_title (GTK_WINDOW (gswat_new_session_window), _("New Debug Session"));
+  gtk_window_set_modal (GTK_WINDOW (gswat_new_session_window), TRUE);
 
   hbox1 = gtk_hbox_new (FALSE, 0);
   gtk_widget_show (hbox1);
-  gtk_container_add (GTK_CONTAINER (gg_connect_window), hbox1);
+  gtk_container_add (GTK_CONTAINER (gswat_new_session_window), hbox1);
 
   vbox1 = gtk_vbox_new (FALSE, 0);
   gtk_widget_show (vbox1);
@@ -428,155 +511,190 @@ create_gg_connect_window (void)
                     NULL);
 
   /* Store pointers to all widgets, for use by lookup_widget(). */
-  GLADE_HOOKUP_OBJECT_NO_REF (gg_connect_window, gg_connect_window, "gg_connect_window");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, hbox1, "hbox1");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, vbox1, "vbox1");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, frame1, "frame1");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, alignment1, "alignment1");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, notebook1, "notebook1");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_direct_gdb_label, "gg_connect_direct_gdb_label");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, label6, "label6");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, table1, "table1");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, label10, "label10");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, label11, "label11");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, entry5, "entry5");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, entry6, "entry6");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, label7, "label7");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, label2, "label2");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, frame4, "frame4");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, alignment4, "alignment4");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, hbox4, "hbox4");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_wkdir_text, "gg_connect_wkdir_text");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_wkdir_browse_button, "gg_connect_wkdir_browse_button");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, label9, "label9");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, frame3, "frame3");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, alignment3, "alignment3");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, vbox2, "vbox2");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, hbox3, "hbox3");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_inherit_env_button, "gg_connect_inherit_env_button");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_env_clear_button, "gg_connect_env_clear_button");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, scrolledwindow2, "scrolledwindow2");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_treeview, "gg_connect_treeview");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, label4, "label4");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, frame2, "frame2");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, alignment2, "alignment2");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, hbox2, "hbox2");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_program_text, "gg_connect_program_text");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_program_browse_button, "gg_connect_program_browse_button");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, label3, "label3");
-  GLADE_HOOKUP_OBJECT (gg_connect_window, gg_connect_connect_button, "gg_connect_connect_button");
+  GLADE_HOOKUP_OBJECT_NO_REF (gswat_new_session_window, gswat_new_session_window, "gswat_new_session_window");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, hbox1, "hbox1");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, vbox1, "vbox1");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, frame1, "frame1");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, alignment1, "alignment1");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, notebook1, "notebook1");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, gg_connect_direct_gdb_label, "gg_connect_direct_gdb_label");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, label6, "label6");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, table1, "table1");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, label10, "label10");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, label11, "label11");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, entry5, "entry5");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, entry6, "entry6");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, label7, "label7");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, label2, "label2");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, frame4, "frame4");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, alignment4, "alignment4");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, hbox4, "hbox4");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, gg_connect_wkdir_text, "gg_connect_wkdir_text");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, gg_connect_wkdir_browse_button, "gg_connect_wkdir_browse_button");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, label9, "label9");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, frame3, "frame3");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, alignment3, "alignment3");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, vbox2, "vbox2");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, hbox3, "hbox3");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, gg_connect_inherit_env_button, "gg_connect_inherit_env_button");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, gg_connect_env_clear_button, "gg_connect_env_clear_button");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, scrolledwindow2, "scrolledwindow2");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, gg_connect_treeview, "gg_connect_treeview");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, label4, "label4");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, frame2, "frame2");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, alignment2, "alignment2");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, hbox2, "hbox2");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, gg_connect_program_text, "gg_connect_program_text");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, gg_connect_program_browse_button, "gg_connect_program_browse_button");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, label3, "label3");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_window, gg_connect_connect_button, "gg_connect_connect_button");
 
-  return gg_connect_window;
+  return gswat_new_session_window;
 }
 
 GtkWidget*
-create_gg_file_chooser_dialog (void)
+create_gswat_new_session_dialog (void)
 {
-  GtkWidget *gg_file_chooser_dialog;
-  GtkWidget *dialog_vbox1;
-  GtkWidget *dialog_action_area1;
-  GtkWidget *button2;
-  GtkWidget *button3;
-
-  gg_file_chooser_dialog = gtk_file_chooser_dialog_new ("", NULL, GTK_FILE_CHOOSER_ACTION_OPEN, NULL);
-  gtk_window_set_type_hint (GTK_WINDOW (gg_file_chooser_dialog), GDK_WINDOW_TYPE_HINT_DIALOG);
-
-  dialog_vbox1 = GTK_DIALOG (gg_file_chooser_dialog)->vbox;
-  gtk_widget_show (dialog_vbox1);
-
-  dialog_action_area1 = GTK_DIALOG (gg_file_chooser_dialog)->action_area;
-  gtk_widget_show (dialog_action_area1);
-  gtk_button_box_set_layout (GTK_BUTTON_BOX (dialog_action_area1), GTK_BUTTONBOX_END);
-
-  button2 = gtk_button_new_from_stock ("gtk-open");
-  gtk_widget_show (button2);
-  gtk_dialog_add_action_widget (GTK_DIALOG (gg_file_chooser_dialog), button2, GTK_RESPONSE_OK);
-  GTK_WIDGET_SET_FLAGS (button2, GTK_CAN_DEFAULT);
-
-  button3 = gtk_button_new_with_mnemonic (_("button3"));
-  gtk_widget_show (button3);
-  gtk_dialog_add_action_widget (GTK_DIALOG (gg_file_chooser_dialog), button3, 0);
-  GTK_WIDGET_SET_FLAGS (button3, GTK_CAN_DEFAULT);
-
-  /* Store pointers to all widgets, for use by lookup_widget(). */
-  GLADE_HOOKUP_OBJECT_NO_REF (gg_file_chooser_dialog, gg_file_chooser_dialog, "gg_file_chooser_dialog");
-  GLADE_HOOKUP_OBJECT_NO_REF (gg_file_chooser_dialog, dialog_vbox1, "dialog_vbox1");
-  GLADE_HOOKUP_OBJECT_NO_REF (gg_file_chooser_dialog, dialog_action_area1, "dialog_action_area1");
-  GLADE_HOOKUP_OBJECT (gg_file_chooser_dialog, button2, "button2");
-  GLADE_HOOKUP_OBJECT (gg_file_chooser_dialog, button3, "button3");
-
-  gtk_widget_grab_default (button2);
-  return gg_file_chooser_dialog;
-}
-
-GtkWidget*
-create_gg_run_dialog (void)
-{
-  GtkWidget *gg_run_dialog;
+  GtkWidget *gswat_new_session_dialog;
   GtkWidget *dialog_vbox2;
-  GtkWidget *frame;
+  GtkWidget *frame6;
+  GtkWidget *alignment6;
+  GtkWidget *gswat_session_name_combo;
+  GtkWidget *label13;
+  GtkWidget *frame7;
+  GtkWidget *alignment7;
+  GtkWidget *gswat_session_target_combo;
+  GtkWidget *label14;
+  GtkWidget *frame8;
+  GtkWidget *alignment8;
+  GtkWidget *frame5;
   GtkWidget *alignment5;
-  GtkWidget *gg_run_dialog_text_entry;
+  GtkWidget *gswat_session_command_entry;
   GtkWidget *label12;
+  GtkWidget *label15;
   GtkWidget *dialog_action_area2;
-  GtkWidget *cancelbutton1;
-  GtkWidget *gg_run_dialog_ok_button;
+  GtkWidget *gswat_session_cancel_button;
+  GtkWidget *gswat_session_ok_button;
 
-  gg_run_dialog = gtk_dialog_new ();
-  gtk_window_set_title (GTK_WINDOW (gg_run_dialog), _("Run"));
-  gtk_window_set_type_hint (GTK_WINDOW (gg_run_dialog), GDK_WINDOW_TYPE_HINT_DIALOG);
+  gswat_new_session_dialog = gtk_dialog_new ();
+  gtk_window_set_title (GTK_WINDOW (gswat_new_session_dialog), _("New Session"));
+  gtk_window_set_type_hint (GTK_WINDOW (gswat_new_session_dialog), GDK_WINDOW_TYPE_HINT_DIALOG);
 
-  dialog_vbox2 = GTK_DIALOG (gg_run_dialog)->vbox;
+  dialog_vbox2 = GTK_DIALOG (gswat_new_session_dialog)->vbox;
   gtk_widget_show (dialog_vbox2);
 
-  frame = gtk_frame_new (NULL);
-  gtk_widget_show (frame);
-  gtk_box_pack_start (GTK_BOX (dialog_vbox2), frame, TRUE, TRUE, 0);
-  gtk_frame_set_shadow_type (GTK_FRAME (frame), GTK_SHADOW_NONE);
+  frame6 = gtk_frame_new (NULL);
+  gtk_widget_show (frame6);
+  gtk_box_pack_start (GTK_BOX (dialog_vbox2), frame6, FALSE, TRUE, 0);
+  gtk_frame_set_shadow_type (GTK_FRAME (frame6), GTK_SHADOW_NONE);
+
+  alignment6 = gtk_alignment_new (0.5, 0.5, 1, 1);
+  gtk_widget_show (alignment6);
+  gtk_container_add (GTK_CONTAINER (frame6), alignment6);
+  gtk_alignment_set_padding (GTK_ALIGNMENT (alignment6), 0, 0, 12, 0);
+
+  gswat_session_name_combo = gtk_combo_box_entry_new_text ();
+  gtk_widget_show (gswat_session_name_combo);
+  gtk_container_add (GTK_CONTAINER (alignment6), gswat_session_name_combo);
+
+  label13 = gtk_label_new (_("<b>Session Name</b>"));
+  gtk_widget_show (label13);
+  gtk_frame_set_label_widget (GTK_FRAME (frame6), label13);
+  gtk_label_set_use_markup (GTK_LABEL (label13), TRUE);
+
+  frame7 = gtk_frame_new (NULL);
+  gtk_widget_show (frame7);
+  gtk_box_pack_start (GTK_BOX (dialog_vbox2), frame7, FALSE, TRUE, 0);
+  gtk_frame_set_shadow_type (GTK_FRAME (frame7), GTK_SHADOW_NONE);
+
+  alignment7 = gtk_alignment_new (0.5, 0.5, 1, 1);
+  gtk_widget_show (alignment7);
+  gtk_container_add (GTK_CONTAINER (frame7), alignment7);
+  gtk_alignment_set_padding (GTK_ALIGNMENT (alignment7), 0, 0, 12, 0);
+
+  gswat_session_target_combo = gtk_combo_box_entry_new_text ();
+  gtk_widget_show (gswat_session_target_combo);
+  gtk_container_add (GTK_CONTAINER (alignment7), gswat_session_target_combo);
+  gtk_combo_box_append_text (GTK_COMBO_BOX (gswat_session_target_combo), _("Local Command"));
+  gtk_combo_box_append_text (GTK_COMBO_BOX (gswat_session_target_combo), _("Local PID"));
+  gtk_combo_box_append_text (GTK_COMBO_BOX (gswat_session_target_combo), _("Remote Command"));
+  gtk_combo_box_append_text (GTK_COMBO_BOX (gswat_session_target_combo), _("Remote PID"));
+
+  label14 = gtk_label_new (_("<b>Target</b>"));
+  gtk_widget_show (label14);
+  gtk_frame_set_label_widget (GTK_FRAME (frame7), label14);
+  gtk_label_set_use_markup (GTK_LABEL (label14), TRUE);
+
+  frame8 = gtk_frame_new (NULL);
+  gtk_widget_show (frame8);
+  gtk_box_pack_start (GTK_BOX (dialog_vbox2), frame8, TRUE, TRUE, 0);
+
+  alignment8 = gtk_alignment_new (0.5, 0.5, 1, 1);
+  gtk_widget_show (alignment8);
+  gtk_container_add (GTK_CONTAINER (frame8), alignment8);
+  gtk_alignment_set_padding (GTK_ALIGNMENT (alignment8), 0, 0, 12, 0);
+
+  frame5 = gtk_frame_new (NULL);
+  gtk_widget_show (frame5);
+  gtk_container_add (GTK_CONTAINER (alignment8), frame5);
+  gtk_container_set_border_width (GTK_CONTAINER (frame5), 18);
+  gtk_frame_set_shadow_type (GTK_FRAME (frame5), GTK_SHADOW_NONE);
 
   alignment5 = gtk_alignment_new (0.5, 0.5, 1, 1);
   gtk_widget_show (alignment5);
-  gtk_container_add (GTK_CONTAINER (frame), alignment5);
+  gtk_container_add (GTK_CONTAINER (frame5), alignment5);
   gtk_alignment_set_padding (GTK_ALIGNMENT (alignment5), 0, 0, 12, 0);
 
-  gg_run_dialog_text_entry = gtk_entry_new ();
-  gtk_widget_show (gg_run_dialog_text_entry);
-  gtk_container_add (GTK_CONTAINER (alignment5), gg_run_dialog_text_entry);
+  gswat_session_command_entry = gtk_entry_new ();
+  gtk_widget_show (gswat_session_command_entry);
+  gtk_container_add (GTK_CONTAINER (alignment5), gswat_session_command_entry);
 
   label12 = gtk_label_new (_("<b>Command</b>"));
   gtk_widget_show (label12);
-  gtk_frame_set_label_widget (GTK_FRAME (frame), label12);
+  gtk_frame_set_label_widget (GTK_FRAME (frame5), label12);
   gtk_label_set_use_markup (GTK_LABEL (label12), TRUE);
 
-  dialog_action_area2 = GTK_DIALOG (gg_run_dialog)->action_area;
+  label15 = gtk_label_new (_("<b>Target details</b>"));
+  gtk_widget_show (label15);
+  gtk_frame_set_label_widget (GTK_FRAME (frame8), label15);
+  gtk_label_set_use_markup (GTK_LABEL (label15), TRUE);
+
+  dialog_action_area2 = GTK_DIALOG (gswat_new_session_dialog)->action_area;
   gtk_widget_show (dialog_action_area2);
   gtk_button_box_set_layout (GTK_BUTTON_BOX (dialog_action_area2), GTK_BUTTONBOX_END);
 
-  cancelbutton1 = gtk_button_new_from_stock ("gtk-cancel");
-  gtk_widget_show (cancelbutton1);
-  gtk_dialog_add_action_widget (GTK_DIALOG (gg_run_dialog), cancelbutton1, GTK_RESPONSE_CANCEL);
-  GTK_WIDGET_SET_FLAGS (cancelbutton1, GTK_CAN_DEFAULT);
+  gswat_session_cancel_button = gtk_button_new_from_stock ("gtk-cancel");
+  gtk_widget_show (gswat_session_cancel_button);
+  gtk_dialog_add_action_widget (GTK_DIALOG (gswat_new_session_dialog), gswat_session_cancel_button, GTK_RESPONSE_CANCEL);
+  GTK_WIDGET_SET_FLAGS (gswat_session_cancel_button, GTK_CAN_DEFAULT);
 
-  gg_run_dialog_ok_button = gtk_button_new_from_stock ("gtk-ok");
-  gtk_widget_show (gg_run_dialog_ok_button);
-  gtk_dialog_add_action_widget (GTK_DIALOG (gg_run_dialog), gg_run_dialog_ok_button, GTK_RESPONSE_OK);
-  GTK_WIDGET_SET_FLAGS (gg_run_dialog_ok_button, GTK_CAN_DEFAULT);
-
-  g_signal_connect ((gpointer) gg_run_dialog_ok_button, "clicked",
-                    G_CALLBACK (on_gg_run_dialog_ok_button_clicked),
-                    NULL);
+  gswat_session_ok_button = gtk_button_new_from_stock ("gtk-ok");
+  gtk_widget_show (gswat_session_ok_button);
+  gtk_dialog_add_action_widget (GTK_DIALOG (gswat_new_session_dialog), gswat_session_ok_button, GTK_RESPONSE_OK);
+  GTK_WIDGET_SET_FLAGS (gswat_session_ok_button, GTK_CAN_DEFAULT);
 
   /* Store pointers to all widgets, for use by lookup_widget(). */
-  GLADE_HOOKUP_OBJECT_NO_REF (gg_run_dialog, gg_run_dialog, "gg_run_dialog");
-  GLADE_HOOKUP_OBJECT_NO_REF (gg_run_dialog, dialog_vbox2, "dialog_vbox2");
-  GLADE_HOOKUP_OBJECT (gg_run_dialog, frame, "frame");
-  GLADE_HOOKUP_OBJECT (gg_run_dialog, alignment5, "alignment5");
-  GLADE_HOOKUP_OBJECT (gg_run_dialog, gg_run_dialog_text_entry, "gg_run_dialog_text_entry");
-  GLADE_HOOKUP_OBJECT (gg_run_dialog, label12, "label12");
-  GLADE_HOOKUP_OBJECT_NO_REF (gg_run_dialog, dialog_action_area2, "dialog_action_area2");
-  GLADE_HOOKUP_OBJECT (gg_run_dialog, cancelbutton1, "cancelbutton1");
-  GLADE_HOOKUP_OBJECT (gg_run_dialog, gg_run_dialog_ok_button, "gg_run_dialog_ok_button");
+  GLADE_HOOKUP_OBJECT_NO_REF (gswat_new_session_dialog, gswat_new_session_dialog, "gswat_new_session_dialog");
+  GLADE_HOOKUP_OBJECT_NO_REF (gswat_new_session_dialog, dialog_vbox2, "dialog_vbox2");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, frame6, "frame6");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, alignment6, "alignment6");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, gswat_session_name_combo, "gswat_session_name_combo");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, label13, "label13");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, frame7, "frame7");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, alignment7, "alignment7");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, gswat_session_target_combo, "gswat_session_target_combo");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, label14, "label14");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, frame8, "frame8");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, alignment8, "alignment8");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, frame5, "frame5");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, alignment5, "alignment5");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, gswat_session_command_entry, "gswat_session_command_entry");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, label12, "label12");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, label15, "label15");
+  GLADE_HOOKUP_OBJECT_NO_REF (gswat_new_session_dialog, dialog_action_area2, "dialog_action_area2");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, gswat_session_cancel_button, "gswat_session_cancel_button");
+  GLADE_HOOKUP_OBJECT (gswat_new_session_dialog, gswat_session_ok_button, "gswat_session_ok_button");
 
-  return gg_run_dialog;
+  return gswat_new_session_dialog;
 }
 

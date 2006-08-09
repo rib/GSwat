@@ -42,3 +42,57 @@ on_gg_connect_connect_button_clicked   (GtkButton       *button,
 void
 on_gg_run_dialog_ok_button_clicked     (GtkButton       *button,
                                         gpointer         user_data);
+
+void
+on_gswat_main_connect_button_clicked   (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gswat_main_step_button_clicked      (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gswat_main_next_button_clicked      (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gswat_main_break_button_clicked     (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+gswat_main_on_quit_activate            (GtkMenuItem     *menuitem,
+                                        gpointer         user_data);
+
+void
+on_gswat_main_run_button_clicked       (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gswat_main_new_button_clicked       (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+gboolean
+on_gswat_new_session_dialog_delete_event
+                                        (GtkWidget       *widget,
+                                        GdkEvent        *event,
+                                        gpointer         user_data);
+
+void
+on_gswat_session_cancel_button_clicked (GtkButton       *button,
+                                        gpointer         user_data);
+
+void
+on_gswat_session_ok_button_clicked     (GtkButton       *button,
+                                        gpointer         user_data);
+
+void
+on_gswat_main_continue_button_clicked  (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gswat_main_finish_button_clicked    (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_debug_button_clicked                (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);

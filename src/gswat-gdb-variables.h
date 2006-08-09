@@ -21,25 +21,25 @@
  * USA
  */
 
-#ifndef GG_GDB_VARIABLE_H
-#define GG_GDB_VARIABLE_H
+#ifndef GSwat_GDB_VARIABLE_H
+#define GSwat_GDB_VARIABLE_H
 
 #include <glib-object.h>
 
 G_BEGIN_DECLS
 
-typedef struct _GGGdbVariable GGGdbVariable;
+typedef struct _GSwatGdbVariable GSwatGdbVariable;
 
-struct _GGGdbVariable {
+struct _GSwatGdbVariable {
 	gchar* name;
 	GValue* val;
 };
 
-GGGdbVariable* gg_gdb_variable_parse(gchar const* string,
+GSwatGdbVariable* gswat_gdb_variable_parse(gchar const* string,
 				     gchar const**endptr);
-void           gg_gdb_variable_print(GGGdbVariable const* self);
-void           gg_gdb_variable_free (GGGdbVariable* self);
+void           gswat_gdb_variable_print(GSwatGdbVariable const* self);
+void           gswat_gdb_variable_free (GSwatGdbVariable* self);
 
 G_END_DECLS
 
-#endif /* !GG_GDB_VARIABLE_H */
+#endif /* !GSwat_GDB_VARIABLE_H */

@@ -27,14 +27,14 @@
 #include <glib/gstrfuncs.h>
 #include <glib/gstring.h>
 
-#include "gg_gdb_variable.h"
+#include "gswat-gdb-variables.h"
 
 
 
-GGGdbVariable*
-gg_gdb_variable_parse(gchar const* string, gchar const** endptr)
+GSwatGdbVariable*
+gswat_gdb_variable_parse(gchar const* string, gchar const** endptr)
 {
-	GGGdbVariable* var = g_new0(GGGdbVariable, 1);
+	GSwatGdbVariable* var = g_new0(GSwatGdbVariable, 1);
 	GString* tempdata = g_string_new("");
 
 	// FIXME: return NULL if we get NULL
@@ -93,7 +93,7 @@ gg_gdb_variable_parse(gchar const* string, gchar const** endptr)
 			string++; // skip '['
 			while(string && *string && *string != ']') {
 				list = g_list_prepend(list,
-						      gg_gdb_variable_parse(string, &string));
+						      gswat_gdb_variable_parse(string, &string));
 				if(*string != ']') {
 					string++;
 				}
@@ -110,7 +110,7 @@ gg_gdb_variable_parse(gchar const* string, gchar const** endptr)
 			string++; // skip '{'
 			while(string && *string && *string != '}') {
 				list = g_list_prepend(list,
-						      gg_gdb_variable_parse(string, &string));
+						      gswat_gdb_variable_parse(string, &string));
 				if(*string != '}') {
 					string++;
 				}
@@ -135,16 +135,16 @@ gg_gdb_variable_parse(gchar const* string, gchar const** endptr)
 	return var;
 }
 
-static void gg_gdb_variable_print_depth(GGGdbVariable const* self, guint depth);
+static void gswat_gdb_variable_print_depth(GSwatGdbVariable const* self, guint depth);
 
 static void
-gg_gdb_variable_print_depth_p(GGGdbVariable const* self, gpointer user_data)
+gswat_gdb_variable_print_depth_p(GSwatGdbVariable const* self, gpointer user_data)
 {
-	gg_gdb_variable_print_depth(self, GPOINTER_TO_INT(user_data));
+	gswat_gdb_variable_print_depth(self, GPOINTER_TO_INT(user_data));
 }
 
 static void
-gg_gdb_variable_print_depth(GGGdbVariable const* self, guint depth)
+gswat_gdb_variable_print_depth(GSwatGdbVariable const* self, guint depth)
 {
 	guint done;
 	for(done = 0; done < depth; done++) { g_print("    "); }
@@ -161,7 +161,7 @@ gg_gdb_variable_print_depth(GGGdbVariable const* self, guint depth)
             {
                 g_print("\n");
                 g_list_foreach(g_value_get_pointer(self->val),
-                                   (GFunc)gg_gdb_variable_print_depth_p, GINT_TO_POINTER(depth+1));
+                                   (GFunc)gswat_gdb_variable_print_depth_p, GINT_TO_POINTER(depth+1));
                 for(done = 0; done < depth; done++) { g_print("    "); }
             }
             g_print("]\n");
@@ -172,18 +172,18 @@ gg_gdb_variable_print_depth(GGGdbVariable const* self, guint depth)
 }
 
 void
-gg_gdb_variable_print(GGGdbVariable const* self)
+gswat_gdb_variable_print(GSwatGdbVariable const* self)
 {
-	gg_gdb_variable_print_depth(self, 0);
+	gswat_gdb_variable_print_depth(self, 0);
 }
 
 void
-gg_gdb_variable_free(GGGdbVariable* self)
+gswat_gdb_variable_free(GSwatGdbVariable* self)
 {
 	g_free(self->name);
 	if(G_VALUE_TYPE(self->val) == G_TYPE_POINTER)
     {
-		g_list_foreach(g_value_get_pointer(self->val), (GFunc)gg_gdb_variable_free, NULL);
+		g_list_foreach(g_value_get_pointer(self->val), (GFunc)gswat_gdb_variable_free, NULL);
     }
 	g_value_unset(self->val);
 	g_free(self->val);
