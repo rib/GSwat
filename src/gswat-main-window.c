@@ -12,6 +12,12 @@
 #include "gdb.h"
 
 
+enum {
+  GSWAT_MAIN_STACK_FUNC_COL,
+  GSWAT_MAIN_STACK_ADDR_COL,
+  GSWAT_MAIN_STACK_N_COLS
+};
+
 
 static GladeXML *gswat_main_window_xml;
 
@@ -20,6 +26,7 @@ static GladeXML *gswat_main_window_xml;
 //static GtkSourceView *source_view;
 static GeditDocument *source_document;
 static GtkWidget *source_view;
+static GtkListStore *gswat_main_stack_list_store;
 
 static GSwatDebugger* debugger;
 
@@ -33,6 +40,10 @@ static void on_gswat_session_edit_done(GSwatSession *session);
 static void gswat_main_set_toolbar_state(guint state);
 
 static void gswat_main_update_state(GObject *debugger,
+                                    GParamSpec *property,
+                                    gpointer data);
+
+static void gswat_main_update_stack(GObject *debugger,
                                     GParamSpec *property,
                                     gpointer data);
 
@@ -54,7 +65,10 @@ static void gswat_main_source_file_loaded(GeditDocument *document,
 void
 gswat_main_window_init(GSwatSession *session)
 {
-
+    GladeXML *xml;
+    GtkTreeView *stack_widget;
+    GtkCellRenderer *renderer;
+    GtkTreeViewColumn *column;
 
     /* load the main window */
     gswat_main_window_xml = glade_xml_new(GSWAT_GLADEDIR "gswat.glade", "gswat_main_window", NULL);
@@ -70,6 +84,19 @@ gswat_main_window_init(GSwatSession *session)
     setup_sourceview();
 
     gswat_main_set_toolbar_state(GSWAT_DEBUGGER_NOT_RUNNING);
+
+
+    /* Setup the stack view */
+    xml = gswat_main_window_xml;
+    stack_widget = (GtkTreeView *)glade_xml_get_widget(xml, "gswat_main_stack_widget");
+    
+    renderer = gtk_cell_renderer_text_new();
+    column = gtk_tree_view_column_new_with_attributes("",
+                                                      renderer,
+                                                      "text", GSWAT_MAIN_STACK_FUNC_COL,
+                                                      NULL);
+    gtk_tree_view_append_column(stack_widget, column);
+
 
     /* If we have been passed a session, then
      * we start that immediatly
@@ -197,6 +224,11 @@ on_gswat_session_edit_done(GSwatSession *session)
                      NULL);
 
     g_signal_connect(G_OBJECT(debugger),
+                     "notify::stack",
+                     G_CALLBACK(gswat_main_update_stack),
+                     NULL);
+
+    g_signal_connect(G_OBJECT(debugger),
                      "notify::source-uri",
                      G_CALLBACK(gswat_main_update_source_file),
                      NULL);
@@ -287,6 +319,55 @@ gswat_main_update_state(GObject *object,
     gswat_main_set_toolbar_state(state);
 }
 
+
+
+static void
+gswat_main_update_stack(GObject *object,
+                        GParamSpec *property,
+                        gpointer data)
+{
+    GSwatDebugger *debugger = GSWAT_DEBUGGER(object);
+    GList *stack, *tmp;
+    GSwatDebuggerFrame *current_frame=NULL;
+    GladeXML *xml;
+    GtkTreeView *stack_widget=NULL;
+    GtkListStore *list_store;
+    GtkTreeIter iter;
+
+    stack = gswat_debugger_get_stack(debugger);
+
+    /* TODO look up the stack tree view widget */
+    xml = gswat_main_window_xml;
+    stack_widget = (GtkTreeView *)glade_xml_get_widget(xml, "gswat_main_stack_widget");
+
+
+    list_store = gtk_list_store_new(GSWAT_MAIN_STACK_N_COLS,
+                                    G_TYPE_STRING,
+                                    G_TYPE_ULONG);
+
+
+    for(tmp=stack; tmp!=NULL; tmp=tmp->next)
+    {
+        current_frame = (GSwatDebuggerFrame *)tmp->data;
+        gtk_list_store_append(list_store, &iter);
+
+        gtk_list_store_set(list_store, &iter,
+                           GSWAT_MAIN_STACK_FUNC_COL, current_frame->function,
+                           GSWAT_MAIN_STACK_ADDR_COL, current_frame->address,
+                           -1);
+
+    }
+
+    g_object_unref(gswat_main_stack_list_store);
+    gswat_main_stack_list_store = list_store;
+
+    gtk_tree_view_set_model(stack_widget,
+                            GTK_TREE_MODEL(gswat_main_stack_list_store));
+}
+
+
+
+
 static void
 gswat_main_source_file_loaded(GeditDocument *document,
                               const GError  *error,
@@ -308,7 +389,7 @@ gswat_main_update_source_file(GObject *debugger,
     /* FIXME - we should have a main_window object to hold this */
     //GtkTextIter iter;
 
-    
+
     file_uri = gswat_debugger_get_source_uri(GSWAT_DEBUGGER(debugger));
 
     line = gswat_debugger_get_source_line(GSWAT_DEBUGGER(debugger));

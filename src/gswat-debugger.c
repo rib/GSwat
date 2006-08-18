@@ -64,8 +64,9 @@ struct GSwatDebuggerPrivate {
     GPid    spawner_pid;
     
     GPid    target_pid;
-    
 };
+
+
 
 /* GType */
 G_DEFINE_TYPE(GSwatDebugger, gswat_debugger, G_TYPE_OBJECT);
@@ -253,6 +254,135 @@ uri_from_filename(gchar *filename)
 }
 
 
+static void
+gd_handle_gdb_stack_result(GSwatDebugger* self, MIResult *result)
+{
+    MIList *list;
+    MITuple *tuple;
+    MIResult *res0, *res1;
+    MIValue *val;
+    gchar *level, *addr;
+    GList *stack=NULL, *tmp=NULL;
+    GSwatDebuggerFrame *frame=NULL, *current_frame=NULL;
+
+    g_assert(result->value->value_choice == GDBMI_LIST);
+    list = result->value->option.list;
+
+    g_assert(list->list_choice == GDBMI_RESULT);
+
+    /* Free the current stack */
+    for(tmp=self->priv->stack; tmp!=NULL; tmp=tmp->next)
+    {
+        current_frame = (GSwatDebuggerFrame *)tmp->data;
+        g_free(current_frame->function);
+        g_free(tmp->data);
+    }
+    g_list_free(self->priv->stack);
+    self->priv->stack = NULL;
+
+    g_assert(list->list_choice == GDBMI_RESULT);
+    res0 = list->option.result;
+    //g_assert(res0->value->value_choice == GDBMI_TUPLE);
+    //tuple = res0->value->option.tuple;
+
+
+    //for(; list != NULL; list=list->next)
+    for(; res0!=NULL; res0=res0->next)
+    {
+        g_assert(res0->value->value_choice == GDBMI_TUPLE);
+        tuple = res0->value->option.tuple;
+
+
+        frame = g_new(GSwatDebuggerFrame, 1);
+        
+        for(res1 = tuple->result; res1!=NULL; res1=res1->next)
+        {
+            g_message("stack res debug\n");
+
+            if(strcmp(res1->variable, "level")==0)
+            {   
+                val = res1->value;
+                g_assert(val->value_choice == GDBMI_CSTRING);
+                level = g_shell_unquote(val->option.cstring, NULL);
+                frame->level = strtol(val->option.cstring, NULL, 10);
+                g_free(level);
+
+    /*
+                if(self->priv->source_uri != NULL){
+                    g_free(self->priv->source_uri);
+                }
+                self->priv->source_uri = uri_from_filename(val->option.cstring);
+                g_message("Breakpoint file=%s\n", self->priv->source_uri);
+                
+                g_object_notify(G_OBJECT(self), "source-uri");
+                */
+            }
+            if(strcmp(res1->variable, "addr")==0)
+            {   
+                val = res1->value;
+                g_assert(val->value_choice == GDBMI_CSTRING);
+                addr = g_shell_unquote(val->option.cstring, NULL);
+                frame->address = strtol(addr, NULL, 16);
+                g_free(addr);
+            }
+            if(strcmp(res1->variable, "func")==0)
+            {   
+                val = res1->value;
+                g_assert(val->value_choice == GDBMI_CSTRING);
+                frame->function = g_shell_unquote(val->option.cstring, NULL);
+            }
+            
+        } 
+        stack=g_list_prepend(stack, frame);
+    }
+
+    //stack=g_list_reverse(stack);
+    
+    self->priv->stack = stack;
+
+    g_message("Debug Stack..");
+    /* Print the stack for debugging */
+    for(tmp=stack; tmp!=NULL; tmp=tmp->next)
+    {
+        current_frame = (GSwatDebuggerFrame *)tmp->data;
+        g_message("frame %d: addr=0x%lX, func=%s",
+                  current_frame->level,
+                  current_frame->address,
+                  current_frame->function);
+    }
+    
+    g_object_notify(G_OBJECT(self), "stack");
+    
+
+    #if 0
+    for(cur = list->option.result; cur!=NULL; cur=cur->next)
+    {
+        if(strcmp(cur->variable, "frame")==0)
+        {   
+            val = cur->value;
+            g_assert(val->value_choice == GDBMI_TUPLE);
+/*
+            if(self->priv->source_uri != NULL){
+                g_free(self->priv->source_uri);
+            }
+            self->priv->source_uri = uri_from_filename(val->option.cstring);
+            g_message("Breakpoint file=%s\n", self->priv->source_uri);
+            
+            g_object_notify(G_OBJECT(self), "source-uri");
+            */
+        }
+        else
+        {
+            g_assert_not_reached();
+        }
+
+    }
+    #endif
+
+}
+
+
+
 
 static void
 gd_handle_gdb_bkpt_result(GSwatDebugger* self, MIResult *result)
@@ -284,6 +414,9 @@ gd_handle_gdb_bkpt_result(GSwatDebugger* self, MIResult *result)
     }
 
 }
+
+
+
 
 
 static void
@@ -375,6 +508,7 @@ gd_handle_gdb_breakpoint_hit(GSwatDebugger* self, MIAsyncRecord *bkpt_hit_record
 
         }
     }
+    gd_send_mi_command(self, "-stack-list-frames");
 }
 
 
@@ -429,6 +563,10 @@ gd_handle_gdb_oob_stopped_record(GSwatDebugger* self, MIAsyncRecord *stopped_rec
             else if(strcmp(reason, "exited-normally")==0)
             {
                 self->priv->state = GSWAT_DEBUGGER_NOT_RUNNING;
+            }
+            else if(strcmp(reason, "function-finished")==0)
+            {
+                self->priv->state = GSWAT_DEBUGGER_INTERRUPTED;
             }
             else
             {
@@ -513,6 +651,13 @@ gd_handle_gdb_result_record(GSwatDebugger* self, MIResultRecord *result_record)
                 g_message("GDBMI_DONE Breakpoint\n");
                 gd_handle_gdb_bkpt_result(self, result_record->result);
             }
+            
+            if(strcmp(result_record->result->variable, "stack") == 0)
+            {
+                g_message("GDBMI_DONE Stack\n");
+                gd_handle_gdb_stack_result(self, result_record->result);
+            }
+
             break;
 	    case GDBMI_RUNNING:
             self->priv->state = GSWAT_DEBUGGER_RUNNING;
@@ -903,14 +1048,18 @@ gswat_debugger_get_state(GSwatDebugger* self)
 GList *
 gswat_debugger_get_stack(GSwatDebugger* self)
 { 
-    gchar *current_frame;
+    GSwatDebuggerFrame *current_frame, *new_frame;
     GList *tmp, *new_stack=NULL;
 
     /* copy the stack list */
     for(tmp=self->priv->stack; tmp!=NULL; tmp=tmp->next)
     {
-        current_frame = (gchar *)tmp->data;
-        new_stack = g_list_prepend(new_stack, g_strdup(current_frame));
+        current_frame = (GSwatDebuggerFrame *)tmp->data;
+
+        new_frame = g_new(GSwatDebuggerFrame, 1);
+        memcpy(new_frame, current_frame, sizeof(GSwatDebuggerFrame));
+
+        new_stack = g_list_prepend(new_stack, new_frame);
     }
 
     return new_stack;
@@ -1246,7 +1395,6 @@ gswat_debugger_init(GSwatDebugger* self)
     {
         g_critical("Failed to start spawner process");
     }
-
 
 }
 

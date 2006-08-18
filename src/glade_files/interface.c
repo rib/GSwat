@@ -90,7 +90,7 @@ create_gswat_main_window (void)
   GtkWidget *vpaned2;
   GtkWidget *image1;
   GtkWidget *scrolledwindow1;
-  GtkWidget *backtrace_widget;
+  GtkWidget *gswat_main_stack_widget;
   GtkWidget *scrolledwindow3;
   GtkWidget *viewport1;
   GtkWidget *drawingarea1;
@@ -196,9 +196,9 @@ create_gswat_main_window (void)
   gtk_paned_pack2 (GTK_PANED (vpaned2), scrolledwindow1, TRUE, TRUE);
   gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolledwindow1), GTK_SHADOW_IN);
 
-  backtrace_widget = gtk_tree_view_new ();
-  gtk_widget_show (backtrace_widget);
-  gtk_container_add (GTK_CONTAINER (scrolledwindow1), backtrace_widget);
+  gswat_main_stack_widget = gtk_tree_view_new ();
+  gtk_widget_show (gswat_main_stack_widget);
+  gtk_container_add (GTK_CONTAINER (scrolledwindow1), gswat_main_stack_widget);
 
   scrolledwindow3 = gtk_scrolled_window_new (NULL, NULL);
   gtk_widget_show (scrolledwindow3);
@@ -277,7 +277,7 @@ create_gswat_main_window (void)
   GLADE_HOOKUP_OBJECT (gswat_main_window, vpaned2, "vpaned2");
   GLADE_HOOKUP_OBJECT (gswat_main_window, image1, "image1");
   GLADE_HOOKUP_OBJECT (gswat_main_window, scrolledwindow1, "scrolledwindow1");
-  GLADE_HOOKUP_OBJECT (gswat_main_window, backtrace_widget, "backtrace_widget");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_stack_widget, "gswat_main_stack_widget");
   GLADE_HOOKUP_OBJECT (gswat_main_window, scrolledwindow3, "scrolledwindow3");
   GLADE_HOOKUP_OBJECT (gswat_main_window, viewport1, "viewport1");
   GLADE_HOOKUP_OBJECT (gswat_main_window, drawingarea1, "drawingarea1");

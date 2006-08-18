@@ -53,6 +53,12 @@ struct _GSwatDebugger {
 	struct GSwatDebuggerPrivate* priv;
 };
 
+typedef struct {
+    int level;
+    unsigned long address;
+    gchar *function;
+}GSwatDebuggerFrame;
+
 
 /* Public methods */
 
@@ -73,6 +79,7 @@ void	    gswat_debugger_step_into(GSwatDebugger* self);
 void        gswat_debugger_interrupt(GSwatDebugger* self);
 void        gswat_debugger_restart(GSwatDebugger* self);
 guint       gswat_debugger_get_state(GSwatDebugger* self);
+GList       *gswat_debugger_get_stack(GSwatDebugger* self);
 
 
 
