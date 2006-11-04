@@ -97,6 +97,7 @@ struct _GeditDocumentClass
 	void (* loaded)			(GeditDocument    *document,
 					 const GError     *error);
 
+#if 0
 	/* Document save */
 	void (* saving)			(GeditDocument    *document,
 					 GnomeVFSFileSize  size,
@@ -104,6 +105,7 @@ struct _GeditDocumentClass
 
 	void (* saved)  		(GeditDocument    *document,
 					 const GError     *error);
+#endif
 
 	void (* search_highlight_updated)
 					(GeditDocument    *document,
@@ -167,6 +169,7 @@ gboolean	 gedit_document_insert_file	(GeditDocument       *doc,
 
 gboolean	 gedit_document_load_cancel	(GeditDocument       *doc);
 
+#if 0
 void		 gedit_document_save 		(GeditDocument       *doc,
 						 GeditDocumentSaveFlags flags);
 
@@ -174,6 +177,7 @@ void		 gedit_document_save_as 	(GeditDocument       *doc,
 						 const gchar         *uri, 
 						 const GeditEncoding *encoding,
 						 GeditDocumentSaveFlags flags);
+#endif
 
 gboolean	 gedit_document_is_untouched 	(GeditDocument       *doc);
 gboolean	 gedit_document_is_untitled 	(GeditDocument       *doc);
@@ -232,7 +236,7 @@ gboolean	 gedit_document_get_enable_search_highlighting
 /* 
  * Non exported functions
  */
-gboolean	_gedit_document_is_saving_as	(GeditDocument       *doc);
+//gboolean	_gedit_document_is_saving_as	(GeditDocument       *doc);
 
 // CHECK: va bene un gint?
 glong		 _gedit_document_get_seconds_since_last_save_or_load 

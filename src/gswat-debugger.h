@@ -54,11 +54,21 @@ struct _GSwatDebugger {
 };
 
 typedef struct {
+    gchar *name;
+    gchar *value;
+}GSwatDebuggerFrameArgument;
+
+typedef struct {
     int level;
     unsigned long address;
     gchar *function;
+    GList *arguments;
 }GSwatDebuggerFrame;
 
+typedef struct {
+    gchar   *source_uri;
+    gint    line;
+}GSwatDebuggerBreakpoint;
 
 /* Public methods */
 
@@ -68,7 +78,7 @@ GSwatDebugger* gswat_debugger_new(GSwatSession *session);
 
 void        gswat_debugger_target_connect(GSwatDebugger* self);
 
-void	    gswat_debugger_request_line_breakpoint(GSwatDebugger* self, gchar *file, guint line);
+void	    gswat_debugger_request_line_breakpoint(GSwatDebugger* self, gchar *uri, guint line);
 void	    gswat_debugger_request_function_breakpoint(GSwatDebugger* self, gchar *symbol);
 gchar       *gswat_debugger_get_source_uri(GSwatDebugger* self);
 gulong      gswat_debugger_get_source_line(GSwatDebugger* self);
@@ -80,6 +90,7 @@ void        gswat_debugger_interrupt(GSwatDebugger* self);
 void        gswat_debugger_restart(GSwatDebugger* self);
 guint       gswat_debugger_get_state(GSwatDebugger* self);
 GList       *gswat_debugger_get_stack(GSwatDebugger* self);
+GList       *gswat_debugger_get_breakpoints(GSwatDebugger* self);
 
 
 

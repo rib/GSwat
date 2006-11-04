@@ -96,3 +96,36 @@ on_gswat_main_finish_button_clicked    (GtkToolButton   *toolbutton,
 void
 on_debug_button_clicked                (GtkToolButton   *toolbutton,
                                         gpointer         user_data);
+
+void
+on_gswat_window_new_button_clicked     (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gswat_window_step_button_clicked    (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gswat_window_next_button_clicked    (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gswat_window_continue_button_clicked
+                                        (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gswat_window_finish_button_clicked  (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gswat_window_break_button_clicked   (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+on_gswat_window_run_button_clicked     (GtkToolButton   *toolbutton,
+                                        gpointer         user_data);
+
+void
+gswat_window_on_quit_activate          (GtkMenuItem     *menuitem,
+                                        gpointer         user_data);

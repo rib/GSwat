@@ -108,6 +108,9 @@ void 		 gedit_view_set_font		(GeditView       *view,
 						 gboolean         def,
 						 const gchar     *font_name);
 
+GeditDocument   *gedit_view_get_document(GeditView       *view);
+
+
 G_END_DECLS
 
 #endif /* __GEDIT_VIEW_H__ */

@@ -9,7 +9,8 @@
 
 static gint pid = -1;
 
-static GSwatSession *session;
+static GSwatSession *session = NULL;
+static GSwatWindow *main_window = NULL;
 
 int
 main(int argc, char **argv)
@@ -87,7 +88,7 @@ main(int argc, char **argv)
     }
 
     /* Normal case: display GUI */
-    gswat_main_window_init(session);
+    main_window = gswat_window_new(session);
 
     
     if (remaining_args != NULL) {
@@ -97,6 +98,14 @@ main(int argc, char **argv)
 
 
     gtk_main();
+
+    
+    if(session)
+    {
+        g_object_unref(session);
+    }
+
+    g_object_unref(main_window);
 
 
     return 0;

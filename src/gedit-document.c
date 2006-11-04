@@ -43,7 +43,7 @@
 //#include "gedit-prefs-manager-app.h"
 #include "gedit-prefs-manager.h"
 #include "gedit-document.h"
-//#include "gedit-debug.h"
+#include "gedit-debug.h"
 #include "gedit-utils.h"
 //#include "gedit-convert.h"
 #include "gedit-metadata-manager.h"
@@ -92,7 +92,7 @@ struct _GeditDocumentPrivate
 	gint	     readonly : 1;
 	gint	     last_save_was_manually : 1; 	
 	gint	     language_set_by_user : 1;
-	gint         is_saving_as : 1;
+//	gint         is_saving_as : 1;
 	gint         has_selection : 1;
 	gint         stop_cursor_moved_emission : 1;
 
@@ -206,7 +206,7 @@ gedit_document_finalize (GObject *object)
 {
 	GeditDocument *doc = GEDIT_DOCUMENT (object); 
 	
-	//RIBgedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 
 	if (doc->priv->untitled_number > 0)
 	{
@@ -485,6 +485,7 @@ gedit_document_class_init (GeditDocumentClass *klass)
 			      1,
 			      G_TYPE_POINTER);
 
+#if 0
 	document_signals[SAVING] =
    		g_signal_new ("saving",
 			      G_OBJECT_CLASS_TYPE (object_class),
@@ -507,6 +508,7 @@ gedit_document_class_init (GeditDocumentClass *klass)
 			      G_TYPE_NONE,
 			      1,
 			      G_TYPE_POINTER);
+#endif
 
 	document_signals[SEARCH_HIGHLIGHT_UPDATED] =
 	    	g_signal_new ("search_highlight_updated",
@@ -530,7 +532,7 @@ set_language (GeditDocument     *doc,
 {
 	GtkSourceLanguage *old_lang;
 
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 	
 	old_lang = gtk_source_buffer_get_language (GTK_SOURCE_BUFFER (doc));
 	
@@ -575,7 +577,7 @@ set_encoding (GeditDocument       *doc,
 {
 	g_return_if_fail (encoding != NULL);
 
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 
 	if (doc->priv->encoding == encoding)
 		return;
@@ -599,7 +601,7 @@ set_encoding (GeditDocument       *doc,
 static void
 gedit_document_init (GeditDocument *doc)
 {
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 
 	doc->priv = GEDIT_DOCUMENT_GET_PRIVATE (doc);
 
@@ -647,7 +649,7 @@ gedit_document_init (GeditDocument *doc)
 GeditDocument *
 gedit_document_new (void)
 {
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 
 	return GEDIT_DOCUMENT (g_object_new (GEDIT_TYPE_DOCUMENT, NULL));
 }
@@ -659,7 +661,7 @@ set_uri (GeditDocument *doc,
 	 const gchar   *uri,
 	 const gchar   *mime_type)
 {
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 
 	g_return_if_fail ((uri == NULL) || gedit_utils_is_valid_uri (uri));
 
@@ -725,7 +727,7 @@ set_uri (GeditDocument *doc,
 
 		if (data != NULL)
 		{
-			//RIB gedit_debug_message (DEBUG_DOCUMENT, "Language: %s", data);
+			gedit_debug_message (DEBUG_DOCUMENT, "Language: %s", data);
 
 			if (strcmp (data, "_NORMAL_") != 0)
 			{
@@ -738,7 +740,7 @@ set_uri (GeditDocument *doc,
 		}
 		else
 		{
-			//RIB gedit_debug_message (DEBUG_DOCUMENT, "Language Normal");
+			gedit_debug_message (DEBUG_DOCUMENT, "Language Normal");
 
 			if (strcmp (doc->priv->mime_type, "text/plain") != 0)
 			{
@@ -887,7 +889,7 @@ static void
 set_readonly (GeditDocument *doc,
 	      gboolean       readonly)
 {
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 	
 	readonly = (readonly != FALSE);
 
@@ -1138,7 +1140,7 @@ gedit_document_goto_line (GeditDocument *doc,
 	guint line_count;
 	GtkTextIter iter;
 
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 
 	g_return_val_if_fail (GEDIT_IS_DOCUMENT (doc), FALSE);
 	g_return_val_if_fail (line >= -1, FALSE);
@@ -1205,7 +1207,7 @@ gedit_document_set_search_text (GeditDocument *doc,
 	g_return_if_fail ((text == NULL) || (doc->priv->search_text != text));
 	g_return_if_fail ((text == NULL) || g_utf8_validate (text, -1, NULL));
 
-	//RIB gedit_debug_message (DEBUG_DOCUMENT, "text = %s", text);
+	gedit_debug_message (DEBUG_DOCUMENT, "text = %s", text);
 
 	if (text != NULL)
 	{
@@ -1296,11 +1298,11 @@ gedit_document_search_forward (GeditDocument     *doc,
 	
 	if (doc->priv->search_text == NULL)
 	{
-		//RIB gedit_debug_message (DEBUG_DOCUMENT, "doc->priv->search_text == NULL\n");
+		gedit_debug_message (DEBUG_DOCUMENT, "doc->priv->search_text == NULL\n");
 		return FALSE;
 	}
 	else
-		//RIB gedit_debug_message (DEBUG_DOCUMENT, "doc->priv->search_text == \"%s\"\n", doc->priv->search_text);
+		gedit_debug_message (DEBUG_DOCUMENT, "doc->priv->search_text == \"%s\"\n", doc->priv->search_text);
 				      
 	if (start == NULL)
 		gtk_text_buffer_get_start_iter (GTK_TEXT_BUFFER (doc), &iter);
@@ -1365,11 +1367,11 @@ gedit_document_search_backward (GeditDocument     *doc,
 	
 	if (doc->priv->search_text == NULL)
 	{
-		//RIB gedit_debug_message (DEBUG_DOCUMENT, "doc->priv->search_text == NULL\n");
+		gedit_debug_message (DEBUG_DOCUMENT, "doc->priv->search_text == NULL\n");
 		return FALSE;
 	}
 	else
-		//RIB gedit_debug_message (DEBUG_DOCUMENT, "doc->priv->search_text == \"%s\"\n", doc->priv->search_text);
+		gedit_debug_message (DEBUG_DOCUMENT, "doc->priv->search_text == \"%s\"\n", doc->priv->search_text);
 				      
 	if (end == NULL)
 		gtk_text_buffer_get_end_iter (GTK_TEXT_BUFFER (doc), &iter);
@@ -1560,7 +1562,7 @@ _gedit_document_get_seconds_since_last_save_or_load (GeditDocument *doc)
 {
 	GTimeVal current_time;
 
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 	
 	g_return_val_if_fail (GEDIT_IS_DOCUMENT (doc), -1);
 
@@ -1569,15 +1571,17 @@ _gedit_document_get_seconds_since_last_save_or_load (GeditDocument *doc)
 	return (current_time.tv_sec - doc->priv->time_of_last_save_or_load.tv_sec);
 }
 
+#if 0
 gboolean
 _gedit_document_is_saving_as (GeditDocument *doc)
 {
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 	
 	g_return_val_if_fail (GEDIT_IS_DOCUMENT (doc), FALSE);
 	
 	return (doc->priv->is_saving_as);
 }
+#endif
 
 static void
 search_region (GeditDocument *doc,
@@ -1592,7 +1596,7 @@ search_region (GeditDocument *doc,
 
 	GtkTextBuffer *buffer;	
 
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 	
 	buffer = GTK_TEXT_BUFFER (doc);
 	
@@ -1683,7 +1687,7 @@ to_search_region_range (GeditDocument *doc,
 			GtkTextIter   *start, 
 			GtkTextIter   *end)
 {
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 	
 	if (doc->priv->to_search_region == NULL)
 		return;
@@ -1713,7 +1717,7 @@ _gedit_document_search_region (GeditDocument     *doc,
 {
 	GeditTextRegion *region;
 
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 		
 	g_return_if_fail (GEDIT_IS_DOCUMENT (doc));
 	g_return_if_fail (start != NULL);
@@ -1770,7 +1774,7 @@ insert_text_cb (GeditDocument *doc,
 	GtkTextIter start;
 	GtkTextIter end;
 
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 		
 	start = end = *pos;
 
@@ -1794,7 +1798,7 @@ delete_range_cb (GeditDocument *doc,
 	GtkTextIter d_start;
 	GtkTextIter d_end;
 
-	//RIB gedit_debug (DEBUG_DOCUMENT);
+	gedit_debug (DEBUG_DOCUMENT);
 		
 	d_start = *start;
 	d_end = *end;

@@ -7,7 +7,7 @@
 
 <widget class="GnomeApp" id="gswat_main_window">
   <property name="visible">True</property>
-  <property name="title" translatable="yes">GGdb</property>
+  <property name="title" translatable="yes">GSwat</property>
   <property name="type">GTK_WINDOW_TOPLEVEL</property>
   <property name="window_position">GTK_WIN_POS_NONE</property>
   <property name="modal">False</property>
@@ -67,7 +67,7 @@
 			<widget class="GtkImageMenuItem" id="quit">
 			  <property name="visible">True</property>
 			  <property name="stock_item">GNOMEUIINFO_MENU_EXIT_ITEM</property>
-			  <signal name="activate" handler="gswat_main_on_quit_activate" last_modification_time="Sat, 08 Jul 2006 20:52:15 GMT"/>
+			  <signal name="activate" handler="gswat_window_on_quit_activate" last_modification_time="Sat, 04 Nov 2006 00:55:09 GMT"/>
 			</widget>
 		      </child>
 		    </widget>
@@ -193,14 +193,13 @@
 	      <property name="show_arrow">True</property>
 
 	      <child>
-		<widget class="GtkToolButton" id="gswat_main_new_button">
+		<widget class="GtkToolButton" id="gswat_window_new_button">
 		  <property name="visible">True</property>
 		  <property name="tooltip" translatable="yes">New File</property>
 		  <property name="stock_id">gtk-new</property>
 		  <property name="visible_horizontal">True</property>
 		  <property name="visible_vertical">True</property>
 		  <property name="is_important">False</property>
-		  <signal name="clicked" handler="on_gswat_main_new_button_clicked" last_modification_time="Sat, 08 Jul 2006 21:38:23 GMT"/>
 		</widget>
 		<packing>
 		  <property name="expand">False</property>
@@ -222,7 +221,7 @@
 	      </child>
 
 	      <child>
-		<widget class="GtkToolButton" id="gswat_main_step_button">
+		<widget class="GtkToolButton" id="gswat_window_step_button">
 		  <property name="visible">True</property>
 		  <property name="label" translatable="yes">Step In</property>
 		  <property name="use_underline">True</property>
@@ -230,7 +229,6 @@
 		  <property name="visible_horizontal">True</property>
 		  <property name="visible_vertical">True</property>
 		  <property name="is_important">False</property>
-		  <signal name="clicked" handler="on_gswat_main_step_button_clicked" last_modification_time="Sat, 08 Jul 2006 20:44:03 GMT"/>
 		</widget>
 		<packing>
 		  <property name="expand">False</property>
@@ -239,7 +237,7 @@
 	      </child>
 
 	      <child>
-		<widget class="GtkToolButton" id="gswat_main_next_button">
+		<widget class="GtkToolButton" id="gswat_window_next_button">
 		  <property name="visible">True</property>
 		  <property name="label" translatable="yes">Next</property>
 		  <property name="use_underline">True</property>
@@ -247,7 +245,6 @@
 		  <property name="visible_horizontal">True</property>
 		  <property name="visible_vertical">True</property>
 		  <property name="is_important">False</property>
-		  <signal name="clicked" handler="on_gswat_main_next_button_clicked" last_modification_time="Sat, 08 Jul 2006 20:44:11 GMT"/>
 		</widget>
 		<packing>
 		  <property name="expand">False</property>
@@ -256,7 +253,7 @@
 	      </child>
 
 	      <child>
-		<widget class="GtkToolButton" id="gswat_main_continue_button">
+		<widget class="GtkToolButton" id="gswat_window_continue_button">
 		  <property name="visible">True</property>
 		  <property name="label" translatable="yes">Continue</property>
 		  <property name="use_underline">True</property>
@@ -264,7 +261,6 @@
 		  <property name="visible_horizontal">True</property>
 		  <property name="visible_vertical">True</property>
 		  <property name="is_important">False</property>
-		  <signal name="clicked" handler="on_gswat_main_continue_button_clicked" last_modification_time="Sun, 23 Jul 2006 19:46:25 GMT"/>
 		</widget>
 		<packing>
 		  <property name="expand">False</property>
@@ -273,16 +269,14 @@
 	      </child>
 
 	      <child>
-		<widget class="GtkToolButton" id="gswat_main_finish_button">
+		<widget class="GtkToolButton" id="gswat_window_finish_button">
 		  <property name="visible">True</property>
-		  <property name="label" translatable="yes">Finish
-Frame</property>
+		  <property name="label" translatable="yes">Up Frame</property>
 		  <property name="use_underline">True</property>
 		  <property name="stock_id">gtk-go-up</property>
 		  <property name="visible_horizontal">True</property>
 		  <property name="visible_vertical">True</property>
 		  <property name="is_important">False</property>
-		  <signal name="clicked" handler="on_gswat_main_finish_button_clicked" last_modification_time="Sun, 23 Jul 2006 19:46:37 GMT"/>
 		</widget>
 		<packing>
 		  <property name="expand">False</property>
@@ -291,7 +285,7 @@ Frame</property>
 	      </child>
 
 	      <child>
-		<widget class="GtkToolButton" id="gswat_main_break_button">
+		<widget class="GtkToolButton" id="gswat_window_break_button">
 		  <property name="visible">True</property>
 		  <property name="label" translatable="yes">Break</property>
 		  <property name="use_underline">True</property>
@@ -299,7 +293,6 @@ Frame</property>
 		  <property name="visible_horizontal">True</property>
 		  <property name="visible_vertical">True</property>
 		  <property name="is_important">False</property>
-		  <signal name="clicked" handler="on_gswat_main_break_button_clicked" last_modification_time="Sat, 08 Jul 2006 20:44:19 GMT"/>
 		</widget>
 		<packing>
 		  <property name="expand">False</property>
@@ -308,7 +301,7 @@ Frame</property>
 	      </child>
 
 	      <child>
-		<widget class="GtkToolButton" id="gswat_main_run_button">
+		<widget class="GtkToolButton" id="gswat_window_run_button">
 		  <property name="visible">True</property>
 		  <property name="label" translatable="yes">Restart</property>
 		  <property name="use_underline">True</property>
@@ -316,7 +309,22 @@ Frame</property>
 		  <property name="visible_horizontal">True</property>
 		  <property name="visible_vertical">True</property>
 		  <property name="is_important">False</property>
-		  <signal name="clicked" handler="on_gswat_main_run_button_clicked" last_modification_time="Sat, 08 Jul 2006 20:56:01 GMT"/>
+		</widget>
+		<packing>
+		  <property name="expand">False</property>
+		  <property name="homogeneous">True</property>
+		</packing>
+	      </child>
+
+	      <child>
+		<widget class="GtkToolButton" id="gswat_window_add_break_button">
+		  <property name="visible">True</property>
+		  <property name="label" translatable="yes">Add Break</property>
+		  <property name="use_underline">True</property>
+		  <property name="stock_id">gtk-stop</property>
+		  <property name="visible_horizontal">True</property>
+		  <property name="visible_vertical">True</property>
+		  <property name="is_important">False</property>
 		</widget>
 		<packing>
 		  <property name="expand">False</property>
@@ -333,7 +341,6 @@ Frame</property>
 		  <property name="visible_horizontal">True</property>
 		  <property name="visible_vertical">True</property>
 		  <property name="is_important">False</property>
-		  <signal name="clicked" handler="on_debug_button_clicked" last_modification_time="Sun, 23 Jul 2006 22:49:09 GMT"/>
 		</widget>
 		<packing>
 		  <property name="expand">False</property>
@@ -365,7 +372,7 @@ Frame</property>
 	      <property name="position">533</property>
 
 	      <child>
-		<widget class="GtkScrolledWindow" id="gswat_main_scrolled_window">
+		<widget class="GtkScrolledWindow" id="gswat_window_scrolled_window">
 		  <property name="visible">True</property>
 		  <property name="can_focus">True</property>
 		  <property name="hscrollbar_policy">GTK_POLICY_ALWAYS</property>
@@ -413,7 +420,7 @@ Frame</property>
 		      <property name="window_placement">GTK_CORNER_TOP_LEFT</property>
 
 		      <child>
-			<widget class="GtkTreeView" id="gswat_main_stack_widget">
+			<widget class="GtkTreeView" id="gswat_window_stack_widget">
 			  <property name="visible">True</property>
 			  <property name="can_focus">True</property>
 			  <property name="headers_visible">True</property>

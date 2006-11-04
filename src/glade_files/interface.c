@@ -30,7 +30,7 @@ static GnomeUIInfo file1_menu_uiinfo[] =
 {
   GNOMEUIINFO_MENU_NEW_ITEM (N_("_New"), NULL, NULL, NULL),
   GNOMEUIINFO_SEPARATOR,
-  GNOMEUIINFO_MENU_EXIT_ITEM (gswat_main_on_quit_activate, NULL),
+  GNOMEUIINFO_MENU_EXIT_ITEM (gswat_window_on_quit_activate, NULL),
   GNOMEUIINFO_END
 };
 
@@ -74,23 +74,24 @@ create_gswat_main_window (void)
   GtkWidget *bonobodock1;
   GtkWidget *toolbar1;
   GtkIconSize tmp_toolbar_icon_size;
-  GtkWidget *gswat_main_new_button;
+  GtkWidget *gswat_window_new_button;
   GtkWidget *separatortoolitem1;
   GtkWidget *tmp_image;
-  GtkWidget *gswat_main_step_button;
-  GtkWidget *gswat_main_next_button;
-  GtkWidget *gswat_main_continue_button;
-  GtkWidget *gswat_main_finish_button;
-  GtkWidget *gswat_main_break_button;
-  GtkWidget *gswat_main_run_button;
+  GtkWidget *gswat_window_step_button;
+  GtkWidget *gswat_window_next_button;
+  GtkWidget *gswat_window_continue_button;
+  GtkWidget *gswat_window_finish_button;
+  GtkWidget *gswat_window_break_button;
+  GtkWidget *gswat_window_run_button;
+  GtkWidget *gswat_window_add_break_button;
   GtkWidget *debug_button;
   GtkWidget *vpaned1;
   GtkWidget *hpaned1;
-  GtkWidget *gswat_main_scrolled_window;
+  GtkWidget *gswat_window_scrolled_window;
   GtkWidget *vpaned2;
   GtkWidget *image1;
   GtkWidget *scrolledwindow1;
-  GtkWidget *gswat_main_stack_widget;
+  GtkWidget *gswat_window_stack_widget;
   GtkWidget *scrolledwindow3;
   GtkWidget *viewport1;
   GtkWidget *drawingarea1;
@@ -99,7 +100,7 @@ create_gswat_main_window (void)
 
   tooltips = gtk_tooltips_new ();
 
-  gswat_main_window = gnome_app_new ("Glade_files", _("GGdb"));
+  gswat_main_window = gnome_app_new ("Glade_files", _("GSwat"));
   gtk_window_set_default_size (GTK_WINDOW (gswat_main_window), 1024, 768);
 
   bonobodock1 = GNOME_APP (gswat_main_window)->dock;
@@ -116,10 +117,10 @@ create_gswat_main_window (void)
   gtk_toolbar_set_style (GTK_TOOLBAR (toolbar1), GTK_TOOLBAR_BOTH);
   tmp_toolbar_icon_size = gtk_toolbar_get_icon_size (GTK_TOOLBAR (toolbar1));
 
-  gswat_main_new_button = (GtkWidget*) gtk_tool_button_new_from_stock ("gtk-new");
-  gtk_widget_show (gswat_main_new_button);
-  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_new_button);
-  gtk_tool_item_set_tooltip (GTK_TOOL_ITEM (gswat_main_new_button), tooltips, _("New File"), NULL);
+  gswat_window_new_button = (GtkWidget*) gtk_tool_button_new_from_stock ("gtk-new");
+  gtk_widget_show (gswat_window_new_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_window_new_button);
+  gtk_tool_item_set_tooltip (GTK_TOOL_ITEM (gswat_window_new_button), tooltips, _("New File"), NULL);
 
   separatortoolitem1 = (GtkWidget*) gtk_separator_tool_item_new ();
   gtk_widget_show (separatortoolitem1);
@@ -127,39 +128,45 @@ create_gswat_main_window (void)
 
   tmp_image = gtk_image_new_from_stock ("gtk-jump-to", tmp_toolbar_icon_size);
   gtk_widget_show (tmp_image);
-  gswat_main_step_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Step In"));
-  gtk_widget_show (gswat_main_step_button);
-  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_step_button);
+  gswat_window_step_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Step In"));
+  gtk_widget_show (gswat_window_step_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_window_step_button);
 
   tmp_image = gtk_image_new_from_stock ("gtk-go-forward", tmp_toolbar_icon_size);
   gtk_widget_show (tmp_image);
-  gswat_main_next_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Next"));
-  gtk_widget_show (gswat_main_next_button);
-  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_next_button);
+  gswat_window_next_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Next"));
+  gtk_widget_show (gswat_window_next_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_window_next_button);
 
   tmp_image = gtk_image_new_from_stock ("gtk-media-forward", tmp_toolbar_icon_size);
   gtk_widget_show (tmp_image);
-  gswat_main_continue_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Continue"));
-  gtk_widget_show (gswat_main_continue_button);
-  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_continue_button);
+  gswat_window_continue_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Continue"));
+  gtk_widget_show (gswat_window_continue_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_window_continue_button);
 
   tmp_image = gtk_image_new_from_stock ("gtk-go-up", tmp_toolbar_icon_size);
   gtk_widget_show (tmp_image);
-  gswat_main_finish_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Finish\nFrame"));
-  gtk_widget_show (gswat_main_finish_button);
-  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_finish_button);
+  gswat_window_finish_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Up Frame"));
+  gtk_widget_show (gswat_window_finish_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_window_finish_button);
 
   tmp_image = gtk_image_new_from_stock ("gtk-stop", tmp_toolbar_icon_size);
   gtk_widget_show (tmp_image);
-  gswat_main_break_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Break"));
-  gtk_widget_show (gswat_main_break_button);
-  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_break_button);
+  gswat_window_break_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Break"));
+  gtk_widget_show (gswat_window_break_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_window_break_button);
 
   tmp_image = gtk_image_new_from_stock ("gtk-media-play", tmp_toolbar_icon_size);
   gtk_widget_show (tmp_image);
-  gswat_main_run_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Restart"));
-  gtk_widget_show (gswat_main_run_button);
-  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_main_run_button);
+  gswat_window_run_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Restart"));
+  gtk_widget_show (gswat_window_run_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_window_run_button);
+
+  tmp_image = gtk_image_new_from_stock ("gtk-stop", tmp_toolbar_icon_size);
+  gtk_widget_show (tmp_image);
+  gswat_window_add_break_button = (GtkWidget*) gtk_tool_button_new (tmp_image, _("Add Break"));
+  gtk_widget_show (gswat_window_add_break_button);
+  gtk_container_add (GTK_CONTAINER (toolbar1), gswat_window_add_break_button);
 
   tmp_image = gtk_image_new_from_stock ("gtk-dialog-warning", tmp_toolbar_icon_size);
   gtk_widget_show (tmp_image);
@@ -177,10 +184,10 @@ create_gswat_main_window (void)
   gtk_paned_pack1 (GTK_PANED (vpaned1), hpaned1, FALSE, TRUE);
   gtk_paned_set_position (GTK_PANED (hpaned1), 533);
 
-  gswat_main_scrolled_window = gtk_scrolled_window_new (NULL, NULL);
-  gtk_widget_show (gswat_main_scrolled_window);
-  gtk_paned_pack1 (GTK_PANED (hpaned1), gswat_main_scrolled_window, FALSE, TRUE);
-  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (gswat_main_scrolled_window), GTK_SHADOW_IN);
+  gswat_window_scrolled_window = gtk_scrolled_window_new (NULL, NULL);
+  gtk_widget_show (gswat_window_scrolled_window);
+  gtk_paned_pack1 (GTK_PANED (hpaned1), gswat_window_scrolled_window, FALSE, TRUE);
+  gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (gswat_window_scrolled_window), GTK_SHADOW_IN);
 
   vpaned2 = gtk_vpaned_new ();
   gtk_widget_show (vpaned2);
@@ -196,9 +203,9 @@ create_gswat_main_window (void)
   gtk_paned_pack2 (GTK_PANED (vpaned2), scrolledwindow1, TRUE, TRUE);
   gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolledwindow1), GTK_SHADOW_IN);
 
-  gswat_main_stack_widget = gtk_tree_view_new ();
-  gtk_widget_show (gswat_main_stack_widget);
-  gtk_container_add (GTK_CONTAINER (scrolledwindow1), gswat_main_stack_widget);
+  gswat_window_stack_widget = gtk_tree_view_new ();
+  gtk_widget_show (gswat_window_stack_widget);
+  gtk_container_add (GTK_CONTAINER (scrolledwindow1), gswat_window_stack_widget);
 
   scrolledwindow3 = gtk_scrolled_window_new (NULL, NULL);
   gtk_widget_show (scrolledwindow3);
@@ -217,30 +224,6 @@ create_gswat_main_window (void)
   gnome_app_set_statusbar (GNOME_APP (gswat_main_window), appbar1);
 
   gnome_app_install_menu_hints (GNOME_APP (gswat_main_window), menubar1_uiinfo);
-  g_signal_connect ((gpointer) gswat_main_new_button, "clicked",
-                    G_CALLBACK (on_gswat_main_new_button_clicked),
-                    NULL);
-  g_signal_connect ((gpointer) gswat_main_step_button, "clicked",
-                    G_CALLBACK (on_gswat_main_step_button_clicked),
-                    NULL);
-  g_signal_connect ((gpointer) gswat_main_next_button, "clicked",
-                    G_CALLBACK (on_gswat_main_next_button_clicked),
-                    NULL);
-  g_signal_connect ((gpointer) gswat_main_continue_button, "clicked",
-                    G_CALLBACK (on_gswat_main_continue_button_clicked),
-                    NULL);
-  g_signal_connect ((gpointer) gswat_main_finish_button, "clicked",
-                    G_CALLBACK (on_gswat_main_finish_button_clicked),
-                    NULL);
-  g_signal_connect ((gpointer) gswat_main_break_button, "clicked",
-                    G_CALLBACK (on_gswat_main_break_button_clicked),
-                    NULL);
-  g_signal_connect ((gpointer) gswat_main_run_button, "clicked",
-                    G_CALLBACK (on_gswat_main_run_button_clicked),
-                    NULL);
-  g_signal_connect ((gpointer) debug_button, "clicked",
-                    G_CALLBACK (on_debug_button_clicked),
-                    NULL);
 
   /* Store pointers to all widgets, for use by lookup_widget(). */
   GLADE_HOOKUP_OBJECT_NO_REF (gswat_main_window, gswat_main_window, "gswat_main_window");
@@ -262,22 +245,23 @@ create_gswat_main_window (void)
   GLADE_HOOKUP_OBJECT (gswat_main_window, menubar1_uiinfo[3].widget, "help1");
   GLADE_HOOKUP_OBJECT (gswat_main_window, help1_menu_uiinfo[0].widget, "about1");
   GLADE_HOOKUP_OBJECT (gswat_main_window, toolbar1, "toolbar1");
-  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_new_button, "gswat_main_new_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_window_new_button, "gswat_window_new_button");
   GLADE_HOOKUP_OBJECT (gswat_main_window, separatortoolitem1, "separatortoolitem1");
-  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_step_button, "gswat_main_step_button");
-  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_next_button, "gswat_main_next_button");
-  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_continue_button, "gswat_main_continue_button");
-  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_finish_button, "gswat_main_finish_button");
-  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_break_button, "gswat_main_break_button");
-  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_run_button, "gswat_main_run_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_window_step_button, "gswat_window_step_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_window_next_button, "gswat_window_next_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_window_continue_button, "gswat_window_continue_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_window_finish_button, "gswat_window_finish_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_window_break_button, "gswat_window_break_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_window_run_button, "gswat_window_run_button");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_window_add_break_button, "gswat_window_add_break_button");
   GLADE_HOOKUP_OBJECT (gswat_main_window, debug_button, "debug_button");
   GLADE_HOOKUP_OBJECT (gswat_main_window, vpaned1, "vpaned1");
   GLADE_HOOKUP_OBJECT (gswat_main_window, hpaned1, "hpaned1");
-  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_scrolled_window, "gswat_main_scrolled_window");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_window_scrolled_window, "gswat_window_scrolled_window");
   GLADE_HOOKUP_OBJECT (gswat_main_window, vpaned2, "vpaned2");
   GLADE_HOOKUP_OBJECT (gswat_main_window, image1, "image1");
   GLADE_HOOKUP_OBJECT (gswat_main_window, scrolledwindow1, "scrolledwindow1");
-  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_main_stack_widget, "gswat_main_stack_widget");
+  GLADE_HOOKUP_OBJECT (gswat_main_window, gswat_window_stack_widget, "gswat_window_stack_widget");
   GLADE_HOOKUP_OBJECT (gswat_main_window, scrolledwindow3, "scrolledwindow3");
   GLADE_HOOKUP_OBJECT (gswat_main_window, viewport1, "viewport1");
   GLADE_HOOKUP_OBJECT (gswat_main_window, drawingarea1, "drawingarea1");

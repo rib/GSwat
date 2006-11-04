@@ -492,8 +492,19 @@ gedit_view_new (GeditDocument *doc)
 	return view;
 }
 
+
+GeditDocument *
+gedit_view_get_document(GeditView *view)
+{
+    return  GEDIT_DOCUMENT(
+                gtk_text_view_get_buffer(GTK_TEXT_VIEW (view))
+                );
+}
+
+
+
 void
-gedit_view_cut_clipboard (GeditView *view)
+gedit_view_cut_clipboard(GeditView *view)
 {
 	GtkTextBuffer *buffer;
 	GtkClipboard *clipboard;

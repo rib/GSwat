@@ -1,23 +1,19 @@
-SUBDIRS = glade_files
+SUBDIRS = glade_files dialogs
 
 bin_PROGRAMS = gswat gswat-spawner
 
 INCLUDES = -DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"	\
 	   -DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\"
-	   
 
 BUILT_SOURCES = gedit-marshal.c \
-		gedit-marshal.h \
-		lex.yy.c \
-		gdbmi-grammar.tab.c \
-		gdbmi-grammar.tab.h
+               gedit-marshal.h	   
 
-gswat_SOURCES = 	$(BUILT_SOURCES) \
+gswat_SOURCES = $(BUILT_SOURCES) \
 		main.c \
 		gswat-main-window.c \
 		gswat-session.c \
 		gswat-debugger.c \
-		gswat-gdb-variables.c \
+		gswat-view.c \
 		gedit-document.c \
 		gedit-document-loader.c \
 		gedit-encodings.c \
@@ -29,18 +25,29 @@ gswat_SOURCES = 	$(BUILT_SOURCES) \
 		gedit-convert.c \
 		gedit-debug.c \
 		gedit-view.c \
+		gedit-tab.c \
+		gedit-io-error-message-area.c \
+		gedit-message-area.c \
+		gedit-notebook.c \
+		gedit-print.c \
+		gedit-print-job-preview.c \
+		gedit-progress-message-area.c \
+		gedit-encodings-option-menu.c \
+		gedit-tooltips.c \
+		gedit-spinner.c \
+		gedit-help.c \
 		sexy-icon-entry.c \
-		gdbmi-parse-tree.c \
-		gdbmi-parser.c
+		gswat-gdbmi.c
 
 		
 #		gdb.c
 #		gedit-prefs-manager-app.c
 		
-gswat_LDADD = @DEPS_LIBS@
+gswat_LDADD = @DEPS_LIBS@ dialogs/libdialogs.la
 gswat_LDFLAGS = -export-dynamic
 gswat_CFLAGS = @EXTRA_CFLAGS@ @DEPS_CFLAGS@
 gswat_CPPFLAGS = @EXTRA_CPPFLAGS@
+#gswat_LIBADD = dialogs/libdialogs.la
 
 gswat_spawner_SOURCES = gswat-spawn.c
 gswat_spawner_LDADD = @DEPS_LIBS@
@@ -59,12 +66,4 @@ gedit-marshal.c: gedit-marshal.list $(GLIB_GENMARSHAL)
 	echo "#include \"gedit-marshal.h\"" > $@ && \
 	$(GLIB_GENMARSHAL) $< --body --prefix=gedit_marshal >> $@
 
-lex.yy.c: gdbmi-lexer.l
-	flex gdbmi-lexer.l
-
-gdbmi-grammar.tab.h: gdbmi-grammar.y
-	bison gdbmi-grammar.y
-
-gdbmi-grammar.tab.c: gdbmi-grammar.y
-	bison gdbmi-grammar.y
 
