@@ -4,6 +4,7 @@
 #include <glade/glade.h>
 #include <gtksourceview/gtksourceview.h>
 
+#include <config.h>
 
 #include "gswat-main-window.h"
 
@@ -11,10 +12,8 @@
 #include "gedit-view.h"
 #include "gswat-view.h"
 
-#include "global.h"
 #include "gswat-session.h"
 #include "gswat-debugger.h"
-#include "gdb.h"
 
 
 enum {
@@ -648,7 +647,7 @@ gswat_window_update_source_file(GObject *debugger,
     line = gswat_debugger_get_source_line(GSWAT_DEBUGGER(debugger));
 
     g_message("gswat_window_update_source_file %s, line=%d", file_uri, line);
-    gedit_document_load(self->priv->source_document, file_uri, NULL, line, False);
+    gedit_document_load(self->priv->source_document, file_uri, NULL, line, FALSE);
 
 
 #if 0
@@ -694,7 +693,7 @@ gswat_window_update_source_line(GObject *debugger,
         g_message("Main line update\n");
     }
 #endif
-    //gedit_document_load(source_document, file_uri, NULL, 0, False);
+    //gedit_document_load(source_document, file_uri, NULL, 0, FALSE);
 
 }
 
@@ -784,7 +783,7 @@ on_gswat_window_add_break_button_clicked(GtkToolButton   *toolbutton,
 
     
     source_view = self->priv->source_view;
-    assert(source_view != NULL);
+    g_assert(source_view != NULL);
 
     source_buffer = GTK_TEXT_VIEW(source_view)->buffer;
 

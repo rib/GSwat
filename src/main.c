@@ -1,6 +1,7 @@
 #include <gnome.h>
 
-#include "global.h"
+#include <config.h>
+
 #include "gswat-main-window.h"
 #include "gswat-spawn.h"
 #include "gswat-session.h"
