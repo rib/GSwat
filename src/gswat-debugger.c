@@ -670,7 +670,6 @@ gswat_debugger_process_gdbmi_command(GSwatDebugger *self, GString *command)
     if(!(command_token == 0 && command->str == remainder))
     {
         tmp = g_string_new(remainder);
-        g_string_erase(command, 0, i);
         command = tmp;
     }
 
@@ -708,6 +707,7 @@ gswat_debugger_process_gdbmi_command(GSwatDebugger *self, GString *command)
     else if (strncasecmp (command->str, "^error", 6) == 0)
     {
         g_assert_not_reached();
+        
 #if 0
         /* GDB reported error */
         if (debugger->priv->current_cmd.suppress_error == FALSE)
