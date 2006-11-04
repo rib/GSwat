@@ -178,7 +178,7 @@ gswat_debugger_get_gdbmi_value(GSwatDebugger *self, gulong token)
     GList *tmp;
     gchar *remainder;
     gboolean found = FALSE;
-    GDBMIValue *val;
+    GDBMIValue *val = NULL;
 
     g_io_channel_flush(self->priv->gdb_in, NULL);
     
@@ -652,7 +652,6 @@ gswat_debugger_process_gdbmi_command(GSwatDebugger *self, GString *command)
     gulong command_token;
     gchar *remainder;
     //guint token;
-    int i;
     //guint lineno;
     //gchar *filename;
 
