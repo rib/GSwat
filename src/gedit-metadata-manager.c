@@ -42,7 +42,7 @@
 #include "gedit-debug.h"
 
 
-#define METADATA_FILE 	"gedit-metadata.xml"
+#define METADATA_FILE 	"gswat-metadata.xml"
 
 #define MAX_ITEMS	50
 

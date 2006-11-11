@@ -16,6 +16,7 @@
 #include "gswat-debugger.h"
 
 
+
 enum {
   GSWAT_WINDOW_STACK_FUNC_COL,
   GSWAT_WINDOW_STACK_N_COLS
@@ -63,7 +64,7 @@ static void gswat_window_init(GSwatWindow *self);
 static void gswat_window_finalize(GObject *object);
 
 static void setup_sourceview(GSwatWindow *self);
-static void on_gswat_window_new_button_clicked(GtkToolButton   *toolbutton,
+static void on_gswat_window_new_button_clicked(GtkWidget       *widget,
                                                gpointer         data);
 static void on_gswat_window_step_button_clicked(GtkToolButton   *toolbutton,
                                                gpointer         data);
@@ -127,6 +128,7 @@ gswat_window_init(GSwatWindow *self)
     //GladeXML *xml;
     GnomeApp *main_window = NULL;
     GtkWidget *button;
+    GtkWidget *item;
     GtkTreeView *stack_widget;
     GtkCellRenderer *renderer;
     GtkTreeViewColumn *column;
@@ -149,6 +151,12 @@ gswat_window_init(GSwatWindow *self)
     button = glade_xml_get_widget(self->priv->xml, "gswat_window_new_button");
     g_signal_connect(button,
                      "clicked",
+                     G_CALLBACK(on_gswat_window_new_button_clicked),
+                     self
+                     );
+    item = glade_xml_get_widget(self->priv->xml, "gswat_window_file_new_menu_item");
+    g_signal_connect(item,
+                     "activate",
                      G_CALLBACK(on_gswat_window_new_button_clicked),
                      self
                      );
@@ -357,8 +365,8 @@ setup_sourceview(GSwatWindow *self)
 
 
 static void
-on_gswat_window_new_button_clicked(GtkToolButton   *toolbutton,
-                                   gpointer         data)
+on_gswat_window_new_button_clicked(GtkWidget   *widget,
+                                   gpointer     data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     GSwatSession *gswat_session;

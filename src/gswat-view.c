@@ -225,15 +225,12 @@ static gboolean
 gswat_view_expose(GtkWidget *widget,
                   GdkEventExpose *event)
 {
-    GtkTextView *text_view;
-    GeditView *gedit_view;
-    GSwatView *gswat_view;
+    GtkTextView *text_view = GTK_TEXT_VIEW(widget);
+    GeditView *gedit_view = GEDIT_VIEW(widget);
+    GSwatView *gswat_view = GSWAT_VIEW(widget);
     GList *tmp = NULL;
     GSwatDebugger *debugger;
     GList *breakpoints;
-    //GSwatViewBreakpoint *current_breakpoint;
-    GSwatDebuggerBreakpoint *current_breakpoint;
-    //GeditDocument *doc;
 
     GdkRectangle visible_rect;
     GdkRectangle redraw_rect;
@@ -242,134 +239,143 @@ gswat_view_expose(GtkWidget *widget,
     gint height;
     gint win_y;
     gulong line;
-
-    text_view = GTK_TEXT_VIEW(widget);
-    gedit_view = GEDIT_VIEW(widget);
-    gswat_view = GSWAT_VIEW(widget);
+    
 
     debugger = gswat_view->priv->debugger;
-    if(debugger)
+    if(!debugger)
     {
-        breakpoints = gswat_debugger_get_breakpoints(debugger);
-    }else{
-        breakpoints = NULL;
+        goto parent_expose;
     }
 
 
-    gchar *current_doc_uri = NULL;
+    breakpoints = gswat_debugger_get_breakpoints(debugger);
 
-    //doc = GEDIT_DOCUMENT(gtk_text_view_get_buffer(text_view));
 
-    if ((event->window == gtk_text_view_get_window(text_view, GTK_TEXT_WINDOW_TEXT)))
+    if ((event->window != gtk_text_view_get_window(text_view, GTK_TEXT_WINDOW_TEXT)))
     {
-        for(tmp=breakpoints; tmp != NULL; tmp=tmp->next)
-        {
-            current_breakpoint = (GSwatDebuggerBreakpoint *)tmp->data;
-            current_doc_uri = gedit_document_get_uri(gedit_view_get_document(gedit_view));
-
-            if( !current_doc_uri ||
-                strcmp(current_breakpoint->source_uri,
-                       current_doc_uri
-                      ) != 0
-              )
-            {
-                continue;
-            }
-
-            gtk_text_buffer_get_iter_at_line(text_view->buffer,
-                                             &cur,
-                                             current_breakpoint->line);
-
-            gtk_text_view_get_line_yrange(text_view, &cur, &y, &height);
-
-            gtk_text_view_get_visible_rect(text_view, &visible_rect);
-
-            gtk_text_view_buffer_to_window_coords(text_view,
-                                                  GTK_TEXT_WINDOW_TEXT,
-                                                  visible_rect.x,
-                                                  visible_rect.y,
-                                                  &redraw_rect.x,
-                                                  &redraw_rect.y);
-
-            redraw_rect.width = visible_rect.width;
-            redraw_rect.height = visible_rect.height;
-
-            if(y > (redraw_rect.y + redraw_rect.height)
-               || (y + height) < redraw_rect.y
-              )
-            {
-                /* line not visible */
-                continue;
-            }
-
-            gtk_text_view_buffer_to_window_coords (text_view,
-                                                   GTK_TEXT_WINDOW_TEXT,
-                                                   0,
-                                                   y,
-                                                   NULL,
-                                                   &win_y);
-
-            gdk_draw_rectangle(event->window,
-                               widget->style->mid_gc[GTK_WIDGET_STATE (widget)],
-                               TRUE,
-                               redraw_rect.x + MAX(0, gtk_text_view_get_left_margin(text_view) - 1),
-                               win_y,
-                               redraw_rect.width,
-                               height);
-        }
-
-        if(debugger)
-        {
-            /* highlight the current line */
-            /* FIXME - this clearly duplicates a big chunk of code from above! */
-            line = gswat_debugger_get_source_line(debugger) - 1;
-            g_message("current line=%lu", line);
-            gtk_text_buffer_get_iter_at_line(text_view->buffer,
-                                             &cur,
-                                             line);
-
-            gtk_text_view_get_line_yrange(text_view, &cur, &y, &height);
-
-            gtk_text_view_get_visible_rect(text_view, &visible_rect);
-
-            gtk_text_view_buffer_to_window_coords(text_view,
-                                                  GTK_TEXT_WINDOW_TEXT,
-                                                  visible_rect.x,
-                                                  visible_rect.y,
-                                                  &redraw_rect.x,
-                                                  &redraw_rect.y);
-
-            redraw_rect.width = visible_rect.width;
-            redraw_rect.height = visible_rect.height;
-
-            if(y <= (redraw_rect.y + redraw_rect.height)
-               && (y + height) >= redraw_rect.y
-              )
-            {
-
-                gtk_text_view_buffer_to_window_coords (text_view,
-                                                       GTK_TEXT_WINDOW_TEXT,
-                                                       0,
-                                                       y,
-                                                       NULL,
-                                                       &win_y);
-
-                gdk_draw_rectangle(event->window,
-                                   widget->style->mid_gc[GTK_WIDGET_STATE (widget)],
-                                   TRUE,
-                                   redraw_rect.x + MAX(0, gtk_text_view_get_left_margin(text_view) - 1),
-                                   win_y,
-                                   redraw_rect.width,
-                                   height);
-
-            }
-        }
-
+        goto parent_expose;
     }
+
+    gtk_text_view_get_visible_rect(text_view, &visible_rect);
+
     
-    return (* GTK_WIDGET_CLASS (gswat_view_parent_class)->expose_event)(widget, event);
+    for(tmp=breakpoints; tmp != NULL; tmp=tmp->next)
+    {
+        GSwatDebuggerBreakpoint *current_breakpoint;
+        gchar *current_doc_uri;
 
-    //return FALSE;
+        current_breakpoint = (GSwatDebuggerBreakpoint *)tmp->data;
+        current_doc_uri = gedit_document_get_uri(
+                                gedit_view_get_document(gedit_view)
+                                );
+
+        if( !current_doc_uri ||
+            strcmp(current_breakpoint->source_uri,
+                   current_doc_uri
+                  ) != 0
+          )
+        {
+            continue;
+        }
+
+        gtk_text_buffer_get_iter_at_line(text_view->buffer,
+                                         &cur,
+                                         current_breakpoint->line);
+
+        gtk_text_view_get_line_yrange(text_view, &cur, &y, &height);
+
+        gtk_text_view_buffer_to_window_coords(text_view,
+                                              GTK_TEXT_WINDOW_TEXT,
+                                              visible_rect.x,
+                                              visible_rect.y,
+                                              &redraw_rect.x,
+                                              &redraw_rect.y);
+
+        redraw_rect.width = visible_rect.width;
+        redraw_rect.height = visible_rect.height;
+
+        if(y > (redraw_rect.y + redraw_rect.height)
+           || (y + height) < redraw_rect.y
+          )
+        {
+            /* line not visible */
+            continue;
+        }
+
+        gtk_text_view_buffer_to_window_coords (text_view,
+                                               GTK_TEXT_WINDOW_TEXT,
+                                               0,
+                                               y,
+                                               NULL,
+                                               &win_y);
+
+        gdk_draw_rectangle(event->window,
+                           widget->style->mid_gc[GTK_WIDGET_STATE (widget)],
+                           TRUE,
+                           redraw_rect.x + MAX(0, gtk_text_view_get_left_margin(text_view) - 1),
+                           win_y,
+                           redraw_rect.width,
+                           height);
+    }
+
+    /* highlight the current line */
+    /* FIXME - this clearly duplicates a big chunk of code from above! */
+    line = gswat_debugger_get_source_line(debugger) - 1;
+    gtk_text_buffer_get_iter_at_line(text_view->buffer,
+                                     &cur,
+                                     line);
+
+    gtk_text_view_get_line_yrange(text_view, &cur, &y, &height);
+
+    gtk_text_view_buffer_to_window_coords(text_view,
+                                          GTK_TEXT_WINDOW_TEXT,
+                                          visible_rect.x,
+                                          visible_rect.y,
+                                          &redraw_rect.x,
+                                          &redraw_rect.y);
+
+    redraw_rect.width = visible_rect.width;
+    redraw_rect.height = visible_rect.height;
+
+    g_message("current line=%lu, x=%d, y=%d, width=%d, height=%d",
+                line,
+                redraw_rect.x,
+                redraw_rect.y,
+                redraw_rect.width,
+                redraw_rect.height);
+
+    gtk_text_view_buffer_to_window_coords (text_view,
+                                           GTK_TEXT_WINDOW_TEXT,
+                                           0,
+                                           y,
+                                           NULL,
+                                           &win_y);
+
+    if(win_y <= (redraw_rect.y + redraw_rect.height)
+       && (win_y + height) >= redraw_rect.y
+      )
+    {
+
+        gdk_draw_rectangle(event->window,
+                           widget->style->mid_gc[GTK_WIDGET_STATE (widget)],
+                           TRUE,
+                           redraw_rect.x + MAX(0, gtk_text_view_get_left_margin(text_view) - 1),
+                           win_y,
+                           redraw_rect.width,
+                           height);
+
+    }else{
+        g_message("CLIPPED!!");
+    }
+
+parent_expose:
+    {
+        GtkWidgetClass *widget_class;
+        widget_class = GTK_WIDGET_CLASS(gswat_view_parent_class);
+        return widget_class->expose_event(widget, event);
+    }
+    //return (* GTK_WIDGET_CLASS (gswat_view_parent_class)->expose_event)(widget, event);
+
 }
 
 
