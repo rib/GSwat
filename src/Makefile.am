@@ -55,7 +55,42 @@ gswat_spawner_CFLAGS = @EXTRA_CFLAGS@ @DEPS_CFLAGS@
 gswat_spawner_CPPFLAGS = @EXTRA_CPPFLAGS@
 
 
-EXTRA_DIST = signals.h
+EXTRA_DIST =	gedit-marshal.list \
+		gedit-convert.h \
+		gedit-debug.h \
+		gedit-document.h \
+		gedit-document-loader.h \
+		gedit-encodings.h \
+		gedit-encodings-option-menu.h \
+		gedit-help.h \
+		gedit-io-error-message-area.h \
+		gedit-languages-manager.h \
+		gedit-marshal.h \
+		gedit-message-area.h \
+		gedit-metadata-manager.h \
+		gedit-notebook.h \
+		gedit-panel.h \
+		gedit-prefs-manager-app.h \
+		gedit-prefs-manager.h \
+		gedit-prefs-manager-private.h \
+		gedit-print.h \
+		gedit-print-job-preview.h \
+		gedit-progress-message-area.h \
+		gedit-spinner.h \
+		gedit-tab.h \
+		gedit-text-region.h \
+		gedit-tooltips.h \
+		gedit-utils.h \
+		gedit-view.h \
+		gedit-window.h \
+		gswat-debugger.h \
+		gswat-gdbmi.h \
+		gswat-main-window.h \
+		gswat-session.h \
+		gswat-spawn.h \
+		gswat-view.h \
+		sexy-icon-entry.h
+
 
 
 
