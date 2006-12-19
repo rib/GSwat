@@ -12,7 +12,7 @@
 
 #include "gswat-view.h"
 #include "gswat-debugger.h"
-
+#include "gedit-prefs-manager.h"
 
 
 #define GSWAT_VIEW_GET_PRIVATE(object)(G_TYPE_INSTANCE_GET_PRIVATE ((object), GSWAT_TYPE_VIEW, GSwatViewPrivate))
@@ -239,6 +239,8 @@ gswat_view_expose(GtkWidget *widget,
     gint height;
     gint win_y;
     gulong line;
+    GdkColor color;
+    GdkGC *gc;
     
 
     debugger = gswat_view->priv->debugger;
@@ -257,17 +259,25 @@ gswat_view_expose(GtkWidget *widget,
     }
 
     gtk_text_view_get_visible_rect(text_view, &visible_rect);
-
+    
+    gc = gdk_gc_new(GDK_DRAWABLE(event->window));
     
     for(tmp=breakpoints; tmp != NULL; tmp=tmp->next)
     {
         GSwatDebuggerBreakpoint *current_breakpoint;
         gchar *current_doc_uri;
 
+        g_message("breakpoint");
         current_breakpoint = (GSwatDebuggerBreakpoint *)tmp->data;
         current_doc_uri = gedit_document_get_uri(
                                 gedit_view_get_document(gedit_view)
                                 );
+    
+        if(current_doc_uri)
+            g_message("current_doc_uri=%s", current_doc_uri);
+        if(current_breakpoint->source_uri)
+            g_message("current_breakpoint->source_uri=%s",
+                        current_breakpoint->source_uri);
 
         if( !current_doc_uri ||
             strcmp(current_breakpoint->source_uri,
@@ -294,23 +304,26 @@ gswat_view_expose(GtkWidget *widget,
         redraw_rect.width = visible_rect.width;
         redraw_rect.height = visible_rect.height;
 
-        if(y > (redraw_rect.y + redraw_rect.height)
-           || (y + height) < redraw_rect.y
-          )
-        {
-            /* line not visible */
-            continue;
-        }
-
-        gtk_text_view_buffer_to_window_coords (text_view,
+        gtk_text_view_buffer_to_window_coords(text_view,
                                                GTK_TEXT_WINDOW_TEXT,
                                                0,
                                                y,
                                                NULL,
                                                &win_y);
 
+        if(win_y > (redraw_rect.y + redraw_rect.height)
+           || (win_y + height) < redraw_rect.y
+          )
+        {
+            /* line not visible */
+            continue;
+        }
+    
+        color = gedit_prefs_manager_get_breakpoint_bg_color();
+
+        gdk_gc_set_rgb_fg_color(gc, &color);
         gdk_draw_rectangle(event->window,
-                           widget->style->mid_gc[GTK_WIDGET_STATE (widget)],
+                           gc,
                            TRUE,
                            redraw_rect.x + MAX(0, gtk_text_view_get_left_margin(text_view) - 1),
                            win_y,
@@ -355,9 +368,11 @@ gswat_view_expose(GtkWidget *widget,
        && (win_y + height) >= redraw_rect.y
       )
     {
+        color = gedit_prefs_manager_get_current_line_bg_color();
+        gdk_gc_set_rgb_fg_color(gc, &color);
 
         gdk_draw_rectangle(event->window,
-                           widget->style->mid_gc[GTK_WIDGET_STATE (widget)],
+                           gc,
                            TRUE,
                            redraw_rect.x + MAX(0, gtk_text_view_get_left_margin(text_view) - 1),
                            win_y,
@@ -367,6 +382,8 @@ gswat_view_expose(GtkWidget *widget,
     }else{
         g_message("CLIPPED!!");
     }
+
+    g_object_unref(gc);
 
 parent_expose:
     {

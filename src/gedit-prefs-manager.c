@@ -519,6 +519,121 @@ gedit_prefs_manager_selection_color_can_set (void)
 	return gedit_prefs_manager_key_is_writable (GPM_SELECTION_COLOR);
 }
 
+/* 
+ * Debugger colors
+ *
+ */
+
+/* Current line font color */
+GdkColor
+gedit_prefs_manager_get_current_line_color (void)
+{
+	gedit_debug (DEBUG_PREFS);
+
+	return gedit_prefs_manager_get_color (GPM_CURRENT_LINE_COLOR,
+					      GPM_DEFAULT_CURRENT_LINE_COLOR);
+}
+
+void
+gedit_prefs_manager_set_current_line_color (GdkColor color)
+{
+	gedit_debug (DEBUG_PREFS);
+	
+	gedit_prefs_manager_set_color (GPM_CURRENT_LINE_COLOR,
+				       color);
+}
+
+gboolean
+gedit_prefs_manager_current_line_color_can_set (void)
+{
+	gedit_debug (DEBUG_PREFS);
+	
+	return gedit_prefs_manager_key_is_writable (GPM_CURRENT_LINE_COLOR);
+}
+
+/* Current line background color */
+GdkColor
+gedit_prefs_manager_get_current_line_bg_color (void)
+{
+	gedit_debug (DEBUG_PREFS);
+
+	return gedit_prefs_manager_get_color (GPM_CURRENT_LINE_BG_COLOR,
+					      GPM_DEFAULT_CURRENT_LINE_BG_COLOR);
+}
+
+void
+gedit_prefs_manager_set_current_line_bg_color (GdkColor color)
+{
+	gedit_debug (DEBUG_PREFS);
+	
+	gedit_prefs_manager_set_color (GPM_CURRENT_LINE_BG_COLOR,
+				       color);
+}
+
+gboolean
+gedit_prefs_manager_current_line_bg_color_can_set (void)
+{
+	gedit_debug (DEBUG_PREFS);
+	
+	return gedit_prefs_manager_key_is_writable (GPM_CURRENT_LINE_BG_COLOR);
+}
+
+/* Breakpoint font color */
+GdkColor
+gedit_prefs_manager_get_breakpoint_color (void)
+{
+	gedit_debug (DEBUG_PREFS);
+
+	return gedit_prefs_manager_get_color (GPM_BREAKPOINT_COLOR,
+					      GPM_DEFAULT_BREAKPOINT_COLOR);
+}
+
+void
+gedit_prefs_manager_set_breakpoint_color (GdkColor color)
+{
+	gedit_debug (DEBUG_PREFS);
+	
+	gedit_prefs_manager_set_color (GPM_BREAKPOINT_COLOR,
+				       color);
+}
+
+gboolean
+gedit_prefs_manager_breakpoint_color_can_set (void)
+{
+	gedit_debug (DEBUG_PREFS);
+	
+	return gedit_prefs_manager_key_is_writable (GPM_BREAKPOINT_COLOR);
+}
+
+/* Breakpoint font color */
+GdkColor
+gedit_prefs_manager_get_breakpoint_bg_color (void)
+{
+	gedit_debug (DEBUG_PREFS);
+
+	return gedit_prefs_manager_get_color (GPM_BREAKPOINT_BG_COLOR,
+					      GPM_DEFAULT_BREAKPOINT_BG_COLOR);
+}
+
+void
+gedit_prefs_manager_set_breakpoint_bg_color (GdkColor color)
+{
+	gedit_debug (DEBUG_PREFS);
+	
+	gedit_prefs_manager_set_color (GPM_BREAKPOINT_BG_COLOR,
+				       color);
+}
+
+gboolean
+gedit_prefs_manager_breakpoint_bg_color_can_set (void)
+{
+	gedit_debug (DEBUG_PREFS);
+	
+	return gedit_prefs_manager_key_is_writable (GPM_BREAKPOINT_BG_COLOR);
+}
+
+
+
 
 /* Create backup copy */
 DEFINE_BOOL_PREF (create_backup_copy,

@@ -79,7 +79,8 @@ struct _GeditPreferencesDialogClass
  */
 GType		 gedit_preferences_dialog_get_type	(void) G_GNUC_CONST;
 
-void		 gedit_show_preferences_dialog		(GeditWindow *parent);
+//void		 gedit_show_preferences_dialog		(GeditWindow *parent);
+void		 gedit_show_preferences_dialog		(void);
 
 G_END_DECLS
 

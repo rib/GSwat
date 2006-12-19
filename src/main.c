@@ -2,6 +2,7 @@
 
 #include <config.h>
 
+#include "gedit-prefs-manager.h"
 #include "gswat-main-window.h"
 #include "gswat-spawn.h"
 #include "gswat-session.h"
@@ -57,6 +58,11 @@ main(int argc, char **argv)
 	                            GNOME_PARAM_GOPTION_CONTEXT, option_context,
 	                            GNOME_PARAM_NONE);
     
+    if(!gedit_prefs_manager_init())
+    {
+        g_critical("gedit_prefs_manager_init failed\n");
+    }
+
 	/* parse remaining command-line arguments that are not
 	 * options (e.g. filenames or URIs or whatever), if any
 	 */
@@ -73,7 +79,7 @@ main(int argc, char **argv)
 	}
 #endif
 
-
+    
     /* First we see if the user has described a new session
      * on the command line
      */

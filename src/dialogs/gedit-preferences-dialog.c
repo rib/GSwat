@@ -91,27 +91,27 @@ struct _GeditPreferencesDialogPrivate
 
 	/* Tabs */
 	GtkWidget	*tabs_width_spinbutton;
-	GtkWidget	*insert_spaces_checkbutton;
+	//GtkWidget	*insert_spaces_checkbutton;
 	GtkWidget	*tabs_width_hbox;
 
 	/* Auto indentation */
-	GtkWidget	*auto_indent_checkbutton;
+	//GtkWidget	*auto_indent_checkbutton;
 
 	/* Text Wrapping */
 	GtkWidget	*wrap_text_checkbutton;
 	GtkWidget	*split_checkbutton;
 
 	/* File Saving */
-	GtkWidget	*backup_copy_checkbutton;
-	GtkWidget	*auto_save_checkbutton;
-	GtkWidget	*auto_save_spinbutton;
-	GtkWidget	*autosave_hbox;
+	//GtkWidget	*backup_copy_checkbutton;
+	//GtkWidget	*auto_save_checkbutton;
+	//GtkWidget	*auto_save_spinbutton;
+	//GtkWidget	*autosave_hbox;
 	
 	/* Line numbers */
 	GtkWidget	*display_line_numbers_checkbutton;
 
 	/* Highlight current line */
-	GtkWidget	*highlight_current_line_checkbutton;
+	//GtkWidget	*highlight_current_line_checkbutton;
 	
 	/* Highlight matching bracket */
 	GtkWidget	*bracket_matching_checkbutton;
@@ -136,6 +136,12 @@ struct _GeditPreferencesDialogPrivate
 	GtkWidget	*background_checkbutton;
 	GtkWidget	*background_colorbutton_2;
 	GtkWidget	*reset_button;
+    
+    /* Debugger colors */
+	GtkWidget	*current_colorbutton;
+	GtkWidget	*current_bg_colorbutton;
+	GtkWidget	*breakpoint_colorbutton;
+	GtkWidget	*breakpoint_bg_colorbutton;
 
 	/* Plugins manager */
 	GtkWidget	*plugin_manager_place_holder;
@@ -196,6 +202,7 @@ tabs_width_spinbutton_value_changed (GtkSpinButton          *spin_button,
 	gedit_prefs_manager_set_tabs_size (gtk_spin_button_get_value_as_int (spin_button));
 }
 	
+/*
 static void
 insert_spaces_checkbutton_toggled (GtkToggleButton        *button,
 				   GeditPreferencesDialog *dlg)
@@ -206,7 +213,8 @@ insert_spaces_checkbutton_toggled (GtkToggleButton        *button,
 
 	gedit_prefs_manager_set_insert_spaces (gtk_toggle_button_get_active (button));
 }
-
+*/
+/*
 static void
 auto_indent_checkbutton_toggled (GtkToggleButton        *button,
 				 GeditPreferencesDialog *dlg)
@@ -217,7 +225,9 @@ auto_indent_checkbutton_toggled (GtkToggleButton        *button,
 
 	gedit_prefs_manager_set_auto_indent (gtk_toggle_button_get_active (button));
 }
+*/
 
+/*
 static void
 auto_save_checkbutton_toggled (GtkToggleButton        *button,
 			       GeditPreferencesDialog *dlg)
@@ -239,7 +249,9 @@ auto_save_checkbutton_toggled (GtkToggleButton        *button,
 		gedit_prefs_manager_set_auto_save (FALSE);
 	}
 }
+*/
 
+/*
 static void
 backup_copy_checkbutton_toggled (GtkToggleButton        *button,
 				 GeditPreferencesDialog *dlg)
@@ -250,7 +262,10 @@ backup_copy_checkbutton_toggled (GtkToggleButton        *button,
 	
 	gedit_prefs_manager_set_create_backup_copy (gtk_toggle_button_get_active (button));
 }
+*/
 
+
+/*
 static void
 auto_save_spinbutton_value_changed (GtkSpinButton          *spin_button,
 				    GeditPreferencesDialog *dlg)
@@ -260,76 +275,77 @@ auto_save_spinbutton_value_changed (GtkSpinButton          *spin_button,
 	gedit_prefs_manager_set_auto_save_interval (
 			MAX (1, gtk_spin_button_get_value_as_int (spin_button)));
 }
+*/
 
 static void
 setup_editor_page (GeditPreferencesDialog *dlg)
 {
-	gboolean auto_save;
-	gint auto_save_interval;
+	//gboolean auto_save;
+	//gint auto_save_interval;
 
 	gedit_debug (DEBUG_PREFS);
 
 	/* Set initial state */
 	gtk_spin_button_set_value (GTK_SPIN_BUTTON (dlg->priv->tabs_width_spinbutton),
 				   (guint) gedit_prefs_manager_get_tabs_size ());
-	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->insert_spaces_checkbutton), 
-				      gedit_prefs_manager_get_insert_spaces ());
-	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->auto_indent_checkbutton), 
-				      gedit_prefs_manager_get_auto_indent ());
-	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->backup_copy_checkbutton),
-				      gedit_prefs_manager_get_create_backup_copy ());
+	//gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->insert_spaces_checkbutton), 
+	//			      gedit_prefs_manager_get_insert_spaces ());
+	//gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->auto_indent_checkbutton), 
+	//			      gedit_prefs_manager_get_auto_indent ());
+	//gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->backup_copy_checkbutton),
+	//			      gedit_prefs_manager_get_create_backup_copy ());
 
-	auto_save = gedit_prefs_manager_get_auto_save ();
-	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->auto_save_checkbutton),
-				      auto_save);
+	//auto_save = gedit_prefs_manager_get_auto_save ();
+	//gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->auto_save_checkbutton),
+	//			      auto_save);
 
-	auto_save_interval = gedit_prefs_manager_get_auto_save_interval ();
-	if (auto_save_interval <= 0)
-		auto_save_interval = GPM_DEFAULT_AUTO_SAVE_INTERVAL;
+	//auto_save_interval = gedit_prefs_manager_get_auto_save_interval ();
+	//if (auto_save_interval <= 0)
+	//	auto_save_interval = GPM_DEFAULT_AUTO_SAVE_INTERVAL;
 
-	gtk_spin_button_set_value (GTK_SPIN_BUTTON (dlg->priv->auto_save_spinbutton),
-				   auto_save_interval);
+	//gtk_spin_button_set_value (GTK_SPIN_BUTTON (dlg->priv->auto_save_spinbutton),
+	//			   auto_save_interval);
 
 	/* Set widget sensitivity */
 	gtk_widget_set_sensitive (dlg->priv->tabs_width_hbox, 
 				  gedit_prefs_manager_tabs_size_can_set ());
-	gtk_widget_set_sensitive (dlg->priv->insert_spaces_checkbutton,
-				  gedit_prefs_manager_insert_spaces_can_set ());
-	gtk_widget_set_sensitive (dlg->priv->auto_indent_checkbutton,
-				  gedit_prefs_manager_auto_indent_can_set ());
-	gtk_widget_set_sensitive (dlg->priv->backup_copy_checkbutton,
-				  gedit_prefs_manager_create_backup_copy_can_set ());
-	gtk_widget_set_sensitive (dlg->priv->autosave_hbox, 
-				  gedit_prefs_manager_auto_save_can_set ()); 
-	gtk_widget_set_sensitive (dlg->priv->auto_save_spinbutton, 
-			          auto_save &&
-				  gedit_prefs_manager_auto_save_interval_can_set ());
+	//gtk_widget_set_sensitive (dlg->priv->insert_spaces_checkbutton,
+	//			  gedit_prefs_manager_insert_spaces_can_set ());
+	//gtk_widget_set_sensitive (dlg->priv->auto_indent_checkbutton,
+	//			  gedit_prefs_manager_auto_indent_can_set ());
+	//gtk_widget_set_sensitive (dlg->priv->backup_copy_checkbutton,
+	//			  gedit_prefs_manager_create_backup_copy_can_set ());
+	//gtk_widget_set_sensitive (dlg->priv->autosave_hbox, 
+	//			  gedit_prefs_manager_auto_save_can_set ()); 
+	//gtk_widget_set_sensitive (dlg->priv->auto_save_spinbutton, 
+	//		          auto_save &&
+	//			  gedit_prefs_manager_auto_save_interval_can_set ());
 
 	/* Connect signal */
 	g_signal_connect (dlg->priv->tabs_width_spinbutton,
 			  "value_changed",
 			  G_CALLBACK (tabs_width_spinbutton_value_changed),
 			  dlg);
-	g_signal_connect (dlg->priv->insert_spaces_checkbutton,
-			 "toggled",
-			  G_CALLBACK (insert_spaces_checkbutton_toggled),
-			  dlg);
-	g_signal_connect (dlg->priv->auto_indent_checkbutton,
-			  "toggled",
-			  G_CALLBACK (auto_indent_checkbutton_toggled),
-			  dlg);
-	g_signal_connect (dlg->priv->auto_save_checkbutton,
-			  "toggled",
-			  G_CALLBACK (auto_save_checkbutton_toggled),
-			  dlg);
-	g_signal_connect (dlg->priv->backup_copy_checkbutton,
-			  "toggled",
-			  G_CALLBACK (backup_copy_checkbutton_toggled),
-			  dlg);
-	g_signal_connect (dlg->priv->auto_save_spinbutton,
-			  "value_changed",
-			  G_CALLBACK (auto_save_spinbutton_value_changed),
-			  dlg);
+	//g_signal_connect (dlg->priv->insert_spaces_checkbutton,
+	//		 "toggled",
+	//		  G_CALLBACK (insert_spaces_checkbutton_toggled),
+	//		  dlg);
+	//g_signal_connect (dlg->priv->auto_indent_checkbutton,
+	//		  "toggled",
+	//		  G_CALLBACK (auto_indent_checkbutton_toggled),
+	//		  dlg);
+	//g_signal_connect (dlg->priv->auto_save_checkbutton,
+	//		  "toggled",
+	//		  G_CALLBACK (auto_save_checkbutton_toggled),
+	//		  dlg);
+	//g_signal_connect (dlg->priv->backup_copy_checkbutton,
+	//		  "toggled",
+	//		  G_CALLBACK (backup_copy_checkbutton_toggled),
+	//		  dlg);
+	//g_signal_connect (dlg->priv->auto_save_spinbutton,
+	//		  "value_changed",
+	//		  G_CALLBACK (auto_save_spinbutton_value_changed),
+	//		  dlg);
 }
 
 static void
@@ -342,6 +358,7 @@ display_line_numbers_checkbutton_toggled (GtkToggleButton        *button,
 	gedit_prefs_manager_set_display_line_numbers (gtk_toggle_button_get_active (button));
 }
 
+/*
 static void
 highlight_current_line_checkbutton_toggled (GtkToggleButton        *button,
 					    GeditPreferencesDialog *dlg)
@@ -351,6 +368,7 @@ highlight_current_line_checkbutton_toggled (GtkToggleButton        *button,
 
 	gedit_prefs_manager_set_highlight_current_line (gtk_toggle_button_get_active (button));
 }
+*/
 
 static void
 bracket_matching_checkbutton_toggled (GtkToggleButton        *button,
@@ -445,8 +463,8 @@ setup_view_page (GeditPreferencesDialog *dlg)
 	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->display_line_numbers_checkbutton),
 				      gedit_prefs_manager_get_display_line_numbers ());
 	
-	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->highlight_current_line_checkbutton),
-				      gedit_prefs_manager_get_highlight_current_line ());
+	//gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->highlight_current_line_checkbutton),
+	//			      gedit_prefs_manager_get_highlight_current_line ());
 	
 	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (dlg->priv->bracket_matching_checkbutton),
 				      gedit_prefs_manager_get_bracket_matching ());
@@ -489,8 +507,8 @@ setup_view_page (GeditPreferencesDialog *dlg)
 	/* Set widgets sensitivity */
 	gtk_widget_set_sensitive (dlg->priv->display_line_numbers_checkbutton,
 				  gedit_prefs_manager_display_line_numbers_can_set ());
-	gtk_widget_set_sensitive (dlg->priv->highlight_current_line_checkbutton,
-				  gedit_prefs_manager_highlight_current_line_can_set ());
+	//gtk_widget_set_sensitive (dlg->priv->highlight_current_line_checkbutton,
+	//			  gedit_prefs_manager_highlight_current_line_can_set ());
 	gtk_widget_set_sensitive (dlg->priv->bracket_matching_checkbutton,
 				  gedit_prefs_manager_bracket_matching_can_set ());
 	wrap_mode_can_set = gedit_prefs_manager_wrap_mode_can_set ();
@@ -510,10 +528,10 @@ setup_view_page (GeditPreferencesDialog *dlg)
 			  "toggled",
 			  G_CALLBACK (display_line_numbers_checkbutton_toggled), 
 			  dlg);
-	g_signal_connect (dlg->priv->highlight_current_line_checkbutton,
-			  "toggled", 
-			  G_CALLBACK (highlight_current_line_checkbutton_toggled), 
-			  dlg);
+	//g_signal_connect (dlg->priv->highlight_current_line_checkbutton,
+	//		  "toggled", 
+	//		  G_CALLBACK (highlight_current_line_checkbutton_toggled), 
+	//		  dlg);
 	g_signal_connect (dlg->priv->bracket_matching_checkbutton,
 			  "toggled", 
 			  G_CALLBACK (bracket_matching_checkbutton_toggled), 
@@ -603,7 +621,7 @@ editor_font_button_font_set (GtkFontButton          *font_button,
 }
 
 static void 
-editor_color_button_color_set (GtkColorButton         *button, 
+color_button_color_set (GtkColorButton         *button, 
 			       GeditPreferencesDialog *dlg)
 {
 	GdkColor color;
@@ -631,6 +649,32 @@ editor_color_button_color_set (GtkColorButton         *button,
 	if (button == GTK_COLOR_BUTTON (dlg->priv->selection_colorbutton))
 	{
 		gedit_prefs_manager_set_selection_color (color);
+		return;
+	}
+
+    /* Debugger colors */
+
+    if (button == GTK_COLOR_BUTTON (dlg->priv->current_colorbutton))
+	{
+		gedit_prefs_manager_set_current_line_color(color);
+		return;
+	}
+
+    if (button == GTK_COLOR_BUTTON (dlg->priv->current_bg_colorbutton))
+	{
+		gedit_prefs_manager_set_current_line_bg_color(color);
+		return;
+	}
+
+    if(button == GTK_COLOR_BUTTON (dlg->priv->breakpoint_colorbutton))
+	{
+		gedit_prefs_manager_set_breakpoint_color(color);
+		return;
+	}
+
+    if(button == GTK_COLOR_BUTTON (dlg->priv->breakpoint_bg_colorbutton))
+	{
+		gedit_prefs_manager_set_breakpoint_bg_color(color);
 		return;
 	}
 
@@ -711,20 +755,21 @@ setup_font_colors_page (GeditPreferencesDialog *dlg)
 			  dlg);
 	g_signal_connect (dlg->priv->text_colorbutton,
 			  "color_set",
-			  G_CALLBACK (editor_color_button_color_set),
+			  G_CALLBACK (color_button_color_set),
 			  dlg);
 	g_signal_connect (dlg->priv->background_colorbutton,
 			  "color_set",
-			  G_CALLBACK (editor_color_button_color_set),
+			  G_CALLBACK (color_button_color_set),
 			  dlg);
 	g_signal_connect (dlg->priv->seltext_colorbutton,
 			  "color_set",
-			  G_CALLBACK (editor_color_button_color_set),
+			  G_CALLBACK (color_button_color_set),
 			  dlg);
 	g_signal_connect (dlg->priv->selection_colorbutton,
 			  "color_set",
-			  G_CALLBACK (editor_color_button_color_set),
+			  G_CALLBACK (color_button_color_set),
 			 dlg);
+
 
 	/* Set initial widget sensitivity */
 	gtk_widget_set_sensitive (dlg->priv->default_font_checkbutton, 
@@ -748,6 +793,62 @@ setup_font_colors_page (GeditPreferencesDialog *dlg)
 				  	  gedit_prefs_manager_selection_color_can_set () &&
 				  	  gedit_prefs_manager_selected_text_color_can_set ());
 }
+
+
+
+static void
+setup_debugger_colors_page (GeditPreferencesDialog *dlg)
+{
+	GdkColor color;
+
+	gedit_debug (DEBUG_PREFS);
+
+	gtk_tooltips_set_tip (dlg->priv->tooltips, dlg->priv->current_colorbutton, 
+			_("Push this button to configure the current line font color"), NULL);
+	gtk_tooltips_set_tip (dlg->priv->tooltips, dlg->priv->current_bg_colorbutton, 
+			_("Push this button to configure the current line background color"), NULL);
+	gtk_tooltips_set_tip (dlg->priv->tooltips, dlg->priv->breakpoint_colorbutton, 
+			_("Push this button to configure the breakpoint font color"), NULL);
+	gtk_tooltips_set_tip (dlg->priv->tooltips, dlg->priv->breakpoint_bg_colorbutton, 
+			_("Push this button to configure the breakpoint backgroun color"), NULL);
+    
+
+	/* read current config and setup initial state */
+	color = gedit_prefs_manager_get_current_line_color ();
+	gtk_color_button_set_color (GTK_COLOR_BUTTON (dlg->priv->current_colorbutton),
+				    &color);
+    color = gedit_prefs_manager_get_current_line_bg_color ();
+	gtk_color_button_set_color (GTK_COLOR_BUTTON (dlg->priv->current_bg_colorbutton),
+				    &color);
+    color = gedit_prefs_manager_get_breakpoint_color ();
+	gtk_color_button_set_color (GTK_COLOR_BUTTON (dlg->priv->breakpoint_colorbutton),
+				    &color);
+    color = gedit_prefs_manager_get_breakpoint_bg_color ();
+	gtk_color_button_set_color (GTK_COLOR_BUTTON (dlg->priv->breakpoint_bg_colorbutton),
+				    &color);
+    
+
+
+	/* Connect signals */
+    g_signal_connect (dlg->priv->current_colorbutton,
+			  "color_set",
+			  G_CALLBACK (color_button_color_set),
+			 dlg);
+    g_signal_connect (dlg->priv->current_bg_colorbutton,
+			  "color_set",
+			  G_CALLBACK (color_button_color_set),
+			 dlg);
+    g_signal_connect (dlg->priv->breakpoint_colorbutton,
+			  "color_set",
+			  G_CALLBACK (color_button_color_set),
+			 dlg);
+    g_signal_connect (dlg->priv->breakpoint_bg_colorbutton,
+			  "color_set",
+			  G_CALLBACK (color_button_color_set),
+			 dlg);
+    
+}
+
 
 static void
 enable_syntax_hl_button_toggled (GtkWidget              *button,
@@ -1103,8 +1204,8 @@ select_default_language (GeditPreferencesDialog *dlg)
 	GtkSourceLanguage *current_document_language;
 	int current_item;
 
-	current_document = gedit_window_get_active_document (GEDIT_WINDOW(
-						gtk_window_get_transient_for (GTK_WINDOW(dlg))));
+	current_document = NULL;//gedit_window_get_active_document (GEDIT_WINDOW(
+						//gtk_window_get_transient_for (GTK_WINDOW(dlg))));
 	if (current_document != NULL)
 		current_document_language = gedit_document_get_language (current_document);
 	else
@@ -1290,7 +1391,7 @@ gedit_preferences_dialog_init (GeditPreferencesDialog *dlg)
 
 		"notebook", &content,
 		"display_line_numbers_checkbutton", &dlg->priv->display_line_numbers_checkbutton,
-		"highlight_current_line_checkbutton", &dlg->priv->highlight_current_line_checkbutton,
+		//"highlight_current_line_checkbutton", &dlg->priv->highlight_current_line_checkbutton,
 				
 		"bracket_matching_checkbutton", &dlg->priv->bracket_matching_checkbutton,
 		"wrap_text_checkbutton", &dlg->priv->wrap_text_checkbutton,
@@ -1304,23 +1405,27 @@ gedit_preferences_dialog_init (GeditPreferencesDialog *dlg)
 		"seltext_colorbutton", &dlg->priv->seltext_colorbutton,
 		"selection_colorbutton", &dlg->priv->selection_colorbutton,
 
+		"current_colorbutton", &dlg->priv->current_colorbutton,
+		"current_bg_colorbutton", &dlg->priv->current_bg_colorbutton,
+		"breakpoint_colorbutton", &dlg->priv->breakpoint_colorbutton,
+		"breakpoint_bg_colorbutton", &dlg->priv->breakpoint_bg_colorbutton,
+
 		"colors_table", &dlg->priv->colors_table,
 		"font_hbox", &dlg->priv->font_hbox,
-
 		"right_margin_checkbutton", &dlg->priv->right_margin_checkbutton,
 		"right_margin_position_spinbutton", &dlg->priv->right_margin_position_spinbutton,
 		"right_margin_position_hbox", &dlg->priv->right_margin_position_hbox,
 
 		"tabs_width_spinbutton", &dlg->priv->tabs_width_spinbutton,
 		"tabs_width_hbox", &dlg->priv->tabs_width_hbox,
-		"insert_spaces_checkbutton", &dlg->priv->insert_spaces_checkbutton,
+		//"insert_spaces_checkbutton", &dlg->priv->insert_spaces_checkbutton,
 
-		"auto_indent_checkbutton", &dlg->priv->auto_indent_checkbutton,
+		//"auto_indent_checkbutton", &dlg->priv->auto_indent_checkbutton,
 
-		"autosave_hbox", &dlg->priv->autosave_hbox,
-		"backup_copy_checkbutton", &dlg->priv->backup_copy_checkbutton,
-		"auto_save_checkbutton", &dlg->priv->auto_save_checkbutton,
-		"auto_save_spinbutton", &dlg->priv->auto_save_spinbutton,
+		//"autosave_hbox", &dlg->priv->autosave_hbox,
+		//"backup_copy_checkbutton", &dlg->priv->backup_copy_checkbutton,
+		//"auto_save_checkbutton", &dlg->priv->auto_save_checkbutton,
+		//"auto_save_spinbutton", &dlg->priv->auto_save_spinbutton,
 
 		"plugin_manager_place_holder", &dlg->priv->plugin_manager_place_holder,
 
@@ -1357,15 +1462,16 @@ gedit_preferences_dialog_init (GeditPreferencesDialog *dlg)
 	setup_view_page (dlg);
 	setup_font_colors_page (dlg);
 	setup_syntax_highlighting_page (dlg);
+    setup_debugger_colors_page (dlg);
 	//setup_plugins_page (dlg);
 }
 
 void
-gedit_show_preferences_dialog (GeditWindow *parent)
+gedit_show_preferences_dialog (void)
 {
 	gedit_debug (DEBUG_PREFS);
 
-	g_return_if_fail (GEDIT_IS_WINDOW (parent));
+	//g_return_if_fail (GEDIT_IS_WINDOW (parent));
 
 	if (preferences_dialog == NULL)
 	{
@@ -1376,12 +1482,13 @@ gedit_show_preferences_dialog (GeditWindow *parent)
 				  &preferences_dialog);
 	}
 
-	if (GTK_WINDOW (parent) != gtk_window_get_transient_for (GTK_WINDOW (preferences_dialog)))
-	{
-		gtk_window_set_transient_for (GTK_WINDOW (preferences_dialog),
-					      GTK_WINDOW (parent));
+	//if (GTK_WINDOW (parent) != gtk_window_get_transient_for (GTK_WINDOW (preferences_dialog)))
+	//{
+	//	gtk_window_set_transient_for (GTK_WINDOW (preferences_dialog),
+	//				      GTK_WINDOW (parent));
 		select_default_language (GEDIT_PREFERENCES_DIALOG (preferences_dialog));
-	}
+	//}
 
 	gtk_window_present (GTK_WINDOW (preferences_dialog));
 }
+

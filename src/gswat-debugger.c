@@ -387,6 +387,54 @@ uri_from_filename(const gchar *filename)
 }
 
 
+static void
+gswat_debugger_on_break_insert_done(struct _GSwatDebugger *self,
+                                    gulong token,
+                                    const GDBMIValue *val,
+                                    GString *command,
+                                    gpointer *data)
+{
+    GSwatDebuggerBreakpoint *breakpoint;
+    const GDBMIValue *bkpt_val, *literal_val;
+    const char *literal;
+
+   /*
+{
+    bkpt = {
+        addr = "0x08048397",
+        times = "0",
+        func = "function2",
+        type = "breakpoint",
+        number = "2",
+        file = "test.c",
+        disp = "keep",
+        enabled = "y",
+        fullname = "/home/rob/local/gswat/bin/test.c",
+        line = "16",
+    },
+},
+    */
+
+    bkpt_val = gdbmi_value_hash_lookup(val, "bkpt");
+    g_assert(bkpt_val);
+    
+    breakpoint = g_new0(GSwatDebuggerBreakpoint, 1);
+    
+    literal_val = gdbmi_value_hash_lookup(bkpt_val, "fullname");
+    literal = gdbmi_value_literal_get(literal_val);
+    breakpoint->source_uri = uri_from_filename(literal);
+    
+    literal_val = gdbmi_value_hash_lookup(bkpt_val, "line");
+    literal = gdbmi_value_literal_get(literal_val);
+    breakpoint->line = strtol(literal, NULL, 10);
+    
+    self->priv->breakpoints =
+        g_list_prepend(self->priv->breakpoints, breakpoint);
+    
+    g_object_notify(G_OBJECT(self), "breakpoints");
+    
+}
+
 
 static void
 gswat_debugger_on_stack_list_done(struct _GSwatDebugger *self,
@@ -405,6 +453,7 @@ gswat_debugger_on_stack_list_done(struct _GSwatDebugger *self,
     gulong tok;
     int n;
 
+    gdbmi_value_dump(val, 0);
 
     /* Free the current stack */
     for(tmp=self->priv->stack; tmp!=NULL; tmp=tmp->next)
@@ -429,6 +478,7 @@ gswat_debugger_on_stack_list_done(struct _GSwatDebugger *self,
 
     n=0;
     while(1){
+        g_message("gdbmi_value_list_get_nth 0 - %d", n);
         frame_val = gdbmi_value_list_get_nth(stack_val, n);
         if(frame_val)
         {
@@ -450,44 +500,46 @@ gswat_debugger_on_stack_list_done(struct _GSwatDebugger *self,
         }else{
             break;
         }
-        
+
         n++;
     }
-    
+
 
     g_string_printf(gdbmi_command, "-stack-list-arguments 1 0 %d", n);
     tok = gswat_debugger_send_mi_command(self, gdbmi_command->str);
     g_string_free(gdbmi_command, TRUE);
-    
-    
+
+
     top_val = gswat_debugger_get_gdbmi_value(self, tok);
-    if(!val && n>0)
+    if(!top_val && n>0)
     {
         g_assert_not_reached();
     }
-    
-    gdbmi_value_dump(val, 0);
-    
+
+    gdbmi_value_dump(top_val, 0);
+
     stackargs_val = gdbmi_value_hash_lookup(top_val, "stack-args");
-    
+
     n--;
     for(tmp=self->priv->stack; tmp!=NULL; tmp=tmp->next)
     {
         guint a;
         current_frame = (GSwatDebuggerFrame *)tmp->data;
 
+        g_message("gdbmi_value_list_get_nth 1 - %d", n);
         frame_val = gdbmi_value_list_get_nth(stackargs_val, n);
         args_val = gdbmi_value_hash_lookup(frame_val, "args");
 
         a=0;
         while(TRUE)
         {
+            g_message("gdbmi_value_list_get_nth 2");
             arg_val = gdbmi_value_list_get_nth(args_val, a);
             if(!arg_val)
             {
                 break;
             }
-            
+
             arg = g_new0(GSwatDebuggerFrameArgument, 1);
 
             literal_val = gdbmi_value_hash_lookup(arg_val, "name");
@@ -497,7 +549,7 @@ gswat_debugger_on_stack_list_done(struct _GSwatDebugger *self,
             arg->value = g_strdup(gdbmi_value_literal_get(literal_val));
 
             current_frame->arguments = 
-                    g_list_prepend(current_frame->arguments, arg);
+                g_list_prepend(current_frame->arguments, arg);
 
             a++;
         }
@@ -506,7 +558,7 @@ gswat_debugger_on_stack_list_done(struct _GSwatDebugger *self,
     }
 
     gdbmi_value_free(top_val);
-    
+
     g_object_notify(G_OBJECT(self), "stack");
 }
 
@@ -672,7 +724,7 @@ gswat_debugger_process_gdbmi_command(GSwatDebugger *self, GString *command)
         command = tmp;
     }
 
-    #if 0
+#if 0
     token_str = g_string_new("");
     for(i=0; i<command->len; i++)
     {
@@ -686,7 +738,7 @@ gswat_debugger_process_gdbmi_command(GSwatDebugger *self, GString *command)
     command_token = strtol(token_str->str, NULL, 10);
 
     g_string_erase(command, 0, i);
-    #endif
+#endif
 
 
     g_message("gdbmi_command: token=%ld, command=%s", command_token, command->str);
@@ -706,7 +758,7 @@ gswat_debugger_process_gdbmi_command(GSwatDebugger *self, GString *command)
     else if (strncasecmp (command->str, "^error", 6) == 0)
     {
         g_assert_not_reached();
-        
+
 #if 0
         /* GDB reported error */
         if (debugger->priv->current_cmd.suppress_error == FALSE)
@@ -1772,11 +1824,22 @@ gswat_debugger_request_line_breakpoint(GSwatDebugger* self, gchar *uri, guint li
     if(self->priv->state == GSWAT_DEBUGGER_NOT_RUNNING
        || self->priv->state == GSWAT_DEBUGGER_INTERRUPTED)
     {
+        gulong token;
+
         filename = gnome_vfs_get_local_path_from_uri(uri);
         g_assert(filename);
 
         gdb_command = g_strdup_printf("-break-insert %s:%d", filename, line);
-        gswat_debugger_send_mi_command(self, gdb_command);
+        token = gswat_debugger_send_mi_command(self, gdb_command);
+        gswat_debugger_done_connect(self,
+                                    token,
+                                    GDBMI_DONE_CALLBACK(
+                                                        gswat_debugger_on_break_insert_done
+                                                       )
+                                    ,
+                                    NULL
+                                   );
+
         g_free(gdb_command);
         g_free(filename);
     }
@@ -1791,9 +1854,19 @@ gswat_debugger_request_function_breakpoint(GSwatDebugger* self, gchar *function)
     if(self->priv->state == GSWAT_DEBUGGER_NOT_RUNNING
        || self->priv->state == GSWAT_DEBUGGER_INTERRUPTED)
     {
+        gulong token;
+
         g_string_printf(gdb_command, "-break-insert %s", function);
 
-        gswat_debugger_send_mi_command(self, gdb_command->str);
+        token = gswat_debugger_send_mi_command(self, gdb_command->str);
+        gswat_debugger_done_connect(self,
+                                    token,
+                                    GDBMI_DONE_CALLBACK(
+                                                        gswat_debugger_on_break_insert_done
+                                                       )
+                                    ,
+                                    NULL
+                                   );
 
         g_string_free(gdb_command, TRUE);
     }
@@ -1808,9 +1881,20 @@ gswat_debugger_request_address_breakpoint(GSwatDebugger* self, unsigned long add
     if(self->priv->state == GSWAT_DEBUGGER_NOT_RUNNING
        || self->priv->state == GSWAT_DEBUGGER_INTERRUPTED)
     {
+        gulong token;
+
         gdb_command = g_strdup_printf("-break-insert 0x%lx", address);
-        gswat_debugger_send_mi_command(self, gdb_command);
+        token = gswat_debugger_send_mi_command(self, gdb_command);
         g_free(gdb_command);
+        gswat_debugger_done_connect(self,
+                                    token,
+                                    GDBMI_DONE_CALLBACK(
+                                                        gswat_debugger_on_break_insert_done
+                                                       )
+                                    ,
+                                    NULL
+                                   );
+
     }
 }
 
@@ -1982,7 +2066,7 @@ gswat_debugger_get_stack(GSwatDebugger* self)
             new_arg->name = g_strdup(current_arg->name);
             new_arg->value = g_strdup(current_arg->value);
             new_frame->arguments = 
-                    g_list_prepend(new_frame->arguments, new_arg);
+                g_list_prepend(new_frame->arguments, new_arg);
         }
 
         new_stack = g_list_prepend(new_stack, new_frame);

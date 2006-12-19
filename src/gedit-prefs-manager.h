@@ -34,7 +34,7 @@
 #include <gtk/gtkenums.h>
 #include <glib/gslist.h>
 
-#define GEDIT_BASE_KEY	"/apps/gedit-2"
+#define GEDIT_BASE_KEY	"/apps/gswat-1"
 
 #define GPM_PREFS_DIR			GEDIT_BASE_KEY "/preferences"
 
@@ -49,6 +49,11 @@
 #define GPM_TEXT_COLOR			GPM_COLORS_DIR "/text_color"
 #define GPM_SELECTED_TEXT_COLOR		GPM_COLORS_DIR "/selected_text_color"
 #define GPM_SELECTION_COLOR		GPM_COLORS_DIR "/selection_color"
+
+#define GPM_CURRENT_LINE_COLOR		GPM_COLORS_DIR "/current_line_color"
+#define GPM_CURRENT_LINE_BG_COLOR	GPM_COLORS_DIR "/current_line_bg_color"
+#define GPM_BREAKPOINT_COLOR		GPM_COLORS_DIR "/breakpoint_color"
+#define GPM_BREAKPOINT_BG_COLOR		GPM_COLORS_DIR "/breakpoint_bg_color"
 
 #define GPM_SAVE_DIR			GPM_PREFS_DIR  "/editor/save"
 #define GPM_CREATE_BACKUP_COPY  	GPM_SAVE_DIR "/create_backup_copy"
@@ -121,7 +126,7 @@
 #define GPM_PRINT_FONT_NUMBERS		GPM_PRINT_FONT_DIR "/print_font_numbers"
 #define GPM_PRINT_FONT_NUMBERS_PANGO	GPM_PRINT_FONT_DIR "/print_font_numbers_pango"
 
-#define GPM_WINDOW_DIR			"/gedit-2/window"
+#define GPM_WINDOW_DIR			"/gswat-1/window"
 #define GPM_WINDOW_STATE		GPM_WINDOW_DIR "/state"
 #define GPM_WINDOW_WIDTH		GPM_WINDOW_DIR "/width"
 #define GPM_WINDOW_HEIGHT		GPM_WINDOW_DIR "/height"
@@ -150,6 +155,12 @@
 #define GPM_DEFAULT_TEXT_COLOR		(const gchar*) "#000000000000"
 #define GPM_DEFAULT_SELECTED_TEXT_COLOR	(const gchar*) "#ffffffffffff"
 #define GPM_DEFAULT_SELECTION_COLOR	(const gchar*) "#000000009c9c"
+
+#define GPM_DEFAULT_CURRENT_LINE_COLOR		(const gchar*) "#000000000000"
+#define GPM_DEFAULT_CURRENT_LINE_BG_COLOR	(const gchar*) "#0000FFFF0000"
+#define GPM_DEFAULT_BREAKPOINT_COLOR		(const gchar*) "#FFFFFFFFFFFF"
+#define GPM_DEFAULT_BREAKPOINT_BG_COLOR		(const gchar*) "#FFFF00000000"
+
 
 #define GPM_DEFAULT_CREATE_BACKUP_COPY	1 /* TRUE */
 #define GPM_DEFAULT_BACKUP_COPY_EXTENSION (const gchar*) "~"
@@ -269,6 +280,27 @@ gboolean		 gedit_prefs_manager_selection_color_can_set	(void);
 GdkColor		 gedit_prefs_manager_get_selected_text_color	(void);
 void 			 gedit_prefs_manager_set_selected_text_color	(GdkColor color);
 gboolean		 gedit_prefs_manager_selected_text_color_can_set(void);
+
+/* Current line font color */
+GdkColor		 gedit_prefs_manager_get_current_line_color	(void);
+void 			 gedit_prefs_manager_set_current_line_color	(GdkColor color);
+gboolean		 gedit_prefs_manager_current_line_color_can_set(void);
+
+/* Current line background color */
+GdkColor		 gedit_prefs_manager_get_current_line_bg_color	(void);
+void 			 gedit_prefs_manager_set_current_line_bg_color	(GdkColor color);
+gboolean		 gedit_prefs_manager_current_line_bg_color_can_set(void);
+
+/* Current breakpoint font color */
+GdkColor		 gedit_prefs_manager_get_breakpoint_color	(void);
+void 			 gedit_prefs_manager_set_breakpoint_color	(GdkColor color);
+gboolean		 gedit_prefs_manager_breakpoint_color_can_set(void);
+
+/* Current breakpoint background color */
+GdkColor		 gedit_prefs_manager_get_breakpoint_bg_color	(void);
+void 			 gedit_prefs_manager_set_breakpoint_bg_color	(GdkColor color);
+gboolean		 gedit_prefs_manager_breakpoint_bg_color_can_set(void);
+
 
 /* Create backup copy */
 gboolean		 gedit_prefs_manager_get_create_backup_copy	(void);

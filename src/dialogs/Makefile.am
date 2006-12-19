@@ -3,9 +3,10 @@ gladedir = $(datadir)/gswat/glade/
 INCLUDES = 							\
 	-I$(top_srcdir)						\
 	-I$(top_srcdir)/src 					\
+	-I$(top_srcdir)/src/gedit 				\
 	-DGNOME_ICONDIR=\""$(datadir)/pixmaps"\" 		\
-	-DGEDIT_GLADEDIR=\""$(datadir)/gswag/glade/"\"		\
-	-DGSWAT_GLADEDIR=\""$(datadir)/gswag/glade/"\"
+	-DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"		\
+	-DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\"
 
 noinst_LTLIBRARIES = libdialogs.la
 

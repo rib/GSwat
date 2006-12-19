@@ -6,6 +6,8 @@
 
 #include <config.h>
 
+#include "dialogs/gedit-preferences-dialog.h"
+
 #include "gswat-main-window.h"
 
 #include "gedit-document.h"
@@ -446,40 +448,43 @@ gswat_window_set_toolbar_state(GSwatWindow *self, guint state)
     switch(state)
     {
         case GSWAT_DEBUGGER_RUNNING:
-            gtk_widget_hide(self->priv->step_button);
-            gtk_widget_hide(self->priv->next_button);
-            gtk_widget_hide(self->priv->continue_button);
-            gtk_widget_hide(self->priv->finish_button);
-            gtk_widget_show(self->priv->break_button);
-            gtk_widget_show(self->priv->restart_button);
-            gtk_widget_hide(self->priv->add_break_button);
+            g_message("******** setting toolbar state GSWAT_DEBUGGER_RUNNING");
+            gtk_widget_set_sensitive(self->priv->step_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->next_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->finish_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->break_button, TRUE);
+            gtk_widget_set_sensitive(self->priv->restart_button, TRUE);
+            gtk_widget_set_sensitive(self->priv->add_break_button, FALSE);
             break;
         case GSWAT_DEBUGGER_NOT_RUNNING:
-            gtk_widget_hide(self->priv->step_button);
-            gtk_widget_hide(self->priv->next_button);
-            gtk_widget_hide(self->priv->continue_button);
-            gtk_widget_hide(self->priv->finish_button);
-            gtk_widget_hide(self->priv->break_button);
-            gtk_widget_show(self->priv->add_break_button);
+            g_message("******** setting toolbar state GSWAT_DEBUGGER_NOT_RUNNING");
+            gtk_widget_set_sensitive(self->priv->step_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->next_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->finish_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->break_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->add_break_button, TRUE);
             break;
         case GSWAT_DEBUGGER_INTERRUPTED:
-            gtk_widget_show(self->priv->step_button);
-            gtk_widget_show(self->priv->next_button);
-            gtk_widget_show(self->priv->continue_button);
-            gtk_widget_show(self->priv->finish_button);
-            gtk_widget_hide(self->priv->break_button);
-            gtk_widget_show(self->priv->restart_button);
-            gtk_widget_show(self->priv->add_break_button);
+            g_message("******** setting toolbar state GSWAT_DEBUGGER_INTERRUPTED");
+            gtk_widget_set_sensitive(self->priv->step_button, TRUE);
+            gtk_widget_set_sensitive(self->priv->next_button, TRUE);
+            gtk_widget_set_sensitive(self->priv->continue_button, TRUE);
+            gtk_widget_set_sensitive(self->priv->finish_button, TRUE);
+            gtk_widget_set_sensitive(self->priv->break_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->restart_button, TRUE);
+            gtk_widget_set_sensitive(self->priv->add_break_button, TRUE);
             break;
         default:
             g_warning("unexpected debugger state");
-            gtk_widget_show(self->priv->step_button);
-            gtk_widget_show(self->priv->next_button);
-            gtk_widget_show(self->priv->continue_button);
-            gtk_widget_show(self->priv->finish_button);
-            gtk_widget_show(self->priv->break_button);
-            gtk_widget_show(self->priv->restart_button);
-            gtk_widget_show(self->priv->add_break_button);
+            gtk_widget_set_sensitive(self->priv->step_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->next_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->finish_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->break_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->restart_button, FALSE);
+            gtk_widget_set_sensitive(self->priv->add_break_button, FALSE);
             break;
     }
 
@@ -593,7 +598,10 @@ gswat_window_update_stack(GObject *object,
                            -1);
 
     }
-    g_object_unref(self->priv->stack_list_store);
+    if(self->priv->stack_list_store)
+    {
+        g_object_unref(self->priv->stack_list_store);
+    }
     self->priv->stack_list_store = list_store;
     
     gtk_tree_view_set_model(stack_widget,
@@ -720,7 +728,6 @@ on_debug_button_clicked(GtkToolButton   *toolbutton,
     gtk_text_buffer_place_cursor (GTK_TEXT_BUFFER (self->priv->source_document), &iter);
 
 
-
 }
 
 
@@ -809,6 +816,12 @@ on_gswat_window_add_break_button_clicked(GtkToolButton   *toolbutton,
     gswat_debugger_request_line_breakpoint(self->priv->debugger, uri, line);
 }
 
+void
+gswat_window_on_preferences_activate(GtkMenuItem     *menuitem,
+                                     gpointer         data)
+{
+    gedit_show_preferences_dialog();
+}
 
 
 void
@@ -817,9 +830,6 @@ gswat_window_on_quit_activate(GtkMenuItem     *menuitem,
 {
     gtk_main_quit();
 }
-
-
-
 
 
 
