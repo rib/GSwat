@@ -67,3 +67,4 @@ void gdbmi_value_dump (const GDBMIValue *val, gint indent_level);
 G_END_DECLS
 
 #endif
+
