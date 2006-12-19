@@ -13,9 +13,15 @@ gswat_SOURCES = main.c \
 		
 #		gdb.c
 #		gedit-prefs-manager-app.c
-		
-gswat_LDADD = @DEPS_LIBS@ gedit/libgedit.la dialogs/libdialogs.la
-gswat_LDFLAGS = -export-dynamic
+
+
+# libgedit.la and libdialogs.la are dependent on each other so as per
+# the GNU info section Multiple dependencies (libtool), the dependency
+# is listed twice and we pass --preserve-dup-deps. This seems a
+# bit hacky but I'd really like to keep the gedit code organised
+# seperatly for neatness.
+gswat_LDADD = @DEPS_LIBS@ gedit/libgedit.la dialogs/libdialogs.la gedit/libgedit.la
+gswat_LDFLAGS = -export-dynamic --preserve-dup-deps
 gswat_CFLAGS = @EXTRA_CFLAGS@ @DEPS_CFLAGS@
 gswat_CPPFLAGS = -DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"	\
 	   	 -DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \

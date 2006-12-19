@@ -33,12 +33,13 @@ libgedit_la_SOURCES = \
 	gedit-spinner.c \
 	gedit-help.c
 
+
 libgedit_la_LIBADD = 	@DEPS_LIBS@
-libgedit_la_LDFLAGS = 	#-export-dynamic
-libgedit_la_CFLAGS = 	-DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
-			-DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
-			@EXTRA_CFLAGS@ @DEPS_CFLAGS@
-libgedit_la_CPPFLAGS = 	@EXTRA_CPPFLAGS@
+libgedit_la_LDFLAGS = 	-export-dynamic
+libgedit_la_CFLAGS = 	@EXTRA_CFLAGS@ @DEPS_CFLAGS@
+libgedit_la_CPPFLAGS = 	@EXTRA_CPPFLAGS@ \
+			-DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
+			-DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\"
 
 
 gedit-marshal.h: gedit-marshal.list $(GLIB_GENMARSHAL)
