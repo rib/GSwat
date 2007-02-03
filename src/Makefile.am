@@ -8,7 +8,8 @@ gswat_SOURCES = main.c \
 		gswat-debugger.c \
 		gswat-view.c \
 		sexy-icon-entry.c \
-		gswat-gdbmi.c
+		gswat-gdbmi.c \
+		gswat-variable-object.c
 
 		
 #		gdb.c
@@ -41,6 +42,8 @@ EXTRA_DIST =	gswat-debugger.h \
 		gswat-session.h \
 		gswat-spawn.h \
 		gswat-view.h \
-		sexy-icon-entry.h
+		sexy-icon-entry.h \
+		gswat-variable-object.h
+		
 
 

@@ -40,6 +40,7 @@
 
 #include "gswat-session.h"
 #include "gswat-gdbmi.h"
+#include "gswat-variable-object.h"
 
 
 typedef void (*GDBMIDoneCallback)(struct _GSwatDebugger *self,
@@ -57,31 +58,37 @@ typedef struct {
 
 struct GSwatDebuggerPrivate
 {
-    GIOChannel  *gdb_in;
-    GIOChannel  *gdb_out;
-    GIOChannel  *gdb_err;
-    GPid        gdb_pid;
-    unsigned long gdb_sequence;
-    GList       *gdb_pending;
+    GSwatSession        *session;
 
-    GList       *stack;
-    GList       *breakpoints;
-    GSwatDebuggerState state;
+    GSwatDebuggerState  state;
+    guint               state_stamp;
 
-    GSwatSession *session;
+    GList               *stack;
+    GList               *breakpoints;
+    gchar               *source_uri;
+    gulong              source_line;
+    
+    GList               *locals;
+    guint               locals_stamp;
 
-    gchar       *source_uri;
-    gulong      source_line;
+    /* gdb specific */
 
-    int         spawn_read_fifo_fd;
-    int         spawn_write_fifo_fd;
-    GIOChannel  *spawn_read_fifo;
-    GIOChannel  *spawn_write_fifo;
-    GPid        spawner_pid;
+    GIOChannel      *gdb_in;
+    GIOChannel      *gdb_out;
+    GIOChannel      *gdb_err;
+    GPid            gdb_pid;
+    unsigned long   gdb_sequence;
+    GList           *gdb_pending;
 
-    GPid        target_pid;
+    int             spawn_read_fifo_fd;
+    int             spawn_write_fifo_fd;
+    GIOChannel      *spawn_read_fifo;
+    GIOChannel      *spawn_write_fifo;
+    GPid            spawner_pid;
 
-    GSList *pending;
+    GPid            target_pid;
+
+    GSList          *pending;
 };
 
 
@@ -129,7 +136,7 @@ gswat_debugger_send_cli_command(GSwatDebugger* self, gchar const* command)
 }
 
 
-static gulong
+gulong
 gswat_debugger_send_mi_command(GSwatDebugger* self, gchar const* command)
 {
     gchar *complete_command = NULL;
@@ -174,7 +181,7 @@ gswat_debugger_idle_check_gdb_pending(gpointer data)
 
 
 
-static GDBMIValue *
+GDBMIValue *
 gswat_debugger_get_gdbmi_value(GSwatDebugger *self, gulong token)
 {
     GList *tmp;
@@ -229,9 +236,18 @@ gswat_debugger_get_gdbmi_value(GSwatDebugger *self, gulong token)
             g_assert_not_reached();
         }
 
-        if(gdb_string->len >= 7 && (strncmp(gdb_string->str, "(gdb) \n", 7) == 0)) {
-            g_string_free(gdb_string, TRUE);
-            break;
+        if(gdb_string->len >= 7 
+            && (strncmp(gdb_string->str, "(gdb) \n", 7) == 0)
+          ) {
+            if(found)
+            {
+                g_string_free(gdb_string, TRUE);
+                break;
+            }
+            else
+            {
+                continue;
+            }
         }
         
         /* remove the trailing newline */
@@ -782,6 +798,7 @@ gswat_debugger_process_gdbmi_command(GSwatDebugger *self, GString *command)
     else if (strncasecmp(command->str, "^running", 8) == 0)
     {
         self->priv->state = GSWAT_DEBUGGER_RUNNING;
+        self->priv->state_stamp++;
         g_object_notify(G_OBJECT(self), "state");
 #if 0
         /* Program started running */
@@ -841,6 +858,7 @@ gswat_debugger_process_gdbmi_command(GSwatDebugger *self, GString *command)
                 self->priv->state = GSWAT_DEBUGGER_INTERRUPTED;
             }
 
+            self->priv->state_stamp++;
             g_object_notify(G_OBJECT(self), "state");
 
             gdbmi_value_free(val);
@@ -1503,10 +1521,12 @@ gswat_debugger_handle_gdb_oob_stopped_record(GSwatDebugger* self, MIAsyncRecord 
             else if(strcmp(reason, "exited-normally")==0)
             {
                 self->priv->state = GSWAT_DEBUGGER_NOT_RUNNING;
+                self->priv->state_stamp++;
             }
             else if(strcmp(reason, "function-finished")==0)
             {
                 self->priv->state = GSWAT_DEBUGGER_INTERRUPTED;
+                self->priv->state_stamp++;
             }
             else
             {
@@ -1514,6 +1534,7 @@ gswat_debugger_handle_gdb_oob_stopped_record(GSwatDebugger* self, MIAsyncRecord 
                 g_assert_not_reached(); /* FIXME - this is a bit too aggressive */
             }
 
+            self->priv->state_stamp++;
             g_object_notify(G_OBJECT(self), "state");
         }
     }
@@ -1601,6 +1622,7 @@ gswat_debugger_handle_gdb_result_record(GSwatDebugger* self, MIResultRecord *res
             break;
         case GDBMI_RUNNING:
             self->priv->state = GSWAT_DEBUGGER_RUNNING;
+            self->priv->state_stamp++;
             g_object_notify(G_OBJECT(self), "state");
             break;
         case GDBMI_CONNECTED:
@@ -2040,6 +2062,13 @@ gswat_debugger_get_state(GSwatDebugger* self)
 }
 
 
+guint
+gswat_debugger_get_state_stamp(GSwatDebugger* self)
+{
+    return self->priv->state_stamp;
+}
+
+
 
 GList *
 gswat_debugger_get_stack(GSwatDebugger* self)
@@ -2099,6 +2128,81 @@ gswat_debugger_get_breakpoints(GSwatDebugger* self)
     return new_breakpoints;
 }
 
+
+
+GList *
+gswat_debugger_get_locals_list(GSwatDebugger* self)
+{
+    GList *new_locals_list=NULL;
+    gulong token;
+    GDBMIValue *top_val;
+    const GDBMIValue *locals_val, *local_val;
+    int n;
+    GList *tmp;
+    
+    
+    if(self->priv->state & GSWAT_DEBUGGER_RUNNING)
+    {
+        return g_list_copy(self->priv->locals);
+    }
+    
+    if(self->priv->locals_stamp == self->priv->state_stamp)
+    {
+        return g_list_copy(self->priv->locals);
+    }
+    
+    self->priv->locals_stamp = self->priv->state_stamp;
+    
+    token = gswat_debugger_send_mi_command(self, "-stack-list-locals --simple-values");
+    top_val = gswat_debugger_get_gdbmi_value(self, token);
+    locals_val = gdbmi_value_hash_lookup(top_val, "locals");
+    
+    
+    n=0;
+    while((local_val = gdbmi_value_list_get_nth(locals_val, n)))
+    {
+        const GDBMIValue *value_val, *name_val;
+        gchar *value = NULL;
+        gchar *expression;
+        GSwatVariableObject *variable_object;
+
+        name_val = gdbmi_value_hash_lookup(local_val, "name");
+        expression = g_strdup(gdbmi_value_literal_get(name_val));
+
+        value_val = gdbmi_value_hash_lookup(local_val, "value");
+        
+        /* arrays, unions structs
+         * wont have a value
+         */
+        if(value_val)
+        {
+            value = g_strdup(gdbmi_value_literal_get(value_val));
+        }
+        
+        /* create a new list of gswat variable objects for each variable
+         * (Note that doesn't mean gdb "variable objects"
+         * are immediatly created for simple types)
+         */
+        variable_object = gswat_variable_object_new(self,
+                                                    expression,
+                                                    value,
+                                                    -1);
+
+        new_locals_list = g_list_prepend(new_locals_list, variable_object);
+        n++;
+    }
+    gdbmi_value_free(top_val);
+
+
+    for(tmp=self->priv->locals; tmp!=NULL; tmp=tmp->next)
+    {
+        g_object_unref(G_OBJECT(tmp->data));
+    }
+    g_list_free(self->priv->locals);
+    self->priv->locals = new_locals_list;
+
+    return self->priv->locals;
+}
 
 
 
@@ -2471,22 +2575,32 @@ static void
 gswat_debugger_get_property(GObject* object, guint id, GValue* value, GParamSpec* pspec)
 {
     GSwatDebugger* self = GSWAT_DEBUGGER(object);
+    guint state;
+    GList *breakpoints, *stack;
+    gchar *source_uri;
+    gulong source_line;
+
 
     switch(id) {
         case PROP_STATE:
-            g_value_set_uint(value, self->priv->state);
+            state = gswat_debugger_get_state(self);
+            g_value_set_uint(value, state);
             break;
         case PROP_STACK:
-            g_value_set_pointer(value, self->priv->stack);
+            stack = gswat_debugger_get_stack(self);
+            g_value_set_pointer(value, stack);
             break;
         case PROP_BREAKPOINTS:
-            g_value_set_pointer(value, self->priv->breakpoints);
+            breakpoints = gswat_debugger_get_breakpoints(self);
+            g_value_set_pointer(value, breakpoints);
             break;
         case PROP_SOURCE_URI:
-            g_value_set_string(value, self->priv->source_uri);
+            source_uri = gswat_debugger_get_source_uri(self);
+            g_value_set_string(value, source_uri);
             break;
         case PROP_SOURCE_LINE:
-            g_value_set_ulong(value, self->priv->source_line);
+            source_line = gswat_debugger_get_source_line(self);
+            g_value_set_ulong(value, source_line);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);

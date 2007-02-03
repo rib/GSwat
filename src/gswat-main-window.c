@@ -40,6 +40,7 @@
 
 #include "gswat-session.h"
 #include "gswat-debugger.h"
+#include "gswat-variable-object.h"
 
 
 
@@ -48,18 +49,28 @@ enum {
   GSWAT_WINDOW_STACK_N_COLS
 };
 
+enum {
+  GSWAT_WINDOW_VARIABLE_NAME_COL,
+  GSWAT_WINDOW_VARIABLE_VALUE_COL,
+  GSWAT_WINDOW_VARIABLES_N_COLS
+};
 
 struct _GSwatWindowPrivate
 {
-    GSwatDebugger* debugger;
-    GeditDocument *source_document;
-    GtkListStore *stack_list_store;
+    GladeXML        *xml;
 
-    GList *stack;
+    GSwatDebugger   *debugger;
 
-    GladeXML *xml;
+    GSwatView       *source_view;
+    GeditDocument   *source_document;
 
-    GSwatView *source_view;
+    GtkListStore    *stack_list_store;
+    GList           *stack;
+
+    GtkTreeStore    *variables_tree_store;
+    GList           *variables;
+
+
     //GSwatSession *session;
     //GtkSourceBuffer *source_buffer;
     //GtkSourceView *source_view;
@@ -79,6 +90,11 @@ typedef struct {
     GString *display;
 }GSwatWindowFrame;
 
+typedef struct {
+    GSwatVariableObject *variable_object;
+    GString *name;
+    GString *value;
+}GSwatWindowVariable;
 
 G_DEFINE_TYPE(GSwatWindow, gswat_window, G_TYPE_OBJECT);
 
@@ -122,6 +138,8 @@ static void gswat_window_update_stack(GObject *debugger,
                                     GParamSpec *property,
                                     gpointer data);
 
+static gboolean gswat_window_update_variable_view(gpointer data);
+
 static void gswat_window_update_source_file(GObject *debugger,
                                           GParamSpec *property,
                                           gpointer data);
@@ -158,6 +176,7 @@ gswat_window_init(GSwatWindow *self)
     GtkTreeView *stack_widget;
     GtkCellRenderer *renderer;
     GtkTreeViewColumn *column;
+    GtkTreeView *variable_view;
 
     self->priv = G_TYPE_INSTANCE_GET_PRIVATE(self, GSWAT_TYPE_WINDOW, GSwatWindowPrivate);
 
@@ -279,11 +298,37 @@ gswat_window_init(GSwatWindow *self)
                             );
     
     renderer = gtk_cell_renderer_text_new();
-    column = gtk_tree_view_column_new_with_attributes("",
+    column = gtk_tree_view_column_new_with_attributes("Stack",
                                                       renderer,
                                                       "markup", GSWAT_WINDOW_STACK_FUNC_COL,
                                                       NULL);
     gtk_tree_view_append_column(stack_widget, column);
+
+
+
+    /* Setup the variable view */
+    variable_view = 
+        (GtkTreeView *)glade_xml_get_widget(
+                            self->priv->xml, 
+                            "gswat_window_variable_view"
+                            );
+    gtk_tree_view_set_rules_hint(variable_view, TRUE);
+
+
+    renderer = gtk_cell_renderer_text_new();
+    column = gtk_tree_view_column_new_with_attributes("Variable",
+                                                      renderer,
+                                                      "markup", GSWAT_WINDOW_VARIABLE_NAME_COL,
+                                                      NULL);
+    gtk_tree_view_append_column(variable_view, column);
+    
+
+    renderer = gtk_cell_renderer_text_new();
+    column = gtk_tree_view_column_new_with_attributes("Value",
+                                                      renderer,
+                                                      "markup", GSWAT_WINDOW_VARIABLE_VALUE_COL,
+                                                      NULL);
+    gtk_tree_view_append_column(variable_view, column);
 
 
 
@@ -461,6 +506,11 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
                      G_CALLBACK(gswat_window_update_source_line),
                      window);
 
+    g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
+                    gswat_window_update_variable_view,
+                    window,
+                    NULL);
+
     gswat_debugger_target_connect(window->priv->debugger);
 
 }
@@ -518,8 +568,8 @@ gswat_window_set_toolbar_state(GSwatWindow *self, guint state)
 
 static void
 gswat_window_update_state(GObject *object,
-                        GParamSpec *property,
-                        gpointer data)
+                          GParamSpec *property,
+                          gpointer data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     GSwatDebugger *debugger = GSWAT_DEBUGGER(object);
@@ -534,8 +584,8 @@ gswat_window_update_state(GObject *object,
 
 static void
 gswat_window_update_stack(GObject *object,
-                        GParamSpec *property,
-                        gpointer data)
+                          GParamSpec *property,
+                          gpointer data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     GSwatDebugger *debugger = GSWAT_DEBUGGER(object);
@@ -558,7 +608,7 @@ gswat_window_update_stack(GObject *object,
                                     G_TYPE_STRING,
                                     G_TYPE_ULONG);
 
-    
+
 
     /* create new display strings for the stack */
     for(tmp=stack; tmp!=NULL; tmp=tmp->next)
@@ -607,7 +657,7 @@ gswat_window_update_stack(GObject *object,
         disp_stack = g_list_prepend(disp_stack, display_frame);
     }
     disp_stack = g_list_reverse(disp_stack);
-    
+
 
     /* start displaying the new stack frames */
     for(tmp=disp_stack; tmp!=NULL; tmp=tmp->next)
@@ -618,7 +668,7 @@ gswat_window_update_stack(GObject *object,
 
         gtk_list_store_set(list_store, &iter,
                            GSWAT_WINDOW_STACK_FUNC_COL,
-                                display_frame->display->str,
+                           display_frame->display->str,
                            -1);
 
     }
@@ -627,11 +677,11 @@ gswat_window_update_stack(GObject *object,
         g_object_unref(self->priv->stack_list_store);
     }
     self->priv->stack_list_store = list_store;
-    
+
     gtk_tree_view_set_model(stack_widget,
                             GTK_TREE_MODEL(self->priv->stack_list_store));
 
-    
+
 
     /* free the previously displayed stack frames */
     for(tmp=self->priv->stack; tmp!=NULL; tmp=tmp->next)
@@ -656,12 +706,111 @@ gswat_window_update_stack(GObject *object,
 }
 
 
+static gboolean
+gswat_window_update_variable_view(gpointer data)
+{
+    GSwatWindow *self = GSWAT_WINDOW(data);
+    GSwatDebugger *debugger = GSWAT_DEBUGGER(self->priv->debugger);
+    GladeXML *xml;
+    GtkTreeView *variables_view=NULL;
+    GtkTreeStore *variables_store;
+    GList *variables, *tmp;
+    GtkTreeIter iter;
+    GList *display_variables = NULL;
+
+
+    variables = gswat_debugger_get_locals_list(debugger);
+
+    /* TODO look up the variable tree view widget */
+    xml = self->priv->xml;
+    variables_view = (GtkTreeView *)glade_xml_get_widget(xml, "gswat_window_variable_view");
+
+
+
+    variables_store = gtk_tree_store_new(GSWAT_WINDOW_VARIABLES_N_COLS,
+                                         G_TYPE_STRING,
+                                         G_TYPE_STRING);
+
+
+
+    /* create new display strings for the stack */
+    for(tmp=variables; tmp!=NULL; tmp=tmp->next)
+    {
+        GString *name = g_string_new("");
+        GString *value = g_string_new("");
+        GSwatVariableObject *variable_object;
+        GSwatWindowVariable *display_variable = g_new0(GSwatWindowVariable, 1);
+
+        variable_object = (GSwatVariableObject *)tmp->data;
+        g_object_ref(variable_object);
+
+        name = g_string_append(name,
+                               gswat_variable_object_get_expression(
+                                                                    variable_object)
+                              );
+
+        value = g_string_append(value,
+                                gswat_variable_object_get_value(
+                                                                variable_object)
+                               );
+
+        display_variable->variable_object = variable_object;
+        display_variable->name = name;
+        display_variable->value = value;
+
+        display_variables = g_list_prepend(display_variables, display_variable);
+    }
+    display_variables = g_list_reverse(display_variables);
+
+    /* start displaying the new stack frames */
+    for(tmp=display_variables; tmp!=NULL; tmp=tmp->next)
+    {
+        GSwatWindowVariable *display_variable = 
+            (GSwatWindowVariable *)tmp->data;
+
+        gtk_tree_store_append(variables_store, &iter, NULL);
+        gtk_tree_store_set(variables_store, &iter,
+                           GSWAT_WINDOW_VARIABLE_NAME_COL,
+                           display_variable->name->str,
+                           GSWAT_WINDOW_VARIABLE_VALUE_COL,
+                           display_variable->value->str,
+                           -1);
+    }
+    if(self->priv->variables_tree_store)
+    {
+        g_object_unref(self->priv->variables_tree_store);
+    }
+    self->priv->variables_tree_store = variables_store;
+
+    gtk_tree_view_set_model(variables_view,
+                            GTK_TREE_MODEL(self->priv->variables_tree_store));
+
+
+
+    /* free the previously displayed stack frames */
+    for(tmp=self->priv->variables; tmp!=NULL; tmp=tmp->next)
+    {
+        GSwatWindowVariable *display_variable = 
+            (GSwatWindowVariable *)tmp->data;
+
+        g_string_free(display_variable->name, TRUE);
+        g_string_free(display_variable->value, TRUE);
+        g_object_unref(display_variable->variable_object);
+        g_free(display_variable);
+    }
+    g_list_free(self->priv->variables);
+    self->priv->variables=display_variables;
+    
+
+    return TRUE;
+}
+
 
 
 static void
 gswat_window_source_file_loaded(GeditDocument *document,
-                              const GError  *error,
-                              void *user_data)
+                                const GError  *error,
+                                void *user_data)
 {
 
     return;
@@ -671,8 +820,8 @@ gswat_window_source_file_loaded(GeditDocument *document,
 
 static void
 gswat_window_update_source_file(GObject *debugger,
-                              GParamSpec *property,
-                              gpointer data)
+                                GParamSpec *property,
+                                gpointer data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     gchar * file_uri;
@@ -705,8 +854,8 @@ gswat_window_update_source_file(GObject *debugger,
 
 static void
 gswat_window_update_source_line(GObject *debugger,
-                              GParamSpec *property,
-                              gpointer data)
+                                GParamSpec *property,
+                                gpointer data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     gulong line;
@@ -759,7 +908,7 @@ on_debug_button_clicked(GtkToolButton   *toolbutton,
 
 void
 on_gswat_window_step_button_clicked(GtkToolButton   *toolbutton,
-                                  gpointer         data)
+                                    gpointer         data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     gswat_debugger_step_into(self->priv->debugger);
@@ -768,7 +917,7 @@ on_gswat_window_step_button_clicked(GtkToolButton   *toolbutton,
 
 void
 on_gswat_window_next_button_clicked(GtkToolButton   *toolbutton,
-                                  gpointer         data)
+                                    gpointer         data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     gswat_debugger_next(self->priv->debugger);
@@ -777,7 +926,7 @@ on_gswat_window_next_button_clicked(GtkToolButton   *toolbutton,
 
 void
 on_gswat_window_break_button_clicked(GtkToolButton   *toolbutton,
-                                   gpointer         data)
+                                     gpointer         data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     gswat_debugger_interrupt(self->priv->debugger);
@@ -785,7 +934,7 @@ on_gswat_window_break_button_clicked(GtkToolButton   *toolbutton,
 
 void
 on_gswat_window_continue_button_clicked  (GtkToolButton   *toolbutton,
-                                        gpointer         data)
+                                          gpointer         data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     gswat_debugger_continue(self->priv->debugger);
@@ -812,7 +961,7 @@ on_gswat_window_run_button_clicked(GtkToolButton   *toolbutton,
 
 void
 on_gswat_window_add_break_button_clicked(GtkToolButton   *toolbutton,
-                                   gpointer         data)
+                                         gpointer         data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     GSwatView *source_view = NULL;
@@ -820,7 +969,7 @@ on_gswat_window_add_break_button_clicked(GtkToolButton   *toolbutton,
     GtkTextIter cur;
     gint line; 
 
-    
+
     source_view = self->priv->source_view;
     g_assert(source_view != NULL);
 
@@ -828,13 +977,13 @@ on_gswat_window_add_break_button_clicked(GtkToolButton   *toolbutton,
 
 
     gchar *uri = gswat_debugger_get_source_uri(self->priv->debugger);
-    
+
 
     gtk_text_buffer_get_iter_at_mark(
-                            source_buffer, 
-							&cur, 
-							gtk_text_buffer_get_insert(source_buffer)
-                            );
+                                     source_buffer, 
+                                     &cur, 
+                                     gtk_text_buffer_get_insert(source_buffer)
+                                    );
     line = gtk_text_iter_get_line(&cur);
 
     gswat_debugger_request_line_breakpoint(self->priv->debugger, uri, line);
@@ -850,7 +999,7 @@ gswat_window_on_preferences_activate(GtkMenuItem     *menuitem,
 
 void
 gswat_window_on_quit_activate(GtkMenuItem     *menuitem,
-                            gpointer         data)
+                              gpointer         data)
 {
     gtk_main_quit();
 }

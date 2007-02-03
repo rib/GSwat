@@ -29,6 +29,7 @@
 #include <glib-object.h>
 
 #include "gswat-session.h"
+#include "gswat-gdbmi.h"
 
 G_BEGIN_DECLS
 
@@ -80,6 +81,7 @@ GSwatDebugger* gswat_debugger_new(GSwatSession *session);
 
 void        gswat_debugger_target_connect(GSwatDebugger* self);
 
+
 void	    gswat_debugger_request_line_breakpoint(GSwatDebugger* self, gchar *uri, guint line);
 void	    gswat_debugger_request_function_breakpoint(GSwatDebugger* self, gchar *symbol);
 gchar       *gswat_debugger_get_source_uri(GSwatDebugger* self);
@@ -91,9 +93,20 @@ void	    gswat_debugger_step_into(GSwatDebugger* self);
 void        gswat_debugger_interrupt(GSwatDebugger* self);
 void        gswat_debugger_restart(GSwatDebugger* self);
 guint       gswat_debugger_get_state(GSwatDebugger* self);
+guint       gswat_debugger_get_state_stamp(GSwatDebugger* self);
 GList       *gswat_debugger_get_stack(GSwatDebugger* self);
 GList       *gswat_debugger_get_breakpoints(GSwatDebugger* self);
+GList       *gswat_debugger_get_locals_list(GSwatDebugger* self);
 
+
+/* Some GDB specific bits:
+ * Currently need to be exported to implement variable objects
+ * for GDB.
+ * TODO seperate the the debugger class into a "debuggable"
+ * interface and gdb-debugger class
+ */
+gulong gswat_debugger_send_mi_command(GSwatDebugger* self, gchar const* command);
+GDBMIValue *gswat_debugger_get_gdbmi_value(GSwatDebugger *self, gulong token);
 
 
 G_END_DECLS
