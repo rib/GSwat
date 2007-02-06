@@ -105,8 +105,8 @@ GList       *gswat_debugger_get_locals_list(GSwatDebugger* self);
  * TODO seperate the the debugger class into a "debuggable"
  * interface and gdb-debugger class
  */
-gulong gswat_debugger_send_mi_command(GSwatDebugger* self, gchar const* command);
-GDBMIValue *gswat_debugger_get_gdbmi_value(GSwatDebugger *self, gulong token);
+gulong gdb_send_mi_command(GSwatDebugger* self, gchar const* command);
+GDBMIValue *gdb_get_mi_value(GSwatDebugger *self, gulong token, GDBMIValue **error);
 
 
 G_END_DECLS

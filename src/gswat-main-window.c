@@ -105,7 +105,8 @@ static void gswat_window_class_init(GSwatWindowClass *klass);
 static void gswat_window_init(GSwatWindow *self);
 static void gswat_window_finalize(GObject *object);
 
-static void setup_sourceview(GSwatWindow *self);
+static void create_sourceview(GSwatWindow *self);
+static void destroy_sourceview(GSwatWindow *self);
 static void on_gswat_window_new_button_clicked(GtkWidget       *widget,
                                                gpointer         data);
 static void on_gswat_window_step_button_clicked(GtkToolButton   *toolbutton,
@@ -280,7 +281,7 @@ gswat_window_init(GSwatWindow *self)
     gtk_widget_show(GTK_WIDGET(main_window));
     
     //XXX
-    //setup_sourceview(self);
+    //create_sourceview(self);
     /* FIXME
     toplevel_win = gdk_window_get_toplevel(//blah);
     */
@@ -387,7 +388,7 @@ gswat_window_new(GSwatSession *session)
 
 
 static void
-setup_sourceview(GSwatWindow *self)
+create_sourceview(GSwatWindow *self)
 {
     GtkWidget *main_scroll;
     //int file;
@@ -432,7 +433,13 @@ setup_sourceview(GSwatWindow *self)
 
 
 
+static void
+destroy_sourceview(GSwatWindow *self)
+{
+    gtk_widget_destroy(GTK_WIDGET(self->priv->source_view));
 
+    g_object_unref(self->priv->source_document);
+}
 
 
 static void
@@ -480,11 +487,17 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
     if(window->priv->debugger)
     {
         g_object_unref(window->priv->debugger);
+        destroy_sourceview(window);
     }
 
     window->priv->debugger = gswat_debugger_new(session);
-    
-    setup_sourceview(window);
+
+    /* currently we don't require a handle to the session
+     * from this class..
+     */
+    g_object_unref(session);
+
+    create_sourceview(window);
 
     g_signal_connect(G_OBJECT(window->priv->debugger),
                      "notify::state",
@@ -503,7 +516,7 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
 
     g_signal_connect(G_OBJECT(window->priv->debugger),
                      "notify::source-line",
-                     G_CALLBACK(gswat_window_update_source_line),
+                    G_CALLBACK(gswat_window_update_source_line),
                      window);
 
     g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,

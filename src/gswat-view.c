@@ -138,7 +138,10 @@ gswat_view_finalize (GObject *object)
     GSwatView *view;
 
     view = GSWAT_VIEW (object);
+    
+    gtk_widget_hide_all(GTK_WIDGET(view));
 
+    g_object_unref(view->priv->debugger);
 
     (* G_OBJECT_CLASS (gswat_view_parent_class)->finalize) (object);
 }
@@ -161,8 +164,10 @@ gswat_view_new(GeditDocument *doc, GSwatDebugger *debugger)
 {
     GSwatView *view;
     //GSwatViewBreakpoint *breakpoint;
-
+    
     g_return_val_if_fail(GEDIT_IS_DOCUMENT (doc), NULL);
+
+    g_object_ref(debugger);
 
     view = g_object_new(GSWAT_TYPE_VIEW, NULL);
 

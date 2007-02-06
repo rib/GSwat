@@ -102,6 +102,8 @@ static guint session_signals[LAST_SIGNAL] = { 0 };
 G_DEFINE_TYPE(GSwatSession, gswat_session, G_TYPE_OBJECT);
 
 
+
+
 static void gswat_session_get_property(GObject* object,
                                        guint id,
                                        GValue* value,

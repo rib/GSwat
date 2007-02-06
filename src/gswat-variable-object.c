@@ -78,11 +78,11 @@ create_gdb_variable_object(GSwatVariableObject *self)
                               global_variable_object_index,
                               //self->priv->frame,
                               self->priv->expression);
-    token = gswat_debugger_send_mi_command(self->priv->debugger, command); 
+    token = gdb_send_mi_command(self->priv->debugger, command); 
     g_free(command);
 
     /* FIXME - make sure we can cope with junk expressions */
-    gswat_debugger_get_gdbmi_value(self->priv->debugger, token);
+    gdb_get_mi_value(self->priv->debugger, token, NULL);
 
     self->priv->gdb_name = g_strdup_printf("v%d",
                                            global_variable_object_index);
@@ -105,7 +105,7 @@ destroy_gdb_variable_object(GSwatVariableObject *self)
 
     command = g_strdup_printf("-var-delete %s",
                               self->priv->gdb_name);
-    gswat_debugger_send_mi_command(self->priv->debugger,
+    gdb_send_mi_command(self->priv->debugger,
                                    command);
     g_free(command);
 
@@ -164,13 +164,12 @@ gswat_variable_object_get_value(GSwatVariableObject *self)
     command = g_strdup_printf("-var-evaluate-expression %s", 
                               self->priv->gdb_name);
 
-    token = gswat_debugger_send_mi_command(self->priv->debugger,
+    token = gdb_send_mi_command(self->priv->debugger,
                                            command);
 
     g_free(command);
 
-    top_val = gswat_debugger_get_gdbmi_value(self->priv->debugger,
-                                             token);
+    top_val = gdb_get_mi_value(self->priv->debugger, token, NULL);
 
     value = gdbmi_value_hash_lookup(top_val, "value");
 
@@ -250,9 +249,9 @@ gswat_variable_object_get_children(GSwatVariableObject *self)
     command=g_strdup_printf("-var-list-children %s --simple-values",
                             self->priv->gdb_name);
 
-    token = gswat_debugger_send_mi_command(self->priv->debugger, command);
+    token = gdb_send_mi_command(self->priv->debugger, command);
     g_free(command);
-    top_val = gswat_debugger_get_gdbmi_value(self->priv->debugger, token);
+    top_val = gdb_get_mi_value(self->priv->debugger, token, NULL);
 
 
     children_val = gdbmi_value_hash_lookup(top_val, "children");
