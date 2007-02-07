@@ -1011,6 +1011,14 @@ gswat_window_on_preferences_activate(GtkMenuItem     *menuitem,
 
 
 void
+gswat_window_on_about_activate(GtkMenuItem     *menuitem,
+                               gpointer         user_data)
+{
+
+}
+
+
+void
 gswat_window_on_quit_activate(GtkMenuItem     *menuitem,
                               gpointer         data)
 {

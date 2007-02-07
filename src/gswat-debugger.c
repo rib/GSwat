@@ -2180,9 +2180,7 @@ gswat_debugger_get_locals_list(GSwatDebugger* self)
 
     self->priv->locals_stamp = self->priv->state_stamp;
 
-    g_list_free(self->priv->locals);
-
-
+    
     token = gdb_send_mi_command(self, "-stack-list-locals --simple-values");
     top_val = gdb_get_mi_value(self, token, NULL);
     if(!top_val)
@@ -2233,6 +2231,7 @@ gswat_debugger_get_locals_list(GSwatDebugger* self)
     {
         g_object_unref(G_OBJECT(tmp->data));
     }
+    g_list_free(self->priv->locals);
     self->priv->locals = new_locals_list;
 
     return self->priv->locals;
