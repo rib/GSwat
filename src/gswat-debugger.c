@@ -263,13 +263,13 @@ gdb_get_mi_value(GSwatDebugger *self,
 
         if(command_token == token)
         {
+            char *error_str;
             g_message("found gdb line match - %s", gdb_string->str);
 
             found = TRUE;
-            
-            if(strstr(gdb_string->str, "^error,") 
-                < strchr(gdb_string->str, ',')
-              )
+
+            error_str=strstr(gdb_string->str, "^error,");
+            if(error_str && error_str < strchr(gdb_string->str, ','))
             {
                 val = NULL;
                 if(mi_error)
