@@ -822,9 +822,11 @@ update_source_view(GSwatWindow *self,
     gchar           *file_uri;
     gint            line;
     GList           *tabs, *tmp;
-    GeditDocument   *source_document;
+    //GeditDocument   *source_document;
     GSwatView       *gswat_view;
-    GtkWidget        *new_tab;
+    GeditDocument   *gedit_document;
+    GtkTextIter     iter;
+    GtkWidget       *new_tab;
 
     file_uri = gswat_debugger_get_source_uri(debugger);
     line = gswat_debugger_get_source_line(debugger);
@@ -837,6 +839,8 @@ update_source_view(GSwatWindow *self,
     {
         GSwatTab *current_tab;
         GSwatView *current_view;
+        GeditDocument *current_document;
+
 
         char *uri;
         if(!GSWAT_IS_TAB(tmp->data))
@@ -850,8 +854,8 @@ update_source_view(GSwatWindow *self,
          * contain a GSwatView specificlly */
         current_view = gswat_tab_get_view(current_tab);
 
-        source_document = gswat_view_get_document(current_view);
-        uri = gedit_document_get_uri(source_document);
+        current_document = gswat_view_get_document(current_view);
+        uri = gedit_document_get_uri(current_document);
         if(strcmp(uri, file_uri)==0)
         {
             gint page;
@@ -860,6 +864,18 @@ update_source_view(GSwatWindow *self,
                                          GTK_WIDGET(current_tab));
             gtk_notebook_set_current_page(GTK_NOTEBOOK(self->priv->notebook),
                                           page);
+
+            gtk_text_buffer_get_iter_at_line(GTK_TEXT_BUFFER(current_document),
+                                             &iter,
+                                             line);
+            gtk_text_view_scroll_to_iter(GTK_TEXT_VIEW(current_view),
+                                         &iter,
+                                         0.2,
+                                         FALSE,
+                                         0,
+                                         0);
+            //gtk_text_buffer_place_cursor(GTK_TEXT_BUFFER(gedit_document), &iter);
+
             g_free(uri);
             g_list_free(tabs);
             goto update_highlights;
@@ -892,12 +908,17 @@ update_source_view(GSwatWindow *self,
     gtk_text_view_set_editable(GTK_TEXT_VIEW(gswat_view), FALSE);
 
 
-#if 0
-    gtk_text_buffer_get_iter_at_line(GTK_TEXT_BUFFER(source_document),
+    gedit_document = gswat_view_get_document(gswat_view);
+    gtk_text_buffer_get_iter_at_line(GTK_TEXT_BUFFER(gedit_document),
                                      &iter,
                                      line);
-    gtk_text_buffer_place_cursor(GTK_TEXT_BUFFER(source_document), &iter);
-#endif
+    gtk_text_view_scroll_to_iter(GTK_TEXT_VIEW(gswat_view),
+                                 &iter,
+                                 0.2,
+                                 FALSE,
+                                 0,
+                                 0);
+    //gtk_text_buffer_place_cursor(GTK_TEXT_BUFFER(gedit_document), &iter);
 
 update_highlights:
 
@@ -1042,7 +1063,9 @@ update_line_highlights(GSwatWindow *self)
             highlight = g_new(GSwatViewLineHighlight, 1);
             highlight->line = gswat_debugger_get_source_line(self->priv->debugger);
             highlight->color = gedit_prefs_manager_get_current_line_bg_color();
-            highlights=g_list_prepend(highlights, highlight);
+            /* note we currently need to append here to ensure
+             * the current line gets rendered last */
+            highlights=g_list_append(highlights, highlight);
         }
 
         gswat_view_set_line_highlights(current_gswat_view, highlights);
