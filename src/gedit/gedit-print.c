@@ -293,8 +293,10 @@ gedit_print_dialog_new (GeditPrintJob *job)
 	gint lines;
 	GnomePrintConfig *config;
 	GtkSourceBuffer *buffer;
+#if 0
 	GeditTab *tab;
 	GeditTabState tab_state;
+#endif
 
 	gedit_debug (DEBUG_PRINT);
 
@@ -324,6 +326,7 @@ gedit_print_dialog_new (GeditPrintJob *job)
 						 selection_flag,
 						 1, lines, (guchar *)"A", (guchar *)_("Lines"));
 
+#if 0
 	/* Disable the print preview button of the gnome print dialog if 
 	 * the state of the active tab is print_previewing or 
 	 * showing_print_preview 
@@ -337,6 +340,7 @@ gedit_print_dialog_new (GeditPrintJob *job)
 						   GNOME_PRINT_DIALOG_RESPONSE_PREVIEW,
 						   FALSE);
 	}
+#endif
 
 	return dialog;
 }

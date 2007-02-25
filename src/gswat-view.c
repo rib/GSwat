@@ -34,8 +34,6 @@
 #include <glib/gi18n.h>
 
 #include "gswat-view.h"
-#include "gswat-debugger.h"
-#include "gedit-prefs-manager.h"
 
 
 #define GSWAT_VIEW_GET_PRIVATE(object)(G_TYPE_INSTANCE_GET_PRIVATE ((object), GSWAT_TYPE_VIEW, GSwatViewPrivate))
@@ -44,8 +42,7 @@
 
 struct _GSwatViewPrivate
 {
-    //GList *breakpoints;
-    GSwatDebugger *debugger;
+    GList *line_highlights;
 };
 
 
@@ -57,10 +54,6 @@ static void	gswat_view_destroy(GtkObject       *object);
 static void	gswat_view_finalize(GObject         *object);
 static gint gswat_view_focus_out(GtkWidget       *widget,
                                  GdkEventFocus   *event);
-
-static void debugger_state_update(GObject *object,
-                                  GParamSpec *property,
-                                  gpointer data);
 static gboolean gswat_view_expose(GtkWidget *widget,
                                   GdkEventExpose *event);
 
@@ -112,10 +105,10 @@ test_expose(GtkWidget *widget,
 */
 
 static void 
-gswat_view_init(GSwatView *view)
+gswat_view_init(GSwatView *self)
 {	
 
-    view->priv = GSWAT_VIEW_GET_PRIVATE(view);
+    self->priv = GSWAT_VIEW_GET_PRIVATE(self);
 
     //g_signal_connect(view, "expose-event", G_CALLBACK(test_expose), NULL);
 
@@ -124,9 +117,9 @@ gswat_view_init(GSwatView *view)
 static void
 gswat_view_destroy (GtkObject *object)
 {
-    GSwatView *view;
+    GSwatView *self;
 
-    view = GSWAT_VIEW (object);
+    self = GSWAT_VIEW (object);
 
 
     (* GTK_OBJECT_CLASS (gswat_view_parent_class)->destroy) (object);
@@ -135,13 +128,11 @@ gswat_view_destroy (GtkObject *object)
 static void
 gswat_view_finalize (GObject *object)
 {
-    GSwatView *view;
+    GSwatView *self;
 
-    view = GSWAT_VIEW (object);
+    self = GSWAT_VIEW (object);
     
-    gtk_widget_hide_all(GTK_WIDGET(view));
-
-    g_object_unref(view->priv->debugger);
+    gtk_widget_hide_all(GTK_WIDGET(self));
 
     (* G_OBJECT_CLASS (gswat_view_parent_class)->finalize) (object);
 }
@@ -149,7 +140,7 @@ gswat_view_finalize (GObject *object)
 static gint
 gswat_view_focus_out (GtkWidget *widget, GdkEventFocus *event)
 {
-    //GSwatView *view = GSWAT_VIEW (widget);
+    //GSwatView *self = GSWAT_VIEW (widget);
 
     gtk_widget_queue_draw (widget);
 
@@ -160,127 +151,82 @@ gswat_view_focus_out (GtkWidget *widget, GdkEventFocus *event)
 
 
 GtkWidget *
-gswat_view_new(GeditDocument *doc, GSwatDebugger *debugger)
+gswat_view_new(GeditDocument *doc)
 {
-    GSwatView *view;
-    //GSwatViewBreakpoint *breakpoint;
+    GSwatView *self;
     
     g_return_val_if_fail(GEDIT_IS_DOCUMENT (doc), NULL);
-
-    g_object_ref(debugger);
-
-    view = g_object_new(GSWAT_TYPE_VIEW, NULL);
-
-    gtk_text_view_set_buffer(GTK_TEXT_VIEW(view),
+    
+    self = g_object_new(GSWAT_TYPE_VIEW, NULL);
+    
+    gtk_text_view_set_buffer(GTK_TEXT_VIEW(self),
                              GTK_TEXT_BUFFER(doc));
-
-    gtk_text_view_set_editable(GTK_TEXT_VIEW (view), 
+    
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(self), 
                                FALSE);					  
-
-    view->priv->debugger = debugger;
-
-    /* add a dummy breakpoint */
-    /*
-       breakpoint = g_new0(GSwatViewBreakpoint, 1);
-       breakpoint->line = 3;
-       view->priv->breakpoints=g_list_append(view->priv->breakpoints, breakpoint);
-       */
-
-    /* so we can make sure the view always tracks changes to the
-     * debugger state */
-    g_signal_connect(debugger, "notify::source-line", G_CALLBACK(debugger_state_update), view);
-
-    gtk_widget_show_all(GTK_WIDGET(view));
-
-    return GTK_WIDGET(view);
+    
+    gtk_widget_show_all(GTK_WIDGET(self));
+    
+    return GTK_WIDGET(self);
 }
 
 
-static void
-debugger_state_update(GObject *object,
-                      GParamSpec *property,
-                      gpointer data)
+void
+gswat_view_set_line_highlights(GSwatView *self, const GList *line_highlights)
 {
-    GSwatView *self = GSWAT_VIEW(data);
-    GdkWindow *window = gtk_text_view_get_window(GTK_TEXT_VIEW(self), GTK_TEXT_WINDOW_TEXT);
+    GList *tmp, *copy;
+    GdkWindow *window;
+    
+    /* why doesn't g_list_copy take (const GList *) input? */
+    copy=g_list_copy((GList *)line_highlights);
 
+    /* Do a deep copy of the list */
+    for(tmp=copy; tmp!=NULL; tmp=tmp->next)
+    {
+        GSwatViewLineHighlight *current_highlight;
+        GSwatViewLineHighlight *new_line_highlight;
 
+        current_highlight=(GSwatViewLineHighlight *)tmp->data;
+
+        new_line_highlight = g_new(GSwatViewLineHighlight, 1);
+        memcpy(new_line_highlight, current_highlight, sizeof(GSwatViewLineHighlight));
+        tmp->data=new_line_highlight;
+    }
+    self->priv->line_highlights = copy;
+    
+    /* trigger an expose to draw any new highlighted lines */
+    window = gtk_text_view_get_window(GTK_TEXT_VIEW(self),
+                                        GTK_TEXT_WINDOW_TEXT);
     gdk_window_invalidate_rect(window,
                                NULL,
                                FALSE);
-                               
 }
 
 
+GeditDocument *
+gswat_view_get_document(GSwatView *self)
+{
+    return  GEDIT_DOCUMENT(
+                gtk_text_view_get_buffer(GTK_TEXT_VIEW (self))
+                );
+}
 
-/*
-   void
-   gswat_view_remove_breakpoint(GSwatView *view, gint line)
-   {
-   GList *tmp;
-   GSwatViewBreakpoint *current_breakpoint;
-
-   for(tmp=view->priv->breakpoints; tmp != NULL; tmp=tmp->next)
-   {
-   current_breakpoint = (GSwatViewBreakpoint *)tmp->data;
-
-   if(current_breakpoint->line == line)
-   {
-   view->priv->breakpoints = 
-   g_list_remove(view->priv->breakpoints, current_breakpoint);
-   g_free(current_breakpoint);
-   return;
-   }
-   }
-   }
-
-   void
-   gswat_view_add_breakpoint(GSwatView *view, gint line)
-   {
-   GSwatViewBreakpoint *new_breakpoint;
-
-   gswat_view_remove_breakpoint(view, line);
-
-   new_breakpoint = g_new(GSwatViewBreakpoint, 1);
-   new_breakpoint->line = line;
-
-   view->priv->breakpoints = 
-   g_list_prepend(view->priv->breakpoints, new_breakpoint);
-   }
-   */
 
 static gboolean
 gswat_view_expose(GtkWidget *widget,
                   GdkEventExpose *event)
 {
+    GSwatView *self = GSWAT_VIEW(widget);
     GtkTextView *text_view = GTK_TEXT_VIEW(widget);
-    GeditView *gedit_view = GEDIT_VIEW(widget);
-    GSwatView *gswat_view = GSWAT_VIEW(widget);
     GList *tmp = NULL;
-    GSwatDebugger *debugger;
-    GList *breakpoints;
-
     GdkRectangle visible_rect;
     GdkRectangle redraw_rect;
     GtkTextIter cur;
     gint y;
     gint height;
     gint win_y;
-    gulong line;
-    GdkColor color;
     GdkGC *gc;
     
-
-    debugger = gswat_view->priv->debugger;
-    if(!debugger)
-    {
-        goto parent_expose;
-    }
-
-
-    breakpoints = gswat_debugger_get_breakpoints(debugger);
-
-
     if ((event->window != gtk_text_view_get_window(text_view, GTK_TEXT_WINDOW_TEXT)))
     {
         goto parent_expose;
@@ -290,35 +236,14 @@ gswat_view_expose(GtkWidget *widget,
     
     gc = gdk_gc_new(GDK_DRAWABLE(event->window));
     
-    for(tmp=breakpoints; tmp != NULL; tmp=tmp->next)
+    for(tmp=self->priv->line_highlights; tmp!=NULL; tmp=tmp->next)
     {
-        GSwatDebuggerBreakpoint *current_breakpoint;
-        gchar *current_doc_uri;
-
-        g_message("breakpoint");
-        current_breakpoint = (GSwatDebuggerBreakpoint *)tmp->data;
-        current_doc_uri = gedit_document_get_uri(
-                                gedit_view_get_document(gedit_view)
-                                );
-    
-        if(current_doc_uri)
-            g_message("current_doc_uri=%s", current_doc_uri);
-        if(current_breakpoint->source_uri)
-            g_message("current_breakpoint->source_uri=%s",
-                        current_breakpoint->source_uri);
-
-        if( !current_doc_uri ||
-            strcmp(current_breakpoint->source_uri,
-                   current_doc_uri
-                  ) != 0
-          )
-        {
-            continue;
-        }
-
+        GSwatViewLineHighlight *current_line_highlight;
+        current_line_highlight = (GSwatViewLineHighlight *)tmp->data;
+        
         gtk_text_buffer_get_iter_at_line(text_view->buffer,
                                          &cur,
-                                         current_breakpoint->line);
+                                         current_line_highlight->line - 1);
 
         gtk_text_view_get_line_yrange(text_view, &cur, &y, &height);
 
@@ -347,9 +272,7 @@ gswat_view_expose(GtkWidget *widget,
             continue;
         }
     
-        color = gedit_prefs_manager_get_breakpoint_bg_color();
-
-        gdk_gc_set_rgb_fg_color(gc, &color);
+        gdk_gc_set_rgb_fg_color(gc, &(current_line_highlight->color));
         gdk_draw_rectangle(event->window,
                            gc,
                            TRUE,
@@ -357,61 +280,11 @@ gswat_view_expose(GtkWidget *widget,
                            win_y,
                            redraw_rect.width,
                            height);
-    }
-
-    /* highlight the current line */
-    /* FIXME - this clearly duplicates a big chunk of code from above! */
-    line = gswat_debugger_get_source_line(debugger) - 1;
-    gtk_text_buffer_get_iter_at_line(text_view->buffer,
-                                     &cur,
-                                     line);
-
-    gtk_text_view_get_line_yrange(text_view, &cur, &y, &height);
-
-    gtk_text_view_buffer_to_window_coords(text_view,
-                                          GTK_TEXT_WINDOW_TEXT,
-                                          visible_rect.x,
-                                          visible_rect.y,
-                                          &redraw_rect.x,
-                                          &redraw_rect.y);
-
-    redraw_rect.width = visible_rect.width;
-    redraw_rect.height = visible_rect.height;
-
-    g_message("current line=%lu, x=%d, y=%d, width=%d, height=%d",
-                line,
-                redraw_rect.x,
-                redraw_rect.y,
-                redraw_rect.width,
-                redraw_rect.height);
-
-    gtk_text_view_buffer_to_window_coords (text_view,
-                                           GTK_TEXT_WINDOW_TEXT,
-                                           0,
-                                           y,
-                                           NULL,
-                                           &win_y);
-
-    if(win_y <= (redraw_rect.y + redraw_rect.height)
-       && (win_y + height) >= redraw_rect.y
-      )
-    {
-        color = gedit_prefs_manager_get_current_line_bg_color();
-        gdk_gc_set_rgb_fg_color(gc, &color);
-
-        gdk_draw_rectangle(event->window,
-                           gc,
-                           TRUE,
-                           redraw_rect.x + MAX(0, gtk_text_view_get_left_margin(text_view) - 1),
-                           win_y,
-                           redraw_rect.width,
-                           height);
-
-    }else{
-        g_message("CLIPPED!!");
+       
     }
 
     g_object_unref(gc);
+
 
 parent_expose:
     {

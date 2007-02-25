@@ -21,10 +21,8 @@ libgedit_la_SOURCES = \
 	gedit-convert.c \
 	gedit-debug.c \
 	gedit-view.c \
-	gedit-tab.c \
 	gedit-io-error-message-area.c \
 	gedit-message-area.c \
-	gedit-notebook.c \
 	gedit-print.c \
 	gedit-print-job-preview.c \
 	gedit-progress-message-area.c \
@@ -54,7 +52,6 @@ EXTRA_DIST =	gedit-marshal.list \
 		gedit-marshal.h \
 		gedit-message-area.h \
 		gedit-metadata-manager.h \
-		gedit-notebook.h \
 		gedit-panel.h \
 		gedit-prefs-manager-app.h \
 		gedit-prefs-manager.h \
@@ -63,7 +60,6 @@ EXTRA_DIST =	gedit-marshal.list \
 		gedit-print-job-preview.h \
 		gedit-progress-message-area.h \
 		gedit-spinner.h \
-		gedit-tab.h \
 		gedit-text-region.h \
 		gedit-tooltips.h \
 		gedit-utils.h \

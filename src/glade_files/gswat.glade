@@ -333,23 +333,22 @@
 	  <property name="position">564</property>
 
 	  <child>
-	    <widget class="GtkHPaned" id="hpaned1">
+	    <widget class="GtkHPaned" id="gswat_window_h_panes">
 	      <property name="visible">True</property>
 	      <property name="can_focus">True</property>
 	      <property name="position">533</property>
 
 	      <child>
-		<widget class="GtkScrolledWindow" id="gswat_window_scrolled_window">
+		<widget class="GtkEntry" id="entry8">
 		  <property name="visible">True</property>
 		  <property name="can_focus">True</property>
-		  <property name="hscrollbar_policy">GTK_POLICY_ALWAYS</property>
-		  <property name="vscrollbar_policy">GTK_POLICY_ALWAYS</property>
-		  <property name="shadow_type">GTK_SHADOW_IN</property>
-		  <property name="window_placement">GTK_CORNER_TOP_LEFT</property>
-
-		  <child>
-		    <placeholder/>
-		  </child>
+		  <property name="editable">True</property>
+		  <property name="visibility">True</property>
+		  <property name="max_length">0</property>
+		  <property name="text" translatable="yes">fooooo</property>
+		  <property name="has_frame">True</property>
+		  <property name="invisible_char">*</property>
+		  <property name="activates_default">False</property>
 		</widget>
 		<packing>
 		  <property name="shrink">True</property>
@@ -428,7 +427,7 @@
 	      </child>
 	    </widget>
 	    <packing>
-	      <property name="shrink">True</property>
+	      <property name="shrink">False</property>
 	      <property name="resize">False</property>
 	    </packing>
 	  </child>

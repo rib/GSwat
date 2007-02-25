@@ -70,16 +70,26 @@ struct _GSwatViewClass
 	
 };
 
+
+typedef struct
+{
+    GdkColor color;
+    gint line;
+}GSwatViewLineHighlight;
+
+
 /*
  * Public methods
  */
 GtkType	    gswat_view_get_type     	(void) G_GNUC_CONST;
 
-GtkWidget	*gswat_view_new(GeditDocument *doc, GSwatDebugger *debugger);
+GtkWidget	*gswat_view_new(GeditDocument *doc);
 
+void        gswat_view_set_line_highlights(GSwatView *view, const GList *line_hilights);
 void        gswat_view_add_breakpoint(GSwatView *view, gint line);
 void        gswat_view_remove_breakpoint(GSwatView *view, gint line);
 
+GeditDocument *gswat_view_get_document(GSwatView *view);
 
 G_END_DECLS
 

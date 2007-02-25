@@ -32,7 +32,7 @@
 #ifndef __GEDIT_PREFERENCES_DIALOG_H__
 #define __GEDIT_PREFERENCES_DIALOG_H__
 
-#include "gedit-window.h"
+//#include "gedit-window.h"
 
 G_BEGIN_DECLS
 

@@ -170,12 +170,20 @@ gswat_variable_object_get_value(GSwatVariableObject *self)
     g_free(command);
 
     top_val = gdb_get_mi_value(self->priv->debugger, token, NULL);
+    if(top_val)
+    {
+        value = gdbmi_value_hash_lookup(top_val, "value");
 
-    value = gdbmi_value_hash_lookup(top_val, "value");
+        g_assert(value);
 
-    g_assert(value);
+        value_string = g_strdup(gdbmi_value_literal_get(value));
+    }
+    else
+    {
+        g_warning("Unexpected failure when retrieving variable value");
+        value_string = g_strdup("Error retrieving value!");
+    }
 
-    value_string = g_strdup(gdbmi_value_literal_get(value));
     
     if(self->priv->cached_value)
     {

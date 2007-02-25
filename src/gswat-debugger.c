@@ -698,18 +698,22 @@ process_frame(GSwatDebugger *self, GDBMIValue *val)
 
     g_return_if_fail (val != NULL);
 
-    file = gdbmi_value_hash_lookup (val, "file");
-    line = gdbmi_value_hash_lookup (val, "line");
-    frame = gdbmi_value_hash_lookup (val, "frame");
-    addr = gdbmi_value_hash_lookup (val, "addr");
+    file = gdbmi_value_hash_lookup(val, "fullname");
+    if(!file)
+    {
+        file = gdbmi_value_hash_lookup(val, "file");
+    }
+    line = gdbmi_value_hash_lookup(val, "line");
+    frame = gdbmi_value_hash_lookup(val, "frame");
+    addr = gdbmi_value_hash_lookup(val, "addr");
 
     if (file && line)
     {
-        file_str = gdbmi_value_literal_get (file);
-        line_str = gdbmi_value_literal_get (line);
+        file_str = gdbmi_value_literal_get(file);
+        line_str = gdbmi_value_literal_get(line);
 
         if (addr)
-            addr_str = gdbmi_value_literal_get (addr);
+            addr_str = gdbmi_value_literal_get(addr);
 
         if (file_str && line_str)
         {
@@ -719,16 +723,20 @@ process_frame(GSwatDebugger *self, GDBMIValue *val)
     }
     else if (frame)
     {
-        file = gdbmi_value_hash_lookup (frame, "file");
-        line = gdbmi_value_hash_lookup (frame, "line");
+        file = gdbmi_value_hash_lookup(frame, "fullname");
+        if(!file)
+        {
+            file = gdbmi_value_hash_lookup(frame, "file");
+        }
+        line = gdbmi_value_hash_lookup(frame, "line");
 
         if (addr)
-            addr_str = gdbmi_value_literal_get (addr);
+            addr_str = gdbmi_value_literal_get(addr);
 
         if (file && line)
         {
-            file_str = gdbmi_value_literal_get (file);
-            line_str = gdbmi_value_literal_get (line);
+            file_str = gdbmi_value_literal_get(file);
+            line_str = gdbmi_value_literal_get(line);
             if (file_str && line_str)
             {
                 set_location(self, file_str,
@@ -800,7 +808,7 @@ process_gdbmi_command(GSwatDebugger *self, GString *command)
     }
     else if (strncasecmp (command->str, "^error", 6) == 0)
     {
-        g_assert_not_reached();
+        g_warning(command->str);
 
 #if 0
         /* GDB reported error */
