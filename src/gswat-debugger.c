@@ -80,7 +80,7 @@ struct GSwatDebuggerPrivate
     guint           gdb_err_event;
     GPid            gdb_pid;
     unsigned long   gdb_sequence;
-    GList           *gdb_pending;
+    GQueue          *gdb_pending;
 
     int             spawn_read_fifo_fd;
     int             spawn_write_fifo_fd;
@@ -162,22 +162,17 @@ gdb_send_mi_command(GSwatDebugger* self, gchar const* command)
 
 
 static gboolean
-idle_check_gdb_pending(gpointer data)
+process_gdb_pending(gpointer data)
 {
     GSwatDebugger *self = GSWAT_DEBUGGER(data);
-    GList *tmp;
     GString *current_line;
 
-    for(tmp = self->priv->gdb_pending; tmp != NULL; tmp=tmp->next)
+    while((current_line = g_queue_pop_head(self->priv->gdb_pending)))
     {
-        current_line = (GString *)tmp->data;
         process_gdbmi_command(self, current_line);
         g_string_free(current_line, TRUE);
     }
-
-    g_list_free(self->priv->gdb_pending);
-    self->priv->gdb_pending = NULL;
-
+    
     return FALSE;
 }
 
@@ -188,32 +183,32 @@ gdb_get_mi_value(GSwatDebugger *self,
                  gulong token,
                  GDBMIValue **mi_error)
 {
-    GList *tmp;
+    GString *current_line;
     gchar *remainder;
     gboolean found = FALSE;
     GDBMIValue *val = NULL;
+    int n;
+
 
     g_io_channel_flush(self->priv->gdb_in, NULL);
+    
 
-
-    for(tmp = self->priv->gdb_pending; tmp != NULL; tmp=tmp->next)
+    n=0;
+    while((current_line = g_queue_peek_nth(self->priv->gdb_pending, n)))
     {
-        GString *current_line;
         gulong command_token;
         GDBMIValue *val;
-
-        current_line = (GString *)tmp->data;
 
         command_token = strtol(current_line->str, &remainder, 10);
         if(command_token == 0 && current_line->str == remainder)
         {
+            n++;
             continue;
         }
 
         if(command_token == token)
         {
-            self->priv->gdb_pending = 
-                g_list_remove(self->priv->gdb_pending, current_line);
+            current_line = g_queue_pop_nth(self->priv->gdb_pending, n);
 
             val = gdbmi_value_parse(remainder);
 
@@ -221,6 +216,8 @@ gdb_get_mi_value(GSwatDebugger *self,
 
             return val;
         }
+
+        n++;
     }
 
 
@@ -289,19 +286,18 @@ gdb_get_mi_value(GSwatDebugger *self,
         }
         else
         {
-            g_message("adding to pending - %s", gdb_string->str);
-            self->priv->gdb_pending = 
-                g_list_prepend(self->priv->gdb_pending, gdb_string);
+            g_message("adding to pending - \"%s\"", gdb_string->str);
+            g_queue_push_tail(self->priv->gdb_pending, gdb_string);
         }
     }
 
-    if(self->priv->gdb_pending != NULL)
+    if(!g_queue_is_empty(self->priv->gdb_pending))
     {
         /* install a one off idle handler to process any commands
          * that were added to the gdb_pending queue
          */
         g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
-                        idle_check_gdb_pending,
+                        process_gdb_pending,
                         self,
                         NULL);
     }
@@ -337,10 +333,6 @@ gswat_debugger_new(GSwatSession *session)
 static void
 parse_stdout(GSwatDebugger* self, GIOChannel* io)
 {
-    GList *tmp = NULL;
-    GList *pending = NULL;
-
-
     /* read new gdb output up to the next (gdb) prompt */
     while(TRUE)
     {
@@ -362,31 +354,12 @@ parse_stdout(GSwatDebugger* self, GIOChannel* io)
         /* remove the trailing newline */
         gdb_string = g_string_truncate(gdb_string, gdb_string->len-1);
 
-        self->priv->gdb_pending = 
-            g_list_prepend(self->priv->gdb_pending, gdb_string);
+        g_message("adding to pending - \"%s\"", gdb_string->str);
+        g_queue_push_tail(self->priv->gdb_pending, gdb_string);
     }
-
-
-    /* we clear self->priv->gdb_pending and iterate
-     * the list in isolation because 
-     * process_gdbmi_command may
-     * also end up playing with self->priv->gdb_pending
-     */
-    pending = g_list_reverse(self->priv->gdb_pending);
-    self->priv->gdb_pending = NULL;
-
-
-    /* Flush the pending queue */ 
-    for(tmp = pending; tmp != NULL; tmp=tmp->next)
-    {
-        GString *current_line = (GString *)tmp->data;
-
-        process_gdbmi_command(self, current_line);
-        g_string_free(current_line, TRUE);
-    }
-    g_list_free(pending);
-
-
+    
+    process_gdb_pending(self);
+    
     return;
 }
 
@@ -2178,11 +2151,19 @@ gswat_debugger_get_locals_list(GSwatDebugger* self)
 
     if(self->priv->state & GSWAT_DEBUGGER_RUNNING)
     {
+        for(tmp=self->priv->locals; tmp!=NULL; tmp=tmp->next)
+        {
+            g_object_ref(G_OBJECT(tmp->data));
+        }
         return g_list_copy(self->priv->locals);
     }
 
     if(self->priv->locals_stamp == self->priv->state_stamp)
     {
+        for(tmp=self->priv->locals; tmp!=NULL; tmp=tmp->next)
+        {
+            g_object_ref(G_OBJECT(tmp->data));
+        }
         return g_list_copy(self->priv->locals);
     }
 
@@ -2241,8 +2222,14 @@ gswat_debugger_get_locals_list(GSwatDebugger* self)
     }
     g_list_free(self->priv->locals);
     self->priv->locals = new_locals_list;
+    
 
-    return self->priv->locals;
+    for(tmp=self->priv->locals; tmp!=NULL; tmp=tmp->next)
+    {
+        g_object_ref(G_OBJECT(tmp->data));
+    }
+    
+    return g_list_copy(self->priv->locals);
 }
 
 
@@ -2604,6 +2591,8 @@ gswat_debugger_init(GSwatDebugger* self)
 
     self->priv = G_TYPE_INSTANCE_GET_PRIVATE(self, GSWAT_TYPE_DEBUGGER, struct GSwatDebuggerPrivate);
 
+    self->priv->gdb_pending = g_queue_new();
+
     if(!start_spawner_process(self))
     {
         g_critical("Failed to start spawner process");
@@ -2628,6 +2617,8 @@ gswat_debugger_finalize(GObject* object)
 
     g_object_unref(self->priv->session);
     self->priv->session=NULL;
+
+    g_queue_free(self->priv->gdb_pending);
 
     G_OBJECT_CLASS(gswat_debugger_parent_class)->finalize(object);
 }

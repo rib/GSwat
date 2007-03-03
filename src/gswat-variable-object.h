@@ -44,7 +44,10 @@ typedef GObjectClass            GSwatVariableObjectClass;
 #define GSWAT_VARIABLE_OBJECT_GET_CLASS(i) (G_TYPE_INSTANCE_GET_CLASS((i), GSWAT_TYPE_VARIABLE_OBJECT, GSwatVariableObjectClass))
 
 
-
+#define GSWAT_VARIABLE_OBJECT_ERROR (gswat_variable_object_error_quark())
+enum {
+    GSWAT_VARIABLE_OBJECT_ERROR_GET_VALUE_FAILED
+};
 
 struct _GSwatVariableObject {
 	GObject base_instance;
@@ -55,6 +58,7 @@ struct _GSwatVariableObject {
 /* Public methods */
 
 GType gswat_variable_object_get_type(void);
+GQuark gswat_variable_object_error_quark(void);
 
 GSwatVariableObject*
 gswat_variable_object_new(GSwatDebugger *debugger,
@@ -63,7 +67,8 @@ gswat_variable_object_new(GSwatDebugger *debugger,
                           int frame);
 
 gchar       *gswat_variable_object_get_expression(GSwatVariableObject* self);
-gchar       *gswat_variable_object_get_value(GSwatVariableObject* self);
+gchar       *gswat_variable_object_get_value(GSwatVariableObject *self, GError **error);
+guint       gswat_variable_object_get_child_count(GSwatVariableObject *self);
 GList       *gswat_variable_object_get_children(GSwatVariableObject* self);
 
 G_END_DECLS
