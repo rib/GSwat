@@ -1,3 +1,4 @@
+
 /*
  * <preamble>
  * gswat - A graphical program debugger for Gnome
@@ -189,6 +190,10 @@ gswat_session_class_init(GSwatSessionClass* self_class)
 
 
 
+    /* set default handlers */
+    self_class->edit_done=NULL;
+    self_class->edit_abort=NULL;
+
     session_signals[SIG_EDIT_DONE] =
         g_signal_new ("edit-done",
                       G_OBJECT_CLASS_TYPE(go_class),
@@ -208,7 +213,7 @@ gswat_session_class_init(GSwatSessionClass* self_class)
                       g_cclosure_marshal_VOID__VOID,
                       G_TYPE_NONE,
                       0);
-
+    
 
     g_type_class_add_private(self_class, sizeof(struct GSwatSessionPrivate));
 }

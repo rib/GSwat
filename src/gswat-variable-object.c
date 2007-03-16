@@ -23,12 +23,20 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 
 #include <glib-2.0/glib.h>
 #include <glib/gi18n.h>
 
 #include "gswat-variable-object.h"
 
+enum {
+    SIG_UPDATED,
+	LAST_SIGNAL
+};
+
+
+static guint variable_signals[LAST_SIGNAL] = { 0 };
 
 
 
@@ -81,11 +89,11 @@ create_gdb_variable_object(GSwatVariableObject *self)
                               global_variable_object_index,
                               //self->priv->frame,
                               self->priv->expression);
-    token = gdb_send_mi_command(self->priv->debugger, command); 
+    token = gdb_debugger_send_mi_command(self->priv->debugger, command); 
     g_free(command);
 
     /* FIXME - make sure we can cope with junk expressions */
-    val=gdb_get_mi_value(self->priv->debugger, token, NULL);
+    val=gdb_debugger_get_mi_value(self->priv->debugger, token, NULL);
     gdbmi_value_free(val);
 
     self->priv->gdb_name = g_strdup_printf("v%d",
@@ -96,8 +104,8 @@ create_gdb_variable_object(GSwatVariableObject *self)
     /* find out if this expression has any children */
     command = g_strdup_printf("-var-info-num-children %s",
                               self->priv->gdb_name);
-    token = gdb_send_mi_command(self->priv->debugger, command);
-    val=gdb_get_mi_value(self->priv->debugger, token, NULL);
+    token = gdb_debugger_send_mi_command(self->priv->debugger, command);
+    val=gdb_debugger_get_mi_value(self->priv->debugger, token, NULL);
     numchild_val=gdbmi_value_hash_lookup(val, "numchild");
     if(numchild_val)
     {
@@ -131,7 +139,7 @@ destroy_gdb_variable_object(GSwatVariableObject *self)
 
     command = g_strdup_printf("-var-delete %s",
                               self->priv->gdb_name);
-    gdb_send_mi_command(self->priv->debugger,
+    gdb_debugger_send_mi_command(self->priv->debugger,
                                    command);
     g_free(command);
 
@@ -147,6 +155,23 @@ destroy_gdb_variable_object(GSwatVariableObject *self)
 
     g_free(self->priv->gdb_name);
     self->priv->gdb_name=NULL;
+}
+
+char *
+gdb_variable_get_name(GSwatVariableObject *self)
+{
+    return g_strdup(self->priv->gdb_name);
+}
+
+void
+gdb_variable_set_cache_value(GSwatVariableObject *self, const char *value)
+{
+
+    if(strcmp(self->priv->cached_value, value) != 0)
+    {
+        self->priv->cached_value=g_strdup(value);
+        g_signal_emit(G_OBJECT(self), variable_signals[SIG_UPDATED], 0);
+    }
 }
 
 gchar *
@@ -184,12 +209,12 @@ gswat_variable_object_get_value(GSwatVariableObject *self, GError **error)
     command = g_strdup_printf("-var-evaluate-expression %s", 
                               self->priv->gdb_name);
 
-    token = gdb_send_mi_command(self->priv->debugger,
+    token = gdb_debugger_send_mi_command(self->priv->debugger,
                                            command);
 
     g_free(command);
 
-    top_val = gdb_get_mi_value(self->priv->debugger, token, NULL);
+    top_val = gdb_debugger_get_mi_value(self->priv->debugger, token, NULL);
     if(top_val)
     {
         value = gdbmi_value_hash_lookup(top_val, "value");
@@ -289,9 +314,9 @@ gswat_variable_object_get_children(GSwatVariableObject *self)
     command=g_strdup_printf("-var-list-children --simple-values %s",
                             self->priv->gdb_name);
 
-    token = gdb_send_mi_command(self->priv->debugger, command);
+    token = gdb_debugger_send_mi_command(self->priv->debugger, command);
     g_free(command);
-    top_val = gdb_get_mi_value(self->priv->debugger, token, NULL);
+    top_val = gdb_debugger_get_mi_value(self->priv->debugger, token, NULL);
 
 
     children_val = gdbmi_value_hash_lookup(top_val, "children");
@@ -329,8 +354,10 @@ gswat_variable_object_get_children(GSwatVariableObject *self)
                                                    child_value,
                                                    self->priv->frame);
 
-        self->priv->children = g_list_prepend(
-                                              self->priv->children,
+        self->priv->children = g_list_prepend(self->priv->children,
+                                              variable_object);
+        
+        gdb_debugger_register_variable_object(self->priv->debugger,
                                               variable_object);
         n++;
     }
@@ -356,14 +383,13 @@ gswat_variable_object_new(GSwatDebugger *debugger,
     
     variable_object->priv->expression = g_strdup(expression);
 
+    variable_object->priv->cached_value = NULL;
+
     if(cached_value)
     {
         variable_object->priv->cached_value = g_strdup(cached_value);
     }
-    else
-    {
-        variable_object->priv->cached_value = NULL;
-    }
+
     variable_object->priv->frame = frame;
 
     variable_object->priv->debugger_state_stamp = 
@@ -371,6 +397,7 @@ gswat_variable_object_new(GSwatDebugger *debugger,
     
     create_gdb_variable_object(variable_object);
     
+    gdb_debugger_register_variable_object(debugger, variable_object);
 
     return variable_object;
 }
@@ -402,6 +429,9 @@ static void
 gswat_variable_object_finalize(GObject* object)
 {
     GSwatVariableObject* self = GSWAT_VARIABLE_OBJECT(object);
+
+    gdb_debugger_unregister_variable_object(self->priv->debugger,
+                                            self);
 
     destroy_gdb_variable_object(self);
     g_free(self->priv->expression);
@@ -473,6 +503,18 @@ gswat_variable_object_class_init(GSwatVariableObjectClass* self_class)
                                                          _("The list of chilren for complex data types"),
                                                          G_PARAM_READABLE));
 
+    /* set signals default handler */
+    self_class->updated = NULL;
+
+    variable_signals[SIG_UPDATED] =
+        g_signal_new ("updated",
+                      G_OBJECT_CLASS_TYPE(go_class),
+                      G_SIGNAL_RUN_LAST,
+                      G_STRUCT_OFFSET(GSwatVariableObjectClass, updated),
+                      NULL, NULL,
+                      g_cclosure_marshal_VOID__VOID,
+                      G_TYPE_NONE,
+                      0);
 
     g_type_class_add_private(self_class, sizeof(struct GSwatVariableObjectPrivate));
 }

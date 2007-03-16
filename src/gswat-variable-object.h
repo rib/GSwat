@@ -28,13 +28,13 @@
 
 #include <glib-object.h>
 
-#include "gswat-debugger.h"
 
 
 G_BEGIN_DECLS
 
 typedef struct _GSwatVariableObject   GSwatVariableObject;
-typedef GObjectClass            GSwatVariableObjectClass;
+
+#include "gswat-debugger.h"
 
 #define GSWAT_TYPE_VARIABLE_OBJECT         (gswat_variable_object_get_type())
 #define GSWAT_VARIABLE_OBJECT(i)           (G_TYPE_CHECK_INSTANCE_CAST((i), GSWAT_TYPE_VARIABLE_OBJECT, GSwatVariableObject))
@@ -54,6 +54,16 @@ struct _GSwatVariableObject {
 	struct GSwatVariableObjectPrivate* priv;
 };
 
+typedef struct _GSwatVariableObjectClass  GSwatVariableObjectClass;
+
+struct _GSwatVariableObjectClass
+{
+	GObjectClass parent_class;
+
+	/* Signals */ 
+
+	void (* updated)		(GSwatVariableObject *session);
+};
 
 /* Public methods */
 
@@ -70,6 +80,11 @@ gchar       *gswat_variable_object_get_expression(GSwatVariableObject* self);
 gchar       *gswat_variable_object_get_value(GSwatVariableObject *self, GError **error);
 guint       gswat_variable_object_get_child_count(GSwatVariableObject *self);
 GList       *gswat_variable_object_get_children(GSwatVariableObject* self);
+
+/* GDB specific interface */
+char *gdb_variable_get_name(GSwatVariableObject *self);
+void gdb_variable_set_cache_value(GSwatVariableObject *self, const char *value);
+
 
 G_END_DECLS
 

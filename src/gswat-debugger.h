@@ -34,7 +34,13 @@
 G_BEGIN_DECLS
 
 typedef struct _GSwatDebugger   GSwatDebugger;
+
+/* variable objects are inter dependent */
+#include "gswat-variable-object.h"
+
 typedef GObjectClass            GSwatDebuggerClass;
+
+
 
 #define GSWAT_TYPE_DEBUGGER         (gswat_debugger_get_type())
 #define GSWAT_DEBUGGER(i)           (G_TYPE_CHECK_INSTANCE_CAST((i), GSWAT_TYPE_DEBUGGER, GSwatDebugger))
@@ -105,9 +111,29 @@ GList       *gswat_debugger_get_locals_list(GSwatDebugger* self);
  * TODO seperate the the debugger class into a "debuggable"
  * interface and gdb-debugger class
  */
-gulong gdb_send_mi_command(GSwatDebugger* self, gchar const* command);
-GDBMIValue *gdb_get_mi_value(GSwatDebugger *self, gulong token, GDBMIValue **error);
 
+typedef void (*GDBMIDoneCallback)(struct _GSwatDebugger *self,
+                                  gulong token,
+                                  const GDBMIValue *val,
+                                  GString *command,
+                                  gpointer data);
+
+gulong gdb_debugger_send_mi_command(GSwatDebugger* self,
+                                    gchar const* command);
+GDBMIValue *gdb_debugger_get_mi_value(GSwatDebugger *self,
+                                      gulong token,
+                                      GDBMIValue **error);
+void gdb_debugger_mi_done_connect(GSwatDebugger *self,
+                                  gulong token,
+                                  GDBMIDoneCallback callback,
+                                  gpointer *data);
+void gdb_debugger_send_cli_command(GSwatDebugger* self,
+                                   gchar const* command);
+
+void gdb_debugger_register_variable_object(GSwatDebugger* self,
+                                           GSwatVariableObject *variable_object);
+void gdb_debugger_unregister_variable_object(GSwatDebugger* self,
+                                             GSwatVariableObject *variable_object);
 
 G_END_DECLS
 

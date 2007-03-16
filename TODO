@@ -1,13 +1,22 @@
 todo
 ----
 
+engineer a nicer object/interface model
+- rename  gswat-main-window.c -> gswat-window.c
+- create a debuggable interface
+- create a variable interface
+- create a gdb debugger class, implementing the debuggable interface
+- create a gdb variable obj class, implementing the variable interface
+- create a tabable interface
+- enhance the source view class to implement the tabable interface
+    - integrate code from gswat-tab.c into the source view as appropriate
+
+
 fix rendering - on-going issue
-xml session storage
 hook up preferences dialogs
 tidy up menus so they work
 make sure the terminal always closes when gswat closes!
 find a way to embed the terminal in a sub window like anjuta does
-color breakpoint highlights red
 some simple way to see variable values, e.g. mouse hover bubbles
 
 1.0

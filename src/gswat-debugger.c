@@ -43,11 +43,6 @@
 #include "gswat-variable-object.h"
 
 
-typedef void (*GDBMIDoneCallback)(struct _GSwatDebugger *self,
-                                  gulong token,
-                                  const GDBMIValue *val,
-                                  GString *command,
-                                  gpointer data);
 typedef struct {
     gulong token;
     GDBMIDoneCallback callback;
@@ -90,7 +85,11 @@ struct GSwatDebuggerPrivate
 
     GPid            target_pid;
 
-    GSList          *pending;
+    GSList          *mi_handlers;
+    
+    /* A list of weak references to all variable
+     * objects */
+    GList           *all_variables;
 };
 
 
@@ -115,8 +114,8 @@ static void spawn_local_process(GSwatDebugger *self);
 
 
 
-static void
-gdb_send_cli_command(GSwatDebugger* self, gchar const* command)
+void
+gdb_debugger_send_cli_command(GSwatDebugger* self, gchar const* command)
 {
     gchar *complete_command = NULL;
     gsize written = 0;
@@ -126,7 +125,8 @@ gdb_send_cli_command(GSwatDebugger* self, gchar const* command)
     if(g_io_channel_write(self->priv->gdb_in,
                           complete_command,
                           strlen(complete_command),
-                          &written) != G_IO_ERROR_NONE) {
+                          &written) != G_IO_ERROR_NONE)
+    {
         g_warning(_("Couldn't send command '%s' to gdb"), command);
     }
 
@@ -139,7 +139,7 @@ gdb_send_cli_command(GSwatDebugger* self, gchar const* command)
 
 
 gulong
-gdb_send_mi_command(GSwatDebugger* self, gchar const* command)
+gdb_debugger_send_mi_command(GSwatDebugger* self, gchar const* command)
 {
     gchar *complete_command = NULL;
     gsize written = 0;
@@ -149,7 +149,8 @@ gdb_send_mi_command(GSwatDebugger* self, gchar const* command)
     if(g_io_channel_write(self->priv->gdb_in,
                           complete_command,
                           strlen(complete_command),
-                          &written) != G_IO_ERROR_NONE) {
+                          &written) != G_IO_ERROR_NONE)
+    {
         g_warning(_("Couldn't send command '%s' to gdb"), command);
     }
 
@@ -172,16 +173,16 @@ process_gdb_pending(gpointer data)
         process_gdbmi_command(self, current_line);
         g_string_free(current_line, TRUE);
     }
-    
+
     return FALSE;
 }
 
 
 
 GDBMIValue *
-gdb_get_mi_value(GSwatDebugger *self,
-                 gulong token,
-                 GDBMIValue **mi_error)
+gdb_debugger_get_mi_value(GSwatDebugger *self,
+                          gulong token,
+                          GDBMIValue **mi_error)
 {
     GString *current_line;
     gchar *remainder;
@@ -191,7 +192,7 @@ gdb_get_mi_value(GSwatDebugger *self,
 
 
     g_io_channel_flush(self->priv->gdb_in, NULL);
-    
+
 
     n=0;
     while((current_line = g_queue_peek_nth(self->priv->gdb_pending, n)))
@@ -357,9 +358,9 @@ parse_stdout(GSwatDebugger* self, GIOChannel* io)
         g_message("adding to pending - \"%s\"", gdb_string->str);
         g_queue_push_tail(self->priv->gdb_pending, gdb_string);
     }
-    
+
     process_gdb_pending(self);
-    
+
     return;
 }
 
@@ -402,7 +403,7 @@ uri_from_filename(const gchar *filename)
 
 
 static void
-on_break_insert_done(struct _GSwatDebugger *self,
+on_break_insert_done(GSwatDebugger *self,
                      gulong token,
                      const GDBMIValue *val,
                      GString *command,
@@ -520,11 +521,11 @@ on_stack_list_done(struct _GSwatDebugger *self,
 
 
     g_string_printf(gdbmi_command, "-stack-list-arguments 1 0 %d", n);
-    tok = gdb_send_mi_command(self, gdbmi_command->str);
+    tok = gdb_debugger_send_mi_command(self, gdbmi_command->str);
     g_string_free(gdbmi_command, TRUE);
 
 
-    top_val = gdb_get_mi_value(self, tok, NULL);
+    top_val = gdb_debugger_get_mi_value(self, tok, NULL);
     if(!top_val && n>0)
     {
         g_object_notify(G_OBJECT(self), "stack");
@@ -579,11 +580,11 @@ on_stack_list_done(struct _GSwatDebugger *self,
 }
 
 
-static void
-gdb_mi_done_connect(GSwatDebugger *self,
-                    gulong token,
-                    GDBMIDoneCallback callback,
-                    gpointer *data)
+void
+gdb_debugger_mi_done_connect(GSwatDebugger *self,
+                             gulong token,
+                             GDBMIDoneCallback callback,
+                             gpointer *data)
 {
     GDBMIDoneHandler *handler = g_new0(GDBMIDoneHandler, 1);
 
@@ -591,9 +592,8 @@ gdb_mi_done_connect(GSwatDebugger *self,
     handler->callback = callback;
     handler->data = data;
 
-    self->priv->pending = g_slist_prepend(self->priv->pending, handler);
+    self->priv->mi_handlers = g_slist_prepend(self->priv->mi_handlers, handler);
 }
-
 
 
 static void
@@ -644,15 +644,15 @@ set_location(GSwatDebugger *self,
 
     if(new_uri || new_line){
         gulong token;
-        token = gdb_send_mi_command(self, "-stack-list-frames");
-        gdb_mi_done_connect(self,
-                            token,
-                            GDBMI_DONE_CALLBACK(
-                                                on_stack_list_done
-                                               )
-                            ,
-                            NULL
-                           );
+        token = gdb_debugger_send_mi_command(self, "-stack-list-frames");
+        gdb_debugger_mi_done_connect(self,
+                                     token,
+                                     GDBMI_DONE_CALLBACK(
+                                                         on_stack_list_done
+                                                        )
+                                     ,
+                                     NULL
+                                    );
     }
 }
 
@@ -664,7 +664,7 @@ process_frame(GSwatDebugger *self, GDBMIValue *val)
     const GDBMIValue *file, *line, *frame, *addr;
     const gchar *file_str, *line_str, *addr_str;
 
-    if (!val)
+    if(!val)
         return;
 
     file_str = line_str = addr_str = NULL;
@@ -680,7 +680,7 @@ process_frame(GSwatDebugger *self, GDBMIValue *val)
     frame = gdbmi_value_hash_lookup(val, "frame");
     addr = gdbmi_value_hash_lookup(val, "addr");
 
-    if (file && line)
+    if(file && line)
     {
         file_str = gdbmi_value_literal_get(file);
         line_str = gdbmi_value_literal_get(line);
@@ -694,7 +694,7 @@ process_frame(GSwatDebugger *self, GDBMIValue *val)
                          (guint)atoi(line_str), addr_str);
         }
     }
-    else if (frame)
+    else if(frame)
     {
         file = gdbmi_value_hash_lookup(frame, "fullname");
         if(!file)
@@ -719,6 +719,107 @@ process_frame(GSwatDebugger *self, GDBMIValue *val)
     } 
 }
 
+void
+gdb_debugger_register_variable_object(GSwatDebugger* self,
+                                      GSwatVariableObject *variable_object)
+{
+    GList *item;
+
+    item = g_list_alloc();
+    item->data = variable_object;
+
+    g_object_add_weak_pointer(G_OBJECT(variable_object),
+                              (gpointer)&item->data);
+
+    self->priv->all_variables = 
+        g_list_concat(item, self->priv->all_variables);
+
+    self->priv->all_variables = 
+        g_list_remove_all(self->priv->all_variables, NULL);
+}
+
+void
+gdb_debugger_unregister_variable_object(GSwatDebugger* self,
+                                      GSwatVariableObject *variable_object)
+{
+    GList *item;
+
+    item = g_list_find(self->priv->all_variables, variable_object);
+    if(item)
+    {
+        g_object_remove_weak_pointer(G_OBJECT(variable_object),
+                                     (gpointer)&item->data);
+    }
+    self->priv->all_variables = 
+        g_list_remove(self->priv->all_variables, variable_object);
+    
+    self->priv->all_variables = 
+        g_list_remove_all(self->priv->all_variables, NULL);
+}
+
+static void
+on_update_variable_objects_done(GSwatDebugger *self,
+                                gulong token,
+                                const GDBMIValue *done_val,
+                                GString *command,
+                                gpointer *data)
+{
+    int i, changed_count;
+    const GDBMIValue *changelist_val;
+
+    changelist_val = gdbmi_value_hash_lookup(done_val, "changelist");
+
+    changed_count = gdbmi_value_get_size(changelist_val);
+    for(i=0; i<changed_count; i++)
+    {
+        const GDBMIValue *change_val, *val;
+        const char *variable_gdb_name;
+        GList *tmp;
+
+        change_val = gdbmi_value_list_get_nth(changelist_val, i);
+        val = gdbmi_value_hash_lookup(change_val, "in_scope");
+
+        if(strcmp(gdbmi_value_literal_get(val), "true") != 0)
+        {
+            continue;
+        }
+
+        val = gdbmi_value_hash_lookup(change_val, "name");
+        variable_gdb_name = gdbmi_value_literal_get(val);
+
+        for(tmp=self->priv->all_variables; tmp!=NULL; tmp=tmp->next)
+        {
+            char *gdb_name;
+
+            gdb_name = gdb_variable_get_name(tmp->data);
+            if(strcmp(gdb_name, variable_gdb_name)==0)
+            {
+                val = gdbmi_value_hash_lookup(change_val, "value");
+                if(val)
+                {
+                    const char *new_value;
+                    new_value = gdbmi_value_literal_get(val);
+                    gdb_variable_set_cache_value(tmp->data, new_value);
+                }
+
+            }
+        }
+
+    }
+}
+
+static void
+update_variable_objects(GSwatDebugger *self)
+{
+    gulong token;
+
+    token = gdb_debugger_send_mi_command(self, "-var-update --simple-values *");
+    gdb_debugger_mi_done_connect(self,
+                                 token,
+                                 (GDBMIDoneCallback)on_update_variable_objects_done,
+                                 NULL);
+
+}
 
 
 static void
@@ -816,6 +917,7 @@ process_gdbmi_command(GSwatDebugger *self, GString *command)
     }
     else if(strncasecmp(command->str, "*stopped", 8) == 0)
     {
+        /* FIXME- move this into a seperate function */
         GDBMIValue *val = gdbmi_value_parse(command->str);
         if(val)
         {
@@ -825,6 +927,7 @@ process_gdbmi_command(GSwatDebugger *self, GString *command)
             gdbmi_value_dump(val, 0);
 
             process_frame(self, val);
+            update_variable_objects(self);
 
             reason = gdbmi_value_hash_lookup(val, "reason");
             if(reason){
@@ -1026,7 +1129,7 @@ process_gdbmi_command(GSwatDebugger *self, GString *command)
 
             gdbmi_value_dump(val, 0);
 
-            for(tmp=self->priv->pending; tmp!=NULL; tmp=tmp->next)
+            for(tmp=self->priv->mi_handlers; tmp!=NULL; tmp=tmp->next)
             {
                 current_handler = (GDBMIDoneHandler *)tmp->data;
 
@@ -1037,8 +1140,8 @@ process_gdbmi_command(GSwatDebugger *self, GString *command)
                                               command,
                                               current_handler->data);
 
-                    self->priv->pending = 
-                        g_slist_remove(self->priv->pending,
+                    self->priv->mi_handlers = 
+                        g_slist_remove(self->priv->mi_handlers,
                                        current_handler);
                     g_free(current_handler);
 
@@ -1474,7 +1577,7 @@ gswat_debugger_handle_gdb_breakpoint_hit(GSwatDebugger* self, MIAsyncRecord *bkp
 
         }
     }
-    gdb_send_mi_command(self, "-stack-list-frames");
+    gdb_debugger_send_mi_command(self, "-stack-list-frames");
 }
 
 
@@ -1736,7 +1839,7 @@ gswat_debugger_update_stack_real(GSwatDebugger* self)
     gchar const* command = "-stack-info-depth\n";
     GList* vars = NULL;
 
-    gdb_send_mi_command(self, command);
+    gdb_debugger_send_mi_command(self, command);
 
     vars = parse_stdout(self->priv->gdb_out, self);
     if(!vars || vars->next) {
@@ -1751,15 +1854,15 @@ gswat_debugger_update_stack_real(GSwatDebugger* self)
 
         if(j <= 11) {
             // get the whole backtrace (up to eleven ones)
-            gdb_send_mi_command(self, "-stack-list-frames\n");
+            gdb_debugger_send_mi_command(self, "-stack-list-frames\n");
             stack = parse_stdout(self->priv->gdb_out, self);
-            gdb_send_mi_command(self, "-stack-list-arguments 1\n");
+            gdb_debugger_send_mi_command(self, "-stack-list-arguments 1\n");
             args  = parse_stdout(self->priv->gdb_out, self);
         } else {
             // get only the ten last items (not eleven, to avoid widow lines - cutting off the last line)
-            gdb_send_mi_command(self, "-stack-list-frames 0 10\n");
+            gdb_debugger_send_mi_command(self, "-stack-list-frames 0 10\n");
             stack = parse_stdout(self->priv->gdb_out, self);
-            gdb_send_mi_command(self, "-stack-list-arguments 1 0 10\n"); // FROM 1 to 10
+            gdb_debugger_send_mi_command(self, "-stack-list-arguments 1 0 10\n"); // FROM 1 to 10
             args  = parse_stdout(self->priv->gdb_out, self);
         }
 
@@ -1842,7 +1945,7 @@ gswat_debugger_update_stack(GSwatDebugger* self)
 void
 gswat_debugger_run(GSwatDebugger* self)
 {
-    gdb_send_mi_command(self, "-exec-run");
+    gdb_debugger_send_mi_command(self, "-exec-run");
 
 }
 
@@ -1862,15 +1965,12 @@ gswat_debugger_request_line_breakpoint(GSwatDebugger* self, gchar *uri, guint li
         g_assert(filename);
 
         gdb_command = g_strdup_printf("-break-insert %s:%d", filename, line);
-        token = gdb_send_mi_command(self, gdb_command);
-        gdb_mi_done_connect(self,
-                            token,
-                            GDBMI_DONE_CALLBACK(
-                                                on_break_insert_done
-                                               )
-                            ,
-                            NULL
-                           );
+        token = gdb_debugger_send_mi_command(self, gdb_command);
+        gdb_debugger_mi_done_connect(self,
+                                     token,
+                                     (GDBMIDoneCallback)on_break_insert_done,
+                                     NULL
+                                    );
 
         g_free(gdb_command);
         g_free(filename);
@@ -1890,15 +1990,15 @@ gswat_debugger_request_function_breakpoint(GSwatDebugger* self, gchar *function)
 
         g_string_printf(gdb_command, "-break-insert %s", function);
 
-        token = gdb_send_mi_command(self, gdb_command->str);
-        gdb_mi_done_connect(self,
-                            token,
-                            GDBMI_DONE_CALLBACK(
-                                                on_break_insert_done
-                                               )
-                            ,
-                            NULL
-                           );
+        token = gdb_debugger_send_mi_command(self, gdb_command->str);
+        gdb_debugger_mi_done_connect(self,
+                                     token,
+                                     GDBMI_DONE_CALLBACK(
+                                                         on_break_insert_done
+                                                        )
+                                     ,
+                                     NULL
+                                    );
 
         g_string_free(gdb_command, TRUE);
     }
@@ -1916,16 +2016,16 @@ gswat_debugger_request_address_breakpoint(GSwatDebugger* self, unsigned long add
         gulong token;
 
         gdb_command = g_strdup_printf("-break-insert 0x%lx", address);
-        token = gdb_send_mi_command(self, gdb_command);
+        token = gdb_debugger_send_mi_command(self, gdb_command);
         g_free(gdb_command);
-        gdb_mi_done_connect(self,
-                            token,
-                            GDBMI_DONE_CALLBACK(
-                                                on_break_insert_done
-                                               )
-                            ,
-                            NULL
-                           );
+        gdb_debugger_mi_done_connect(self,
+                                     token,
+                                     GDBMI_DONE_CALLBACK(
+                                                         on_break_insert_done
+                                                        )
+                                     ,
+                                     NULL
+                                    );
 
     }
 }
@@ -1938,7 +2038,7 @@ gswat_debugger_attach(GSwatDebugger* self, guint pid)
 {
 
     gchar* command = g_strdup_printf("attach %d\n", pid); // FIXME: "-target-attach" should be available
-    gdb_send_mi_command(self, command);
+    gdb_debugger_send_mi_command(self, command);
     g_free(command);
 
     parse_stdout(self->priv->gdb_out, self);
@@ -1956,7 +2056,7 @@ gswat_debugger_query_source(GSwatDebugger* self)
 
     //g_string_printf(gdb_command, "-file-list-exec-source-file\n");
 
-    gdb_send_mi_command(self, "-file-list-exec-source-file");
+    gdb_debugger_send_mi_command(self, "-file-list-exec-source-file");
 
     //g_string_free(gdb_command, TRUE);
 }
@@ -1969,7 +2069,7 @@ gswat_debugger_continue(GSwatDebugger* self)
 
     //g_string_printf(gdb_command, "-exec-continue\n", self->priv->gdb_sequence++);
 
-    gdb_send_mi_command(self, "-exec-continue");
+    gdb_debugger_send_mi_command(self, "-exec-continue");
 
     //g_string_free(gdb_command, TRUE);
 }
@@ -1982,7 +2082,7 @@ gswat_debugger_finish(GSwatDebugger* self)
 
     //g_string_printf(gdb_command, "-exec-continue\n", self->priv->gdb_sequence++);
 
-    gdb_send_mi_command(self, "-exec-finish");
+    gdb_debugger_send_mi_command(self, "-exec-finish");
 
     //g_string_free(gdb_command, TRUE);
 }
@@ -1997,7 +2097,7 @@ gswat_debugger_step_into(GSwatDebugger* self)
 
     //g_string_printf(gdb_command, "-exec-step", self->priv->gdb_sequence++);
 
-    gdb_send_mi_command(self, "-exec-step");
+    gdb_debugger_send_mi_command(self, "-exec-step");
 
     //g_string_free(gdb_command, TRUE);
 
@@ -2013,7 +2113,7 @@ gswat_debugger_next(GSwatDebugger* self)
 
     //g_string_printf(gdb_command, "%ld -exec-next\n", self->priv->gdb_sequence++);
 
-    gdb_send_mi_command(self, "-exec-next");
+    gdb_debugger_send_mi_command(self, "-exec-next");
 
     //g_string_free(gdb_command, TRUE);
 
@@ -2041,7 +2141,7 @@ gswat_debugger_restart(GSwatDebugger* self)
        || self->priv->state == GSWAT_DEBUGGER_INTERRUPTED)
     {
         //kill(self->priv->target_pid, SIGKILL);
-        gdb_send_mi_command(self, "-target-detach");
+        gdb_debugger_send_mi_command(self, "-target-detach");
 
         spawn_local_process(self);
     }
@@ -2141,94 +2241,149 @@ gswat_debugger_get_breakpoints(GSwatDebugger* self)
 GList *
 gswat_debugger_get_locals_list(GSwatDebugger* self)
 {
-    GList *new_locals_list=NULL;
     gulong token;
-    GDBMIValue *top_val;
-    const GDBMIValue *locals_val, *local_val;
-    int n;
-    GList *tmp;
+    GDBMIValue *mi_results1, *mi_results2;
+    const GDBMIValue *local, *var, *frame, *args, *stack;
+    const gchar * name;
+    GList *names, *tmp, *tmp2, *locals_copy;
+    guint i;
 
 
-    if(self->priv->state & GSWAT_DEBUGGER_RUNNING)
+    if( (self->priv->state & GSWAT_DEBUGGER_RUNNING)
+        || (self->priv->locals_stamp == self->priv->state_stamp)
+      )
     {
-        for(tmp=self->priv->locals; tmp!=NULL; tmp=tmp->next)
-        {
-            g_object_ref(G_OBJECT(tmp->data));
-        }
-        return g_list_copy(self->priv->locals);
-    }
-
-    if(self->priv->locals_stamp == self->priv->state_stamp)
-    {
-        for(tmp=self->priv->locals; tmp!=NULL; tmp=tmp->next)
-        {
-            g_object_ref(G_OBJECT(tmp->data));
-        }
+        g_list_foreach(self->priv->locals, (GFunc)g_object_ref, NULL);
         return g_list_copy(self->priv->locals);
     }
 
     self->priv->locals_stamp = self->priv->state_stamp;
 
-    
-    token = gdb_send_mi_command(self, "-stack-list-locals --simple-values");
-    top_val = gdb_get_mi_value(self, token, NULL);
-    if(!top_val)
+    token = gdb_debugger_send_mi_command(self, "-stack-list-arguments 0 0 0");
+    mi_results1 = gdb_debugger_get_mi_value(self, token, NULL);
+
+    names = NULL;
+    /* Add arguments */
+    stack = gdbmi_value_hash_lookup(mi_results1, "stack-args");
+    if(stack)
     {
-        g_warning("Failed to list stack local variables");
-        return NULL;
-    }
-    locals_val = gdbmi_value_hash_lookup(top_val, "locals");
-
-
-    n=0;
-    while((local_val = gdbmi_value_list_get_nth(locals_val, n)))
-    {
-        const GDBMIValue *value_val, *name_val;
-        gchar *value = NULL;
-        gchar *expression;
-        GSwatVariableObject *variable_object;
-
-        name_val = gdbmi_value_hash_lookup(local_val, "name");
-        expression = g_strdup(gdbmi_value_literal_get(name_val));
-
-        value_val = gdbmi_value_hash_lookup(local_val, "value");
-
-        /* arrays, unions structs
-         * wont have a value
-         */
-        if(value_val)
+        frame = gdbmi_value_list_get_nth(stack, 0);
+        if(frame)
         {
-            value = g_strdup(gdbmi_value_literal_get(value_val));
+            args = gdbmi_value_hash_lookup(frame, "args");
+            if(args)
+            {
+                for(i = 0; i < gdbmi_value_get_size(args); i++)
+                {
+                    var = gdbmi_value_list_get_nth(args, i);
+                    if(var)
+                    {
+                        name = gdbmi_value_literal_get(var);
+                        names = g_list_prepend(names, (gchar *)name);
+                    }
+                }
+
+            }
+        }
+    }
+
+
+    token = gdb_debugger_send_mi_command(self, "-stack-list-locals 0");
+    mi_results2 = gdb_debugger_get_mi_value(self, token, NULL);
+
+    /* List local variables */	
+    local = gdbmi_value_hash_lookup(mi_results2, "locals");
+    if(local)
+    {
+        for(i = 0; i < gdbmi_value_get_size(local); i++)
+        {
+            var = gdbmi_value_list_get_nth(local, i);
+            if(var)
+            {
+                name = gdbmi_value_literal_get(var);
+                names = g_list_prepend(names, (gchar *)name);
+            }
+        }
+    }
+
+
+
+    for(tmp=names; tmp!=NULL; tmp=tmp->next)
+    {
+        gboolean found = FALSE;
+
+        for(tmp2=self->priv->locals; tmp2!=NULL; tmp2=tmp2->next)
+        {
+            GSwatVariableObject *variable_object;
+            char *current_name;
+
+            variable_object = tmp2->data;
+            current_name = 
+                gswat_variable_object_get_expression(variable_object);
+
+            if(strcmp(tmp->data, current_name) == 0)
+            {
+                found = TRUE;
+                g_free(current_name);
+                break;
+            }
+            g_free(current_name);
         }
 
-        /* create a new list of gswat variable objects for each variable
-         * (Note that doesn't mean gdb "variable objects"
-         * are immediatly created for simple types)
-         */
-        variable_object = gswat_variable_object_new(self,
-                                                    expression,
-                                                    value,
-                                                    -1);
+        if(!found)
+        {
+            GSwatVariableObject *variable_object;
 
-        new_locals_list = g_list_prepend(new_locals_list, variable_object);
-        n++;
+            variable_object = gswat_variable_object_new(self,
+                                                        (char *)tmp->data,
+                                                        NULL,
+                                                        -1);
+
+            self->priv->locals = 
+                g_list_prepend(self->priv->locals, variable_object);
+
+        }
     }
-    gdbmi_value_free(top_val);
 
-
-    for(tmp=self->priv->locals; tmp!=NULL; tmp=tmp->next)
+    /* prune, extra variable objects from self->priv->locals */
+    locals_copy=g_list_copy(self->priv->locals);
+    for(tmp=locals_copy; tmp!=NULL; tmp=tmp->next)
     {
-        g_object_unref(G_OBJECT(tmp->data));
-    }
-    g_list_free(self->priv->locals);
-    self->priv->locals = new_locals_list;
-    
+        gboolean found = FALSE;
+        GSwatVariableObject *variable_object;
+        char *current_name;
 
-    for(tmp=self->priv->locals; tmp!=NULL; tmp=tmp->next)
-    {
-        g_object_ref(G_OBJECT(tmp->data));
+        variable_object = tmp->data;
+        current_name = 
+            gswat_variable_object_get_expression(variable_object);
+
+        for(tmp2=names; tmp2!=NULL; tmp2=tmp2->next)
+        {
+            if(strcmp(current_name, tmp2->data) == 0)
+            {
+                found = TRUE;
+                break;
+            }
+        }
+        g_free(current_name);
+
+        if(!found)
+        {
+            self->priv->locals = 
+                g_list_remove(self->priv->locals, variable_object);
+            g_object_unref(variable_object);
+        }
     }
-    
+    g_list_free(locals_copy);
+
+
+    g_list_free(names);
+
+    gdbmi_value_free(mi_results1);
+    gdbmi_value_free(mi_results2);
+
+
+    g_list_foreach(self->priv->locals, (GFunc)g_object_ref, NULL);
     return g_list_copy(self->priv->locals);
 }
 
@@ -2435,7 +2590,7 @@ spawn_local_process(GSwatDebugger *self)
 
 
     gdb_command=g_strdup_printf("-file-exec-and-symbols %s", argv[0]);
-    gdb_send_mi_command(self, gdb_command);
+    gdb_debugger_send_mi_command(self, gdb_command);
     g_free(gdb_command);
     g_strfreev(argv);
 
@@ -2444,8 +2599,8 @@ spawn_local_process(GSwatDebugger *self)
     //gdb_command=g_strdup_printf("-target-attach %d", self->priv->target_pid);
     gdb_command=g_strdup_printf("attach %d", self->priv->target_pid);
     g_message("SENDING = \"%s\"", gdb_command);
-    //gdb_send_mi_command(self, gdb_command);
-    gdb_send_cli_command(self, gdb_command);
+    //gdb_debugger_send_mi_command(self, gdb_command);
+    gdb_debugger_send_cli_command(self, gdb_command);
     g_free(gdb_command);
 
 
@@ -2454,9 +2609,9 @@ spawn_local_process(GSwatDebugger *self)
 
     /* easier than sending a SIGCONT... */
     //gswat_debugger_run(self);
-    gdb_send_cli_command(self, "signal SIGCONT");
-    gdb_send_mi_command(self, "-exec-continue");
-    gdb_send_mi_command(self, "-exec-continue");
+    gdb_debugger_send_cli_command(self, "signal SIGCONT");
+    gdb_debugger_send_mi_command(self, "-exec-continue");
+    gdb_debugger_send_mi_command(self, "-exec-continue");
 
 
 }
@@ -2465,11 +2620,11 @@ void
 gswat_debugger_target_disconnect(GSwatDebugger* self)
 {
     stop_spawner_process(self);
-    
+
     g_source_remove(self->priv->gdb_out_event);
     g_source_remove(self->priv->gdb_err_event);
-    
-    
+
+
     if(self->priv->gdb_out) {
         g_io_channel_unref(self->priv->gdb_out);
         self->priv->gdb_out = NULL;
@@ -2481,7 +2636,7 @@ gswat_debugger_target_disconnect(GSwatDebugger* self)
     }
 
     if(self->priv->gdb_in) {
-        gdb_send_mi_command(self, "-gdb-exit\n");
+        gdb_debugger_send_mi_command(self, "-gdb-exit\n");
         //parse_stdout_idle(self->priv->gdb_out, G_IO_OUT, self);
         g_io_channel_unref(self->priv->gdb_in);
         self->priv->gdb_in = NULL;
@@ -2537,15 +2692,15 @@ gswat_debugger_target_connect(GSwatDebugger* self)
         //g_io_channel_set_flags(self->priv->gdb_err, G_IO_FLAG_NONBLOCK, NULL);
 
         self->priv->gdb_out_event = 
-                g_io_add_watch(self->priv->gdb_out,
-                               G_IO_IN,
-                               (GIOFunc)parse_stdout_idle,
-                               self);
+            g_io_add_watch(self->priv->gdb_out,
+                           G_IO_IN,
+                           (GIOFunc)parse_stdout_idle,
+                           self);
         self->priv->gdb_err_event =
-                g_io_add_watch(self->priv->gdb_err,
-                               G_IO_IN,
-                               (GIOFunc)parse_stderr_idle,
-                               self);
+            g_io_add_watch(self->priv->gdb_err,
+                           G_IO_IN,
+                           (GIOFunc)parse_stderr_idle,
+                           self);
     }
 
 
@@ -2564,7 +2719,7 @@ gswat_debugger_target_connect(GSwatDebugger* self)
 #if 0
     gchar *gdb_command;
     gdb_command = g_strdup_printf("-file-exec-and-symbols %s\n", user_command);
-    gdb_send_mi_command(self, gdb_command);
+    gdb_debugger_send_mi_command(self, gdb_command);
     g_free(gdb_command);
 
     gswat_debugger_request_function_breakpoint(self, "main");
