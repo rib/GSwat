@@ -5,7 +5,7 @@ LC_PREFIX_DEFAULT="gswat"
 CC_PREFIX_DEFAULT="GSwat"
 
 echo "This will run your through some quick steps"
-echo "to generate an outline for your new class"
+echo "to generate an outline for your new interface"
 echo
 
 
@@ -47,45 +47,45 @@ echo "CamelCase symbol prefix=$CC_PREFIX"
 echo
 while test "$LC_CLASS_NAME" == ""
 do
-    echo "Enter a lowercase class name:"
+    echo "Enter a lowercase interface name:"
     read -p " > " -e LC_CLASS_NAME
 done
-echo "lowercase class name = $LC_CLASS_NAME"
+echo "lowercase interface name = $LC_CLASS_NAME"
 
 
 UC_CLASS_NAME_DEFAULT=$(echo $LC_CLASS_NAME|tr a-z A-Z)
 echo
-echo "Enter an UPPERCASE class name:"
+echo "Enter an UPPERCASE interface name:"
 read -p "[$UC_CLASS_NAME_DEFAULT] >" -e UC_CLASS_NAME
 if test "$UC_CLASS_NAME" == ""; then
     UC_CLASS_NAME=$UC_CLASS_NAME_DEFAULT
 fi
-echo "UPPERCASE class name=$UC_CLASS_NAME"
+echo "UPPERCASE interface name=$UC_CLASS_NAME"
 
 echo
 while test "$CC_CLASS_NAME" == ""
 do
-    echo "Enter an CamelCase class name:"
+    echo "Enter an CamelCase interface name:"
     read -p " > " -e CC_CLASS_NAME
 done
-echo "CamelCase class name=$CC_CLASS_NAME"
+echo "CamelCase interface name=$CC_CLASS_NAME"
 
-cp g-object-class.c ${FILESTEM}.c
-sed -i "s/my-object.h/${FILESTEM}.h/g" ${FILESTEM}.c
+cp g-interface.c ${FILESTEM}.c
+sed -i "s/my-doable.h/${FILESTEM}.h/g" ${FILESTEM}.c
 sed -i "s/my_/${LC_PREFIX}_/g" ${FILESTEM}.c
 sed -i "s/MY_/${UC_PREFIX}_/g" ${FILESTEM}.c
 sed -i "s/My/${CC_PREFIX}/g" ${FILESTEM}.c
-sed -i "s/_object/_${LC_CLASS_NAME}/g" ${FILESTEM}.c
-sed -i "s/_OBJECT/_${UC_CLASS_NAME}/g" ${FILESTEM}.c
-sed -i "s/Object/${CC_CLASS_NAME}/g" ${FILESTEM}.c
+sed -i "s/_doable/_${LC_CLASS_NAME}/g" ${FILESTEM}.c
+sed -i "s/_DOABLE/_${UC_CLASS_NAME}/g" ${FILESTEM}.c
+sed -i "s/Doable/${CC_CLASS_NAME}/g" ${FILESTEM}.c
 
-cp g-object-class.h ${FILESTEM}.h
+cp g-interface.h ${FILESTEM}.h
 sed -i "s/my_/${LC_PREFIX}_/g" ${FILESTEM}.h
 sed -i "s/MY_/${UC_PREFIX}_/g" ${FILESTEM}.h
 sed -i "s/My/${CC_PREFIX}/g" ${FILESTEM}.h
-sed -i "s/_object/_${LC_CLASS_NAME}/g" ${FILESTEM}.h
-sed -i "s/_OBJECT/_${UC_CLASS_NAME}/g" ${FILESTEM}.h
-sed -i "s/Object/${CC_CLASS_NAME}/g" ${FILESTEM}.h
+sed -i "s/_doable/_${LC_CLASS_NAME}/g" ${FILESTEM}.h
+sed -i "s/_DOABLE/_${UC_CLASS_NAME}/g" ${FILESTEM}.h
+sed -i "s/Doable/${CC_CLASS_NAME}/g" ${FILESTEM}.h
 
 echo "Done!"
 
