@@ -22,6 +22,7 @@ struct _MyObject
 {
     /* add your parent type here */
     MyObjectParent parent;
+
     /* add pointers to new members here */
     
 	/*< private > */
