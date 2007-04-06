@@ -7,7 +7,6 @@ engineer a nicer object/interface model
     - integrate code from gswat-tab.c into the source view as appropriate
 - convert all my code to use my object/interface templates
  - todo:
-  - gswat-window.c
   - gswat-view.c
   - gswat-notebook.c
   - gswat-tab.c

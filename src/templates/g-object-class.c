@@ -42,7 +42,7 @@ static void my_object_finalize(GObject *self);
 /* Macros and defines */
 #define MY_OBJECT_GET_PRIVATE(object)(G_TYPE_INSTANCE_GET_PRIVATE ((object), MY_TYPE_OBJECT, MyObjectPrivate))
 
-/* Enums */
+/* Enums/Typedefs */
 /* add your signals here */
 #if 0
 enum {
@@ -58,8 +58,14 @@ enum {
 };
 #endif
 
+struct _MyObjectPrivate
+{
+#error template_fixme
+};
+
 /* Variables */
 static GObjectClass *parent_class = NULL;
+#error template_fixme
 //static guint my_object_signals[LAST_SIGNAL] = { 0 };
 
 GType
@@ -84,6 +90,7 @@ my_object_get_type(void) /* Typechecking */
         };
 
         /* add the type of your parent class here */
+#error template_fixme
         self_type = g_type_register_static(G_TYPE_OBJECT, /* parent GType */
                                            "MyObject", /* type name */
                                            &object_info, /* type info */
@@ -182,7 +189,7 @@ my_object_get_property(GObject *object,
                        GValue *value,
                        GParamSpec *pspec)
 {
-    MyObject* self = MY_OBJECT(object);
+    //MyObject* self = MY_OBJECT(object);
 
     switch(id) {
 #if 0 /* template code */
@@ -262,7 +269,7 @@ my_object_new(void)
 
 /* Instance Destruction */
 void
-my_object_finalize(MyObject *self)
+my_object_finalize(GObject *object)
 {
     /* destruct your object here */
     G_OBJECT_CLASS(parent_class)->finalize(object);
