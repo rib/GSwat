@@ -4,15 +4,17 @@ bin_PROGRAMS = gswat gswat-spawner
 
 
 GSWAT_SOURCES = main.c \
-		gswat-main-window.c \
+		gswat-window.c \
 		gswat-session.c \
-		gswat-debugger.c \
+		gswat-debuggable.c \
+		gswat-variable-object.c \
+		gswat-gdb-debugger.c \
+		gswat-gdb-variable-object.c \
 		gswat-view.c \
 		gswat-notebook.c \
 		gswat-tab.c \
 		sexy-icon-entry.c \
-		gswat-gdbmi.c \
-		gswat-variable-object.c
+		gswat-gdbmi.c
 
 BUILT_SOURCES = gedit/gedit-marshal.c \
                gedit/gedit-marshal.h

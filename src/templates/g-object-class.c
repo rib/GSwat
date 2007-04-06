@@ -1,18 +1,43 @@
+/*
+ * <preamble>
+ * gswat - A graphical program debugger for Gnome
+ * Copyright (C) 2006  Robert Bragg
+ * </preamble>
+ * 
+ * <license>
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * </license>
+ *
+ */
+
 #include "my-object.h"
 
 /* Function definitions */
 static void my_object_class_init(MyObjectClass *klass);
-static void my_object_get_property(GObject* object,
+static void my_object_get_property(GObject *object,
                                    guint id,
-                                   GValue* value,
-                                   GParamSpec* pspec);
-static void my_object_set_property(GObject      *object,
-					               guint        property_id,
-					               const GValue *value,
-					               GParamSpec   *pspec);
-//staic void my_object_mydoable_interface_init(gpointer interface,
+                                   GValue *value,
+                                   GParamSpec *pspec);
+static void my_object_set_property(GObject *object,
+                                   guint property_id,
+                                   const GValue *value,
+                                   GParamSpec *pspec);
+//static void my_object_mydoable_interface_init(gpointer interface,
 //                                             gpointer data);
 static void my_object_init(MyObject *self);
+static void my_object_finalize(GObject *self);
 
 /* Macros and defines */
 #define MY_OBJECT_GET_PRIVATE(object)(G_TYPE_INSTANCE_GET_PRIVATE ((object), MY_TYPE_OBJECT, MyObjectPrivate))
@@ -28,14 +53,14 @@ enum {
 
 #if 0
 enum {
-  PROP_0,
-  PROP_NAME,
+    PROP_0,
+    PROP_NAME,
 };
 #endif
 
 /* Variables */
 static GObjectClass *parent_class = NULL;
-static guint my_object_signals[LAST_SIGNAL] = { 0 };
+//static guint my_object_signals[LAST_SIGNAL] = { 0 };
 
 GType
 my_object_get_type(void) /* Typechecking */
@@ -57,12 +82,13 @@ my_object_get_type(void) /* Typechecking */
             (GInstanceInitFunc)my_object_init, /* instance initializer */
             NULL /* function table */
         };
-        
+
         /* add the type of your parent class here */
-        self_type = g_type_register_static(MY_OBJECT_PARENT,
-                                           "MyObject",
-                                           &object_info,
-                                           0);
+        self_type = g_type_register_static(G_TYPE_OBJECT, /* parent GType */
+                                           "MyObject", /* type name */
+                                           &object_info, /* type info */
+                                           0 /* flags */
+                                          );
 #if 0
         /* add interfaces here */
         static const GInterfaceInfo mydoable_info =
@@ -71,11 +97,12 @@ my_object_get_type(void) /* Typechecking */
                 my_object_mydoable_interface_init,
             (GInterfaceFinalizeFunc)NULL,
             NULL /* interface data */
-        }
+        };
 
-        if (type != G_TYPE_INVALID) {
-            g_type_add_interface_static(
-				self_type, MY_TYPE_MYDOABLE, &mydoable_info);
+        if(self_type != G_TYPE_INVALID) {
+            g_type_add_interface_static(self_type,
+                                        MY_TYPE_MYDOABLE,
+                                        &mydoable_info);
         }
 #endif
     }
@@ -87,7 +114,7 @@ static void
 my_object_class_init(MyObjectClass *klass) /* Class Initialization */
 {   
     GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-    GParamSpec *new_param;
+    //GParamSpec *new_param;
 
     parent_class = g_type_class_peek_parent(klass);
 
@@ -95,71 +122,75 @@ my_object_class_init(MyObjectClass *klass) /* Class Initialization */
 
     gobject_class->get_property = my_object_get_property;
     gobject_class->set_property = my_object_set_property;
-    
+
     /* set up properties */
 #if 0
-    new_param = g_param_spec_int("name", /* name */
-    new_param = g_param_spec_uint("name", /* name */
-    new_param = g_param_spec_boolean("name", /* name */
-    new_param = g_param_spec_object("name", /* name */
+    //new_param = g_param_spec_int("name", /* name */
+    //new_param = g_param_spec_uint("name", /* name */
+    //new_param = g_param_spec_boolean("name", /* name */
+    //new_param = g_param_spec_object("name", /* name */
     new_param = g_param_spec_pointer("name", /* name */
-							     "Name", /* nick name */
-							     "Name", /* description */
+                                     "Name", /* nick name */
+                                     "Name", /* description */
 #if INT/UINT/CHAR/LONG/FLOAT...
-                                 10, /* minimum */
-                                 100, /* maximum */
-                                 0, /* default */
+                                     10, /* minimum */
+                                     100, /* maximum */
+                                     0, /* default */
 #elif BOOLEAN
-                                 FALSE, /* default */
+                                     FALSE, /* default */
 #elif STRING
-                                 NULL, /* default */
+                                     NULL, /* default */
 #elif OBJECT
-							     MY_TYPE_PARAM_OBJ, /* GType */
+                                     MY_TYPE_PARAM_OBJ, /* GType */
 #elif POINTER
-                                 /* nothing extra */
+                                     /* nothing extra */
 #endif
-							     MY_PARAM_READABLE /* flags */
-							     MY_PARAM_WRITEABLE /* flags */
-							     MY_PARAM_READWRITE /* flags */
-                                  | G_PARAM_CONSTRUCT
-                                  | G_PARAM_CONSTRUCT_ONLY
-                                 );
+                                     MY_PARAM_READABLE /* flags */
+                                     MY_PARAM_WRITEABLE /* flags */
+                                     MY_PARAM_READWRITE /* flags */
+                                     | G_PARAM_CONSTRUCT
+                                     | G_PARAM_CONSTRUCT_ONLY
+                                     );
     g_object_class_install_property(gobject_class,
-				                    PROP_NAME,
-				                    new_param);
+                                    PROP_NAME,
+                                    new_param);
 #endif
 
     /* set up signals */
-#if 0
+#if 0 /* template code */
     klass->signal_member = signal_default_handler;
-    my_object_signals[SIGNAL_NAME] 
-        = g_signal_new ("signal_name",
-                        G_TYPE_FROM_CLASS (klass),
-                        G_SIGNAL_RUN_FIRST | G_SIGNAL_ACTION,
-                        G_STRUCT_OFFSET (MyObjectClass, signal_member),
-                        NULL,
-                        NULL,
-                        g_cclosure_marshal_VOID__VOID,
-                        G_TYPE_NONE, 0);
+    my_object_signals[SIGNAL_NAME] =
+        g_signal_new("signal_name", /* name */
+                     G_TYPE_FROM_CLASS(klass), /* interface GType */
+                     G_SIGNAL_RUN_LAST, /* signal flags */
+                     G_STRUCT_OFFSET(MyObjectClass, signal_member),
+                     NULL, /* accumulator */
+                     NULL, /* accumulator data */
+                     g_cclosure_marshal_VOID__VOID, /* c marshaller */
+                     G_TYPE_NONE, /* return type */
+                     0 /* number of parameters */
+                     /* vararg, list of param types */
+                    );
 #endif
 
-    g_type_class_add_private(klass, sizeof(struct MyObjectPrivate));
+    g_type_class_add_private(klass, sizeof(MyObjectPrivate));
 }
 
 static void
-my_object_get_property(GObject* object,
+my_object_get_property(GObject *object,
                        guint id,
-                       GValue* value,
-                       GParamSpec* pspec)
+                       GValue *value,
+                       GParamSpec *pspec)
 {
     MyObject* self = MY_OBJECT(object);
 
     switch(id) {
-        case PROP_STATE:
 #if 0 /* template code */
+        case PROP_NAME:
             g_value_set_int(value, self->priv->property);
             g_value_set_uint(value, self->priv->property);
             g_value_set_boolean(value, self->priv->property);
+            /* don't forget that this will dup the string... */
             g_value_set_string(value, self->priv->property);
             g_value_set_object(value, self->priv->property);
             g_value_set_pointer(value, self->priv->property);
@@ -170,18 +201,17 @@ my_object_get_property(GObject* object,
             break;
     }
 }
-#error fixme set_property
 
 static void
-my_object_set_property(GObject      *object,
-					   guint        property_id,
-					   const GValue *value,
-					   GParamSpec   *pspec)
+my_object_set_property(GObject *object,
+                       guint property_id,
+                       const GValue *value,
+                       GParamSpec *pspec)
 {   
     switch(property_id)
     {
 #if 0 /* template code */
-	    case PROP_NAME:
+        case PROP_NAME:
             self->priv->property = g_value_get_int(value);
             self->priv->property = g_value_get_uint(value);
             self->priv->property = g_value_get_boolean(value);
@@ -195,15 +225,15 @@ my_object_set_property(GObject      *object,
             break;
 #endif
         default:
-		    g_warning("my_object_set_property on unknown property");
-		    return;
+            g_warning("my_object_set_property on unknown property");
+            return;
     }
 }
 
 /* Initialize interfaces here */
 
 #if 0
-void
+static void
 my_object_mydoable_interface_init(gpointer interface,
                                   gpointer data)
 {
@@ -215,25 +245,26 @@ my_object_mydoable_interface_init(gpointer interface,
 }
 #endif
 
+/* Instance Construction */
 static void
-my_object_init(MyObject *self) /* Instance Construction */
+my_object_init(MyObject *self)
 {
     self->priv = MY_OBJECT_GET_PRIVATE(self);
     /* populate your widget here */
 }
 
+/* Instantiation wrapper */
 MyObject*
-my_object_new(void) /* Construction */
+my_object_new(void)
 {
-#error fixme
     return MY_OBJECT(g_object_new(my_object_get_type(), NULL));
 }
 
+/* Instance Destruction */
 void
-my_object_finalize(MyObject *self) /* Destruction */
+my_object_finalize(MyObject *self)
 {
     /* destruct your object here */
-#error fixme
     G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 

@@ -72,20 +72,18 @@ echo "CamelCase class name=$CC_CLASS_NAME"
 
 cp g-object-class.c ${FILESTEM}.c
 sed -i "s/my-object.h/${FILESTEM}.h/g" ${FILESTEM}.c
-sed -i "s/my_/${LC_PREFIX}_/g" ${FILESTEM}.c
-sed -i "s/MY_/${UC_PREFIX}_/g" ${FILESTEM}.c
-sed -i "s/My/${CC_PREFIX}/g" ${FILESTEM}.c
-sed -i "s/_object/_${LC_CLASS_NAME}/g" ${FILESTEM}.c
-sed -i "s/_OBJECT/_${UC_CLASS_NAME}/g" ${FILESTEM}.c
-sed -i "s/Object/${CC_CLASS_NAME}/g" ${FILESTEM}.c
+sed -i "s/my_object/${LC_PREFIX}_${LC_CLASS_NAME}/g" ${FILESTEM}.c
+sed -i "s/MY_OBJECT/${UC_PREFIX}_${UC_CLASS_NAME}/g" ${FILESTEM}.c
+sed -i "s/MY_TYPE_OBJECT/${UC_PREFIX}_TYPE_${UC_CLASS_NAME}/g" ${FILESTEM}.c
+sed -i "s/MY_IS_OBJECT/${UC_PREFIX}_IS_${UC_CLASS_NAME}/g" ${FILESTEM}.c
+sed -i "s/MyObject/${CC_PREFIX}${CC_CLASS_NAME}/g" ${FILESTEM}.c
 
 cp g-object-class.h ${FILESTEM}.h
-sed -i "s/my_/${LC_PREFIX}_/g" ${FILESTEM}.h
-sed -i "s/MY_/${UC_PREFIX}_/g" ${FILESTEM}.h
-sed -i "s/My/${CC_PREFIX}/g" ${FILESTEM}.h
-sed -i "s/_object/_${LC_CLASS_NAME}/g" ${FILESTEM}.h
-sed -i "s/_OBJECT/_${UC_CLASS_NAME}/g" ${FILESTEM}.h
-sed -i "s/Object/${CC_CLASS_NAME}/g" ${FILESTEM}.h
+sed -i "s/my_object/${LC_PREFIX}_${LC_CLASS_NAME}/g" ${FILESTEM}.h
+sed -i "s/MY_OBJECT/${UC_PREFIX}_${UC_CLASS_NAME}/g" ${FILESTEM}.h
+sed -i "s/MyObject/${CC_PREFIX}${CC_CLASS_NAME}/g" ${FILESTEM}.h
+sed -i "s/MY_TYPE_OBJECT/${UC_PREFIX}_TYPE_${UC_CLASS_NAME}/g" ${FILESTEM}.h
+sed -i "s/MY_IS_OBJECT/${UC_PREFIX}_IS_${UC_CLASS_NAME}/g" ${FILESTEM}.h
 
 echo "Done!"
 

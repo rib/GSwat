@@ -78,19 +78,18 @@ typedef struct _GSwatNotebookClass	GSwatNotebookClass;
 
 struct _GSwatNotebookClass
 {
-        GtkNotebookClass parent_class;
+    GtkNotebookClass parent_class;
 
-	/* Signals */
-	void	 (* tab_added)      (GSwatNotebook *notebook,
-				     GSwatTab      *tab);
-	void	 (* tab_removed)    (GSwatNotebook *notebook,
-				     GSwatTab      *tab);
-	void	 (* tab_detached)   (GSwatNotebook *notebook,
-				     GSwatTab      *tab);
-	void	 (* tabs_reordered) (GSwatNotebook *notebook);
-	void	 (* tab_close_request)
-				    (GSwatNotebook *notebook,
-				     GSwatTab      *tab);
+    /* Signals */
+    void (* tab_added)(GSwatNotebook *notebook,
+                       GSwatTab      *tab);
+    void (* tab_removed)(GSwatNotebook *notebook,
+                         GSwatTab      *tab);
+    void (* tab_detached)(GSwatNotebook *notebook,
+                          GSwatTab      *tab);
+    void (* tabs_reordered)(GSwatNotebook *notebook);
+    void (* tab_close_request)(GSwatNotebook *notebook,
+                               GSwatTab      *tab);
 };
 
 /*
@@ -101,42 +100,42 @@ GType		gswat_notebook_get_type		(void) G_GNUC_CONST;
 GtkWidget      *gswat_notebook_new		(void);
 
 void		gswat_notebook_add_tab		(GSwatNotebook *nb,
-						 GSwatTab      *tab,
-						 gint           position,
-						 gboolean       jump_to);
+                                         GSwatTab      *tab,
+                                         gint           position,
+                                         gboolean       jump_to);
 
 void		gswat_notebook_remove_tab	(GSwatNotebook *nb,
-						 GSwatTab      *tab);
+                                         GSwatTab      *tab);
 
 void		gswat_notebook_remove_all_tabs 	(GSwatNotebook *nb);
 
 void		gswat_notebook_reorder_tab	(GSwatNotebook *src,
-			    			 GSwatTab      *tab,
-			    			 gint           dest_position);
-			    			 
+                                         GSwatTab      *tab,
+                                         gint           dest_position);
+
 void            gswat_notebook_move_tab		(GSwatNotebook *src,
-						 GSwatNotebook *dest,
-						 GSwatTab      *tab,
-						 gint           dest_position);
+                                             GSwatNotebook *dest,
+                                             GSwatTab      *tab,
+                                             gint           dest_position);
 
 /* FIXME: do we really need this function ? */
 void		gswat_notebook_set_always_show_tabs	
-						(GSwatNotebook *nb,
-						 gboolean       show_tabs);
+(GSwatNotebook *nb,
+ gboolean       show_tabs);
 
 void		gswat_notebook_set_close_buttons_sensitive
-						(GSwatNotebook *nb,
-						 gboolean       sensitive);
+(GSwatNotebook *nb,
+ gboolean       sensitive);
 
 gboolean	gswat_notebook_get_close_buttons_sensitive
-						(GSwatNotebook *nb);
+(GSwatNotebook *nb);
 
 void		gswat_notebook_set_tab_drag_and_drop_enabled
-						(GSwatNotebook *nb,
-						 gboolean       enable);
+(GSwatNotebook *nb,
+ gboolean       enable);
 
 gboolean	gswat_notebook_get_tab_drag_and_drop_enabled
-						(GSwatNotebook *nb);
+(GSwatNotebook *nb);
 
 G_END_DECLS
 

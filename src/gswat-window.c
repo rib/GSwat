@@ -1,7 +1,8 @@
 /*
  * <preamble>
  * gswat - A graphical program debugger for Gnome
- * Copyright (C) 2006  Robert Bragg
+ * Copyright (C) 2007  Robert Bragg
+ * </preamble>
  * 
  * <license>
  * This program is free software; you can redistribute it and/or
@@ -19,7 +20,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  * </license>
  *
- * </preamble>
  */
 
 #include <stdio.h>
@@ -39,9 +39,10 @@
 #include "gswat-tab.h"
 #include "gswat-view.h"
 #include "gswat-session.h"
-#include "gswat-debugger.h"
+#include "gswat-debuggable.h"
+#include "gswat-gdb-debugger.h"
 #include "gswat-variable-object.h"
-#include "gswat-main-window.h"
+#include "gswat-window.h"
 
 enum {
     GSWAT_WINDOW_STACK_FUNC_COL,
@@ -59,7 +60,7 @@ struct _GSwatWindowPrivate
 {
     GladeXML        *xml;
 
-    GSwatDebugger   *debugger;
+    GSwatDebuggable *debuggable;
 
     GSwatNotebook   *notebook;
 
@@ -82,7 +83,7 @@ struct _GSwatWindowPrivate
 };
 
 typedef struct {
-    GSwatDebuggerFrame *dbg_frame;
+    GSwatDebuggableFrame *dbg_frame;
     GString *display;
 }GSwatWindowFrame;
 
@@ -133,24 +134,24 @@ static void on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *windo
 
 static void set_toolbar_state(GSwatWindow *self, guint state);
 
-static void on_gswat_debugger_state_notify(GObject *debugger,
+static void on_gswat_debuggable_state_notify(GObject *debuggable,
                                            GParamSpec *property,
                                            gpointer data);
 
-static void on_gswat_debugger_stack_notify(GObject *debugger,
+static void on_gswat_debuggable_stack_notify(GObject *debuggable,
                                            GParamSpec *property,
                                            gpointer data);
 
 static gboolean update_variable_view(gpointer data);
 
-static void on_gswat_debugger_source_uri_notify(GObject *debugger,
+static void on_gswat_debuggable_source_uri_notify(GObject *debuggable,
                                                 GParamSpec *property,
                                                 gpointer data);
-static void on_gswat_debugger_source_line_notify(GObject *debugger,
+static void on_gswat_debuggable_source_line_notify(GObject *debuggable,
                                                  GParamSpec *property,
                                                  gpointer data);
 static void update_source_view(GSwatWindow *self,
-                               GSwatDebugger *debugger);
+                               GSwatDebuggable *debuggable);
 #if 0
 static void on_gswat_window_source_file_loaded(GeditDocument *document,
                                                const GError  *error,
@@ -289,7 +290,7 @@ gswat_window_init(GSwatWindow *self)
     create_sourceview(self);
 
 
-    set_toolbar_state(self, GSWAT_DEBUGGER_NOT_RUNNING);
+    set_toolbar_state(self, GSWAT_DEBUGGABLE_NOT_RUNNING);
 
 
     /* Setup the stack view */
@@ -458,9 +459,9 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
 {
     GList *tabs, *tmp;
 
-    if(window->priv->debugger)
+    if(window->priv->debuggable)
     {
-        g_object_unref(window->priv->debugger);
+        g_object_unref(window->priv->debuggable);
 
         tabs = gtk_container_get_children(GTK_CONTAINER(window->priv->notebook));
         for(tmp=tabs;tmp!=NULL;tmp=tmp->next)
@@ -470,7 +471,8 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
         g_list_free(tabs);
     }
 
-    window->priv->debugger = gswat_debugger_new(session);
+    window->priv->debuggable 
+        = GSWAT_DEBUGGABLE(gswat_gdb_debugger_new(session));
 
     /* currently we don't require a handle to the session
      * from this class..
@@ -478,24 +480,24 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
     g_object_unref(session);
 
 
-    g_signal_connect(G_OBJECT(window->priv->debugger),
+    g_signal_connect(G_OBJECT(window->priv->debuggable),
                      "notify::state",
-                     G_CALLBACK(on_gswat_debugger_state_notify),
+                     G_CALLBACK(on_gswat_debuggable_state_notify),
                      window);
 
-    g_signal_connect(G_OBJECT(window->priv->debugger),
+    g_signal_connect(G_OBJECT(window->priv->debuggable),
                      "notify::stack",
-                     G_CALLBACK(on_gswat_debugger_stack_notify),
+                     G_CALLBACK(on_gswat_debuggable_stack_notify),
                      window);
 
-    g_signal_connect(G_OBJECT(window->priv->debugger),
+    g_signal_connect(G_OBJECT(window->priv->debuggable),
                      "notify::source-uri",
-                     G_CALLBACK(on_gswat_debugger_source_uri_notify),
+                     G_CALLBACK(on_gswat_debuggable_source_uri_notify),
                      window);
 
-    g_signal_connect(G_OBJECT(window->priv->debugger),
+    g_signal_connect(G_OBJECT(window->priv->debuggable),
                      "notify::source-line",
-                     G_CALLBACK(on_gswat_debugger_source_line_notify),
+                     G_CALLBACK(on_gswat_debuggable_source_line_notify),
                      window);
 #if 0
     g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
@@ -504,7 +506,7 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
                     NULL);
 #endif
 
-    gswat_debugger_target_connect(window->priv->debugger);
+    gswat_debuggable_target_connect(window->priv->debuggable);
 }
 
 
@@ -513,8 +515,8 @@ set_toolbar_state(GSwatWindow *self, guint state)
 {
     switch(state)
     {
-        case GSWAT_DEBUGGER_RUNNING:
-            g_message("******** setting toolbar state GSWAT_DEBUGGER_RUNNING");
+        case GSWAT_DEBUGGABLE_RUNNING:
+            g_message("******** setting toolbar state GSWAT_DEBUGGABLE_RUNNING");
             gtk_widget_set_sensitive(self->priv->step_button, FALSE);
             gtk_widget_set_sensitive(self->priv->next_button, FALSE);
             gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
@@ -523,8 +525,8 @@ set_toolbar_state(GSwatWindow *self, guint state)
             gtk_widget_set_sensitive(self->priv->restart_button, TRUE);
             gtk_widget_set_sensitive(self->priv->add_break_button, FALSE);
             break;
-        case GSWAT_DEBUGGER_NOT_RUNNING:
-            g_message("******** setting toolbar state GSWAT_DEBUGGER_NOT_RUNNING");
+        case GSWAT_DEBUGGABLE_NOT_RUNNING:
+            g_message("******** setting toolbar state GSWAT_DEBUGGABLE_NOT_RUNNING");
             gtk_widget_set_sensitive(self->priv->step_button, FALSE);
             gtk_widget_set_sensitive(self->priv->next_button, FALSE);
             gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
@@ -532,8 +534,8 @@ set_toolbar_state(GSwatWindow *self, guint state)
             gtk_widget_set_sensitive(self->priv->break_button, FALSE);
             gtk_widget_set_sensitive(self->priv->add_break_button, TRUE);
             break;
-        case GSWAT_DEBUGGER_INTERRUPTED:
-            g_message("******** setting toolbar state GSWAT_DEBUGGER_INTERRUPTED");
+        case GSWAT_DEBUGGABLE_INTERRUPTED:
+            g_message("******** setting toolbar state GSWAT_DEBUGGABLE_INTERRUPTED");
             gtk_widget_set_sensitive(self->priv->step_button, TRUE);
             gtk_widget_set_sensitive(self->priv->next_button, TRUE);
             gtk_widget_set_sensitive(self->priv->continue_button, TRUE);
@@ -543,7 +545,7 @@ set_toolbar_state(GSwatWindow *self, guint state)
             gtk_widget_set_sensitive(self->priv->add_break_button, TRUE);
             break;
         default:
-            g_warning("unexpected debugger state");
+            g_warning("unexpected debuggable state");
             gtk_widget_set_sensitive(self->priv->step_button, FALSE);
             gtk_widget_set_sensitive(self->priv->next_button, FALSE);
             gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
@@ -559,17 +561,17 @@ set_toolbar_state(GSwatWindow *self, guint state)
 
 
 static void
-on_gswat_debugger_state_notify(GObject *object,
+on_gswat_debuggable_state_notify(GObject *object,
                                GParamSpec *property,
                                gpointer data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
-    GSwatDebugger *debugger = GSWAT_DEBUGGER(object);
+    GSwatDebuggable *debuggable = GSWAT_DEBUGGABLE(object);
     guint state;
 
     update_variable_view(self);
 
-    state = gswat_debugger_get_state(debugger);
+    state = gswat_debuggable_get_state(debuggable);
 
     set_toolbar_state(self, state);
 
@@ -578,21 +580,21 @@ on_gswat_debugger_state_notify(GObject *object,
 
 
 static void
-on_gswat_debugger_stack_notify(GObject *object,
+on_gswat_debuggable_stack_notify(GObject *object,
                                GParamSpec *property,
                                gpointer data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
-    GSwatDebugger *debugger = GSWAT_DEBUGGER(object);
+    GSwatDebuggable *debuggable = GSWAT_DEBUGGABLE(object);
     GList *stack, *tmp, *tmp2;
-    GSwatDebuggerFrameArgument *arg;
+    GSwatDebuggableFrameArgument *arg;
     GladeXML *xml;
     GtkTreeView *stack_widget=NULL;
     GtkListStore *list_store;
     GtkTreeIter iter;
     GList *disp_stack = NULL;
 
-    stack = gswat_debugger_get_stack(debugger);
+    stack = gswat_debuggable_get_stack(debuggable);
 
     /* TODO look up the stack tree view widget */
     xml = self->priv->xml;
@@ -608,11 +610,11 @@ on_gswat_debugger_stack_notify(GObject *object,
     /* create new display strings for the stack */
     for(tmp=stack; tmp!=NULL; tmp=tmp->next)
     {
-        GSwatDebuggerFrame *frame;
+        GSwatDebuggableFrame *frame;
         GSwatWindowFrame *display_frame = g_new0(GSwatWindowFrame, 1);
         GString *display = g_string_new("");
 
-        frame = (GSwatDebuggerFrame *)tmp->data;
+        frame = (GSwatDebuggableFrame *)tmp->data;
 
         /* note: at this point the list is in reverse,
          * so the last in the list is our current frame
@@ -630,7 +632,7 @@ on_gswat_debugger_stack_notify(GObject *object,
 
         for(tmp2 = frame->arguments; tmp2!=NULL; tmp2=tmp2->next)
         {
-            arg = (GSwatDebuggerFrameArgument *)tmp2->data;
+            arg = (GSwatDebuggableFrameArgument *)tmp2->data;
 
 
             display = g_string_append(display, arg->name);
@@ -686,7 +688,7 @@ on_gswat_debugger_stack_notify(GObject *object,
         g_string_free(display_frame->display, TRUE);
         for(tmp2=display_frame->dbg_frame->arguments; tmp2!=NULL; tmp2=tmp2->next)
         {   
-            arg = (GSwatDebuggerFrameArgument *)tmp2->data;
+            arg = (GSwatDebuggableFrameArgument *)tmp2->data;
 
             g_free(arg->name);
             g_free(arg->value);
@@ -842,13 +844,13 @@ static gboolean
 update_variable_view(gpointer data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
-    GSwatDebugger *debugger = self->priv->debugger;
+    GSwatDebuggable *debuggable = self->priv->debuggable;
     GList *variables, *tmp;
     GtkTreeStore *variable_store;
     GtkTreeRowReference *row_ref;
     GtkTreePath *path;
 
-    variables = gswat_debugger_get_locals_list(debugger);
+    variables = gswat_debuggable_get_locals_list(debuggable);
     variable_store = self->priv->variable_store;
 
     /* iterate the current tree store and see if there
@@ -949,23 +951,23 @@ on_gswat_window_source_file_loaded(GeditDocument *document,
 
 
 static void
-on_gswat_debugger_source_uri_notify(GObject *debugger,
+on_gswat_debuggable_source_uri_notify(GObject *debuggable,
                                     GParamSpec *property,
                                     gpointer data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
-    update_source_view(self, GSWAT_DEBUGGER(debugger));
+    update_source_view(self, GSWAT_DEBUGGABLE(debuggable));
 }
 
 
 
 static void
-on_gswat_debugger_source_line_notify(GObject *debugger,
+on_gswat_debuggable_source_line_notify(GObject *debuggable,
                                      GParamSpec *property,
                                      gpointer data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
-    update_source_view(self, GSWAT_DEBUGGER(debugger));
+    update_source_view(self, GSWAT_DEBUGGABLE(debuggable));
 }
 
 /* FIXME, this seems fairly heavy weight to happen every
@@ -973,7 +975,7 @@ on_gswat_debugger_source_line_notify(GObject *debugger,
  */
 static void
 update_source_view(GSwatWindow *self,
-                   GSwatDebugger *debugger)
+                   GSwatDebuggable *debuggable)
 {
     gchar           *file_uri;
     gint            line;
@@ -984,8 +986,8 @@ update_source_view(GSwatWindow *self,
     GtkTextIter     iter;
     GtkWidget       *new_tab;
 
-    file_uri = gswat_debugger_get_source_uri(debugger);
-    line = gswat_debugger_get_source_line(debugger);
+    file_uri = gswat_debuggable_get_source_uri(debuggable);
+    line = gswat_debuggable_get_source_line(debuggable);
 
     g_message("gswat-window update_source_view file=%s, line=%d", file_uri, line);
 
@@ -1226,7 +1228,7 @@ on_gswat_window_step_button_clicked(GtkToolButton   *toolbutton,
                                     gpointer         data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
-    gswat_debugger_step_into(self->priv->debugger);
+    gswat_debuggable_step_into(self->priv->debuggable);
 }
 
 
@@ -1235,7 +1237,7 @@ on_gswat_window_next_button_clicked(GtkToolButton   *toolbutton,
                                     gpointer         data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
-    gswat_debugger_next(self->priv->debugger);
+    gswat_debuggable_next(self->priv->debuggable);
 }
 
 
@@ -1244,7 +1246,7 @@ on_gswat_window_break_button_clicked(GtkToolButton   *toolbutton,
                                      gpointer         data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
-    gswat_debugger_interrupt(self->priv->debugger);
+    gswat_debuggable_interrupt(self->priv->debuggable);
 }
 
 void
@@ -1252,7 +1254,7 @@ on_gswat_window_continue_button_clicked  (GtkToolButton   *toolbutton,
                                           gpointer         data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
-    gswat_debugger_continue(self->priv->debugger);
+    gswat_debuggable_continue(self->priv->debuggable);
 }
 
 
@@ -1261,7 +1263,7 @@ on_gswat_window_finish_button_clicked(GtkToolButton   *toolbutton,
                                       gpointer         data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
-    gswat_debugger_finish(self->priv->debugger);
+    gswat_debuggable_finish(self->priv->debuggable);
 }
 
 
@@ -1270,14 +1272,14 @@ on_gswat_window_run_button_clicked(GtkToolButton   *toolbutton,
                                    gpointer         data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
-    gswat_debugger_restart(self->priv->debugger);
+    gswat_debuggable_restart(self->priv->debuggable);
 }
 
 
 static void
 update_line_highlights(GSwatWindow *self)
 {
-    /* request all debugger breakpoints */
+    /* request all debuggable breakpoints */
     GList *breakpoints;
     GList *tabs;
     GList *tmp, *tmp2;
@@ -1294,7 +1296,7 @@ update_line_highlights(GSwatWindow *self)
      * view.
      */
 
-    breakpoints = gswat_debugger_get_breakpoints(self->priv->debugger);
+    breakpoints = gswat_debuggable_get_breakpoints(self->priv->debuggable);
 
     tabs = gtk_container_get_children(GTK_CONTAINER(self->priv->notebook));
     for(tmp=tabs;tmp!=NULL;tmp=tmp->next)
@@ -1313,18 +1315,17 @@ update_line_highlights(GSwatWindow *self)
         current_gswat_view = gswat_tab_get_view(current_tab);
 
 
-        current_doc_uri = gedit_document_get_uri(
-                                                 gswat_view_get_document(current_gswat_view)
-                                                );
+        current_doc_uri 
+            = gedit_document_get_uri(gswat_view_get_document(current_gswat_view));
 
         breakpoint_color = gedit_prefs_manager_get_breakpoint_bg_color();
 
         /* generate a list of breakpount lines to highlight in this view */
         for(tmp2=breakpoints; tmp2 != NULL; tmp2=tmp2->next)
         {
-            GSwatDebuggerBreakpoint *current_breakpoint;
+            GSwatDebuggableBreakpoint *current_breakpoint;
 
-            current_breakpoint = (GSwatDebuggerBreakpoint *)tmp2->data;
+            current_breakpoint = (GSwatDebuggableBreakpoint *)tmp2->data;
             if(strcmp(current_breakpoint->source_uri, current_doc_uri)==0)
             {
                 highlight = g_new(GSwatViewLineHighlight, 1);
@@ -1335,11 +1336,11 @@ update_line_highlights(GSwatWindow *self)
         }
 
         /* add a line to highlight the current line */
-        if(strcmp(gswat_debugger_get_source_uri(self->priv->debugger),
+        if(strcmp(gswat_debuggable_get_source_uri(self->priv->debuggable),
                   current_doc_uri) == 0)
         {
             highlight = g_new(GSwatViewLineHighlight, 1);
-            highlight->line = gswat_debugger_get_source_line(self->priv->debugger);
+            highlight->line = gswat_debuggable_get_source_line(self->priv->debuggable);
             highlight->color = gedit_prefs_manager_get_current_line_bg_color();
             /* note we currently need to append here to ensure
              * the current line gets rendered last */
@@ -1381,14 +1382,13 @@ on_gswat_window_add_break_button_clicked(GtkToolButton   *toolbutton,
     current_document = gswat_view_get_document(source_view);
     uri = gedit_document_get_uri(current_document); 
 
-    gtk_text_buffer_get_iter_at_mark(
-                                     source_buffer, 
+    gtk_text_buffer_get_iter_at_mark(source_buffer, 
                                      &cur, 
                                      gtk_text_buffer_get_insert(source_buffer)
                                     );
     line = gtk_text_iter_get_line(&cur);
 
-    gswat_debugger_request_line_breakpoint(self->priv->debugger, uri, line + 1);
+    gswat_debuggable_request_line_breakpoint(self->priv->debuggable, uri, line + 1);
 
     /* FIXME this should be triggered by a signal */
     update_line_highlights(self);

@@ -29,7 +29,6 @@
 
 #include "gedit-view.h"
 #include "gedit-document.h"
-#include "gswat-debugger.h"
 
 G_BEGIN_DECLS
 
