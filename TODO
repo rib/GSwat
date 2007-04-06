@@ -2,22 +2,27 @@ todo
 ----
 
 engineer a nicer object/interface model
-- rename  gswat-main-window.c -> gswat-window.c
-- create a debuggable interface
-- create a variable interface
-- create a gdb debugger class, implementing the debuggable interface
-- create a gdb variable obj class, implementing the variable interface
 - create a tabable interface
 - enhance the source view class to implement the tabable interface
     - integrate code from gswat-tab.c into the source view as appropriate
-
+- convert all my code to use my object/interface templates
+ - todo:
+  - gswat-window.c
+  - gswat-view.c
+  - gswat-notebook.c
+  - gswat-tab.c
+  - gswat-session.c
+- remove sexyicon code - I remember someone complaining that gedit was 
+misusing this, so we shouln't copy them!
+  
 
 fix rendering - on-going issue
-hook up preferences dialogs
 tidy up menus so they work
 make sure the terminal always closes when gswat closes!
-find a way to embed the terminal in a sub window like anjuta does
-some simple way to see variable values, e.g. mouse hover bubbles
+Perhaps add mouse over variable bubbles to display their value
+ - also allow highlighting expressions
+ - Consider not using bubbles though since they get in the way
+   of code.
 
 1.0
 
