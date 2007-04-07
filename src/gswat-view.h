@@ -2,6 +2,7 @@
  * <preamble>
  * gswat - A graphical program debugger for Gnome
  * Copyright (C) 2006  Robert Bragg
+ * </preamble>
  * 
  * <license>
  * This program is free software; you can redistribute it and/or
@@ -19,11 +20,10 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  * </license>
  *
- * </preamble>
  */
 
-#ifndef __GSWAT_VIEW_H__
-#define __GSWAT_VIEW_H__
+#ifndef GSWAT_VIEW_H
+#define GSWAT_VIEW_H
 
 #include <gtk/gtk.h>
 
@@ -32,43 +32,36 @@
 
 G_BEGIN_DECLS
 
-/*
- * Type checking and casting macros
- */
-#define GSWAT_TYPE_VIEW            (gswat_view_get_type ())
-#define GSWAT_VIEW(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj), GSWAT_TYPE_VIEW, GSwatView))
-#define GSWAT_VIEW_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass), GSWAT_TYPE_VIEW, GSwatViewClass))
-#define GSWAT_IS_VIEW(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj), GSWAT_TYPE_VIEW))
+#define GSWAT_VIEW(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), GSWAT_TYPE_VIEW, GSwatView))
+#define GSWAT_TYPE_VIEW            (gswat_view_get_type())
+#define GSWAT_VIEW_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), GSWAT_TYPE_VIEW, GSwatViewClass))
+#define GSWAT_IS_VIEW(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GSWAT_TYPE_VIEW))
 #define GSWAT_IS_VIEW_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), GSWAT_TYPE_VIEW))
-#define GSWAT_VIEW_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj), GSWAT_TYPE_VIEW, GSwatViewClass))
+#define GSWAT_VIEW_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GSWAT_TYPE_VIEW, GSwatViewClass))
 
-/* Private structure type */
-typedef struct _GSwatViewPrivate	GSwatViewPrivate;
+typedef struct _GSwatView        GSwatView;
+typedef struct _GSwatViewClass   GSwatViewClass;
+typedef struct _GSwatViewPrivate GSwatViewPrivate;
 
-/*
- * Main object structure
- */
-typedef struct _GSwatView		GSwatView;
- 
 struct _GSwatView
 {
-	GeditView view;
-	
+    /* add your parent type here */
+    GeditView parent;
+
+    /* add pointers to new members here */
+    
 	/*< private > */
 	GSwatViewPrivate *priv;
 };
 
-/*
- * Class definition
- */
-typedef struct _GSwatViewClass		GSwatViewClass;
- 
 struct _GSwatViewClass
 {
-	GeditViewClass parent_class;
-	
-};
+    /* add your parent class here */
+    GeditViewClass parent_class;
 
+    /* add signals here */
+    //void (* signal) (GSwatView *object);
+};
 
 typedef struct
 {
@@ -76,21 +69,16 @@ typedef struct
     gint line;
 }GSwatViewLineHighlight;
 
+GType gswat_view_get_type(void);
 
-/*
- * Public methods
- */
-GtkType	    gswat_view_get_type     	(void) G_GNUC_CONST;
+/* add additional methods here */
+GtkWidget *gswat_view_new(GeditDocument *doc);
+void gswat_view_set_line_highlights(GSwatView *self,
+                                    const GList *line_highlights);
+GeditDocument *gswat_view_get_document(GSwatView *self);
 
-GtkWidget	*gswat_view_new(GeditDocument *doc);
-
-void        gswat_view_set_line_highlights(GSwatView *view, const GList *line_hilights);
-void        gswat_view_add_breakpoint(GSwatView *view, gint line);
-void        gswat_view_remove_breakpoint(GSwatView *view, gint line);
-
-GeditDocument *gswat_view_get_document(GSwatView *view);
 
 G_END_DECLS
 
-#endif /* __GSWAT_VIEW_H__ */
+#endif /* GSWAT_VIEW_H */
 
