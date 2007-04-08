@@ -134,6 +134,7 @@ gswat_view_get_type(void) /* Typechecking */
     return self_type;
 }
 
+
 static void
 gswat_view_class_init(GSwatViewClass *klass) /* Class Initialization */
 {   
@@ -343,7 +344,6 @@ http://developer.gnome.org/arch/doc/authors.html
 
 
 
-
 static gboolean
 gswat_view_expose(GtkWidget *widget,
                   GdkEventExpose *event)
@@ -427,6 +427,7 @@ parent_expose:
     //return (* GTK_WIDGET_CLASS (gswat_view_parent_class)->expose_event)(widget, event);
 
 }
+
 
 void
 gswat_view_set_line_highlights(GSwatView *self,

@@ -24,21 +24,6 @@
 
 #include "my-object.h"
 
-/* Function definitions */
-static void my_object_class_init(MyObjectClass *klass);
-static void my_object_get_property(GObject *object,
-                                   guint id,
-                                   GValue *value,
-                                   GParamSpec *pspec);
-static void my_object_set_property(GObject *object,
-                                   guint property_id,
-                                   const GValue *value,
-                                   GParamSpec *pspec);
-//static void my_object_mydoable_interface_init(gpointer interface,
-//                                             gpointer data);
-static void my_object_init(MyObject *self);
-static void my_object_finalize(GObject *self);
-
 /* Macros and defines */
 #define MY_OBJECT_GET_PRIVATE(object)(G_TYPE_INSTANCE_GET_PRIVATE ((object), MY_TYPE_OBJECT, MyObjectPrivate))
 
@@ -62,6 +47,23 @@ struct _MyObjectPrivate
 {
 #error template_fixme
 };
+
+
+/* Function definitions */
+static void my_object_class_init(MyObjectClass *klass);
+static void my_object_get_property(GObject *object,
+                                   guint id,
+                                   GValue *value,
+                                   GParamSpec *pspec);
+static void my_object_set_property(GObject *object,
+                                   guint property_id,
+                                   const GValue *value,
+                                   GParamSpec *pspec);
+//static void my_object_mydoable_interface_init(gpointer interface,
+//                                             gpointer data);
+static void my_object_init(MyObject *self);
+static void my_object_finalize(GObject *self);
+
 
 /* Variables */
 static GObjectClass *parent_class = NULL;
@@ -197,7 +199,7 @@ my_object_get_property(GObject *object,
             g_value_set_int(value, self->priv->property);
             g_value_set_uint(value, self->priv->property);
             g_value_set_boolean(value, self->priv->property);
-            /* don't forget that this will dup the string... */
+            /* don't forget that this will dup the string for you: */
             g_value_set_string(value, self->priv->property);
             g_value_set_object(value, self->priv->property);
             g_value_set_pointer(value, self->priv->property);
@@ -215,20 +217,18 @@ my_object_set_property(GObject *object,
                        const GValue *value,
                        GParamSpec *pspec)
 {   
+    //MyObject* self = MY_OBJECT(object);
+
     switch(property_id)
     {
 #if 0 /* template code */
         case PROP_NAME:
-            self->priv->property = g_value_get_int(value);
-            self->priv->property = g_value_get_uint(value);
-            self->priv->property = g_value_get_boolean(value);
-            g_free(self->priv->property);
-            self->priv->property = g_value_dup_string(value);
-            if(self->priv->property)
-                g_object_unref(self->priv->property);
-            self->priv->property = g_value_dup_object(value);
-            /* g_free(self->priv->property)? */
-            self->priv->property = g_value_get_pointer(value);
+            my_object_set_property(self, g_value_get_int(value));
+            my_object_set_property(self, g_value_get_uint(value));
+            my_object_set_property(self, g_value_get_boolean(value));
+            my_object_set_property(self, g_value_get_string(value));
+            my_object_set_property(self, g_value_get_object(value));
+            my_object_set_property(self, g_value_get_pointer(value));
             break;
 #endif
         default:
@@ -292,5 +292,53 @@ my_object_finalize(GObject *object)
 #if 0
 For more gtk-doc notes, see:
 http://developer.gnome.org/arch/doc/authors.html
+#endif
+
+
+#if 0 // getter/setter templates
+/**
+ * my_object_get_PROPERTY:
+ * @self:  A MyObject.
+ *
+ * Fetches the PROPERTY of the MyObject. FIXME, add more info!
+ *
+ * Returns: The value of PROPERTY. FIXME, add more info!
+ */
+PropType
+my_object_get_PROPERTY(MyObject *self)
+{
+    g_return_val_if_fail(MY_IS_OBJECT(self), /* FIXME */);
+
+    //return self->priv->PROPERTY;
+    //return g_strdup(self->priv->PROPERTY);
+    //return g_object_ref(self->priv->PROPERTY);
+}
+
+/**
+ * my_object_set_PROPERTY:
+ * @self:  A MyObject.
+ * @property:  The value to set. FIXME, add more info!
+ *
+ * Sets this properties value.
+ *
+ * This will also clear the properties previous value.
+ */
+void
+my_object_set_PROPERTY(MyObject *self, PropType PROPERTY)
+{
+    g_return_if_fail(MY_IS_OBJECT(self));
+
+    //if(self->priv->PROPERTY == PROPERTY)
+    //if(self->priv->PROPERTY == NULL
+    //   || strcmp(self->priv->PROPERTY, PROPERTY) != 0)
+    {
+    //    self->priv->PROPERTY = PROPERTY;
+    //    g_free(self->priv->PROPERTY);
+    //    self->priv->PROPERTY = g_strdup(PROPERTY);
+    //    g_object_unref(self->priv->PROPERTY);
+    //    self->priv->PROPERTY = g_object_ref(PROPERTY);
+    //    g_object_notify(G_OBJECT(self), "PROPERTY");
+    }
+}
 #endif
 

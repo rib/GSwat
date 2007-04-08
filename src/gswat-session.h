@@ -2,6 +2,7 @@
  * <preamble>
  * gswat - A graphical program debugger for Gnome
  * Copyright (C) 2006  Robert Bragg
+ * </preamble>
  * 
  * <license>
  * This program is free software; you can redistribute it and/or
@@ -19,36 +20,48 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  * </license>
  *
- * </preamble>
  */
-
 
 #ifndef GSWAT_SESSION_H
 #define GSWAT_SESSION_H
 
+#include <glib.h>
 #include <glib-object.h>
+/* include your parent object here */
 
 G_BEGIN_DECLS
 
+#define GSWAT_SESSION(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), GSWAT_TYPE_SESSION, GSwatSession))
+#define GSWAT_TYPE_SESSION            (gswat_session_get_type())
+#define GSWAT_SESSION_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), GSWAT_TYPE_SESSION, GSwatSessionClass))
+#define GSWAT_IS_SESSION(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GSWAT_TYPE_SESSION))
+#define GSWAT_IS_SESSION_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), GSWAT_TYPE_SESSION))
+#define GSWAT_SESSION_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GSWAT_TYPE_SESSION, GSwatSessionClass))
 
-#define GSWAT_TYPE_SESSION         (gswat_session_get_type())
-#define GSWAT_SESSION(i)           (G_TYPE_CHECK_INSTANCE_CAST((i), GSWAT_TYPE_SESSION, GSwatSession))
-#define GSWAT_SESSION_CLASS(c)     (G_TYPE_CHECK_CLASS_CAST((c), GSWAT_TYPE_SESSION, GSwatSessionClass))
-#define GSWAT_IS_SESSION(i)        (G_TYPE_CHECK_INSTANCE_TYPE((i), GSWAT_TYPE_SESSION))
-#define GSWAT_IS_SESSION_CLASS(c)  (G_TYPE_CHECK_CLASS_TYPE((c), GSWAT_TYPE_SESSION))
-#define GSWAT_SESSION_GET_CLASS(i) (G_TYPE_INSTANCE_GET_CLASS((i), GSWAT_TYPE_SESSION, GSwatSessionClass))
+typedef struct _GSwatSession        GSwatSession;
+typedef struct _GSwatSessionClass   GSwatSessionClass;
+typedef struct _GSwatSessionPrivate GSwatSessionPrivate;
 
-GType gswat_session_get_type(void);
+struct _GSwatSession
+{
+    /* add your parent type here */
+    GObject parent;
 
+    /* add pointers to new members here */
+    
+	/*< private > */
+	GSwatSessionPrivate *priv;
+};
 
+struct _GSwatSessionClass
+{
+    /* add your parent class here */
+    GObjectClass parent_class;
 
-/* TODO 
-
-void	    gswat_session_load(GSwatSession* self);
-void	    gswat_session_save(GSwatSession* self);
-*/
-
-
+    /* add signals here */
+	void (* edit_done)		(GSwatSession *session);
+	void (* edit_abort)		(GSwatSession *session);
+};
 
 /* Session types */
 enum {
@@ -58,39 +71,16 @@ enum {
     GSWAT_SESSION_TYPE_REMOTE_PID
 };
 
+GType gswat_session_get_type(void);
 
-
-typedef struct _GSwatSession   GSwatSession;
-
-struct _GSwatSession {
-	GObject base_instance;
-	struct GSwatSessionPrivate* priv;
-};
-
-
-
-
-typedef struct _GSwatSessionClass           GSwatSessionClass;
-
-struct _GSwatSessionClass
-{
-	GObjectClass parent_class;
-
-	/* Signals */ 
-
-	void (* edit_done)		(GSwatSession *session);
-	void (* edit_abort)		(GSwatSession *session);
-};
-
-
-
-
-/* Public methods */
-
-GSwatSession* gswat_session_new(void);
+/* add additional methods here */
+GSwatSession *gswat_session_new(void);
 
 void gswat_session_edit(GSwatSession *session);
-
+gchar *gswat_session_get_target(GSwatSession *self);
+void gswat_session_set_target(GSwatSession *self, const gchar *target);
+gchar *gswat_session_get_name(GSwatSession *self);
+void gswat_session_set_name(GSwatSession* self, const char *name);
 gchar *gswat_session_get_command(GSwatSession* self, gint *argc, gchar ***argv);
 void gswat_session_set_command(GSwatSession* self, const gchar *command);
 gint gswat_session_get_pid(GSwatSession* self);
@@ -101,5 +91,5 @@ void gswat_session_set_working_dir(GSwatSession* self, const gchar *working_dir)
 
 G_END_DECLS
 
-#endif /* !GSWAT_SESSION_H */
+#endif /* GSWAT_SESSION_H */
 

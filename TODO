@@ -6,13 +6,11 @@ engineer a nicer object/interface model
 - enhance the source view class to implement the tabable interface
     - integrate code from gswat-tab.c into the source view as appropriate
 - convert all my code to use my object/interface templates
- - todo:
-  - gswat-view.c
+ - still todo:
   - gswat-notebook.c
   - gswat-tab.c
-  - gswat-session.c
 - remove sexyicon code - I remember someone complaining that gedit was 
-misusing this, so we shouln't copy them!
+misusing this, so we shouldn't copy them!
   
 
 fix rendering - on-going issue
