@@ -11,6 +11,7 @@
 #include <glib/gi18n.h>
 #include <libgnomevfs/gnome-vfs-utils.h>
 
+#include "gswat-utils.h"
 #include "gswat-session.h"
 #include "gswat-gdbmi.h"
 #include "gswat-debuggable.h"
@@ -220,7 +221,7 @@ gswat_gdb_debugger_class_init(GSwatGdbDebuggerClass *klass) /* Class Initializat
                                      /* nothing extra */
 #endif
                                      GSWAT_PARAM_READABLE /* flags */
-                                     GSWAT_PARAM_WRITEABLE /* flags */
+                                     GSWAT_PARAM_WRITABLE /* flags */
                                      GSWAT_PARAM_READWRITE /* flags */
                                      | G_PARAM_CONSTRUCT
                                      | G_PARAM_CONSTRUCT_ONLY
@@ -229,6 +230,9 @@ gswat_gdb_debugger_class_init(GSwatGdbDebuggerClass *klass) /* Class Initializat
                                     PROP_NAME,
                                     new_param);
 #endif
+
+//FIXME move most of these up into the debuggable interface
+
     new_param = g_param_spec_uint("state",
                                   _("The Running State"),
                                   _("The State of the debugger"

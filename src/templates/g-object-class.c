@@ -244,8 +244,8 @@ static void
 my_object_mydoable_interface_init(gpointer interface,
                                   gpointer data)
 {
-    MyDoableClass *mydoable = interface;
-    g_assert(G_TYPE_FROM_INTERFACE(mydoable) = MY_TYPE_MYDOABLE);
+    MyDoableIface *mydoable = interface;
+    g_assert(G_TYPE_FROM_INTERFACE(mydoable) == MY_TYPE_MYDOABLE);
 
     mydoable->method1 = my_object_method1;
     mydoable->method2 = my_object_method2;
@@ -257,7 +257,7 @@ static void
 my_object_init(MyObject *self)
 {
     self->priv = MY_OBJECT_GET_PRIVATE(self);
-    /* populate your widget here */
+    /* populate your object here */
 }
 
 /* Instantiation wrapper */
@@ -271,6 +271,8 @@ my_object_new(void)
 void
 my_object_finalize(GObject *object)
 {
+    //MyObject *self = MY_OBJECT(object);
+
     /* destruct your object here */
     G_OBJECT_CLASS(parent_class)->finalize(object);
 }

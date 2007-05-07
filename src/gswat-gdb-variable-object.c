@@ -26,6 +26,7 @@
 
 #include <glib/gi18n.h>
 
+#include "gswat-utils.h"
 #include "gswat-gdb-debugger.h"
 #include "gswat-gdb-variable-object.h"
 
@@ -192,7 +193,7 @@ gswat_gdb_variable_object_class_init(GSwatGdbVariableObjectClass *klass)
                                      /* nothing extra */
 #endif
                                      GSWAT_PARAM_READABLE /* flags */
-                                     GSWAT_PARAM_WRITEABLE /* flags */
+                                     GSWAT_PARAM_WRITABLE /* flags */
                                      GSWAT_PARAM_READWRITE /* flags */
                                      | G_PARAM_CONSTRUCT
                                      | G_PARAM_CONSTRUCT_ONLY

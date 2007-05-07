@@ -51,7 +51,7 @@ my_doable_get_type(void)
     if (!self_type) {
         static const GTypeInfo interface_info = {
             sizeof (MyDoableIface),
-            (GClassInitFunc)my_doable_base_init,
+            (GBaseInitFunc)my_doable_base_init,
             (GBaseFinalizeFunc)NULL,//my_doable_base_finalize
         };
 
@@ -70,6 +70,7 @@ static void
 my_doable_base_init(MyDoableIface *interface)
 {
     my_doable_base_init_count++;
+    //GParamSpec *new_param;
 
     if(my_doable_base_init_count == 1) {
 
@@ -89,6 +90,38 @@ my_doable_base_init(MyDoableIface *interface)
                          /* vararg, list of param types */
                         );
 #endif
+        
+        /* register properties */
+#if 0
+        //new_param = g_param_spec_int("name", /* name */
+        //new_param = g_param_spec_uint("name", /* name */
+        //new_param = g_param_spec_boolean("name", /* name */
+        //new_param = g_param_spec_object("name", /* name */
+        new_param = g_param_spec_pointer("name", /* name */
+                                         "Name", /* nick name */
+                                         "Name", /* description */
+#if INT/UINT/CHAR/LONG/FLOAT...
+                                         10, /* minimum */
+                                         100, /* maximum */
+                                         0, /* default */
+#elif BOOLEAN
+                                         FALSE, /* default */
+#elif STRING
+                                         NULL, /* default */
+#elif OBJECT
+                                         MY_TYPE_PARAM_OBJ, /* GType */
+#elif POINTER
+                                         /* nothing extra */
+#endif
+                                         MY_PARAM_READABLE /* flags */
+                                         MY_PARAM_WRITEABLE /* flags */
+                                         MY_PARAM_READWRITE /* flags */
+                                         | G_PARAM_CONSTRUCT
+                                         | G_PARAM_CONSTRUCT_ONLY
+                                         );
+        g_object_interface_install_property(interface, new_param);
+#endif
+
     }
 }
 

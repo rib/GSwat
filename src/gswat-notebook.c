@@ -1,1100 +1,740 @@
 /*
- * gedit-notebook.c
- * This file is part of gedit
- *
- * Copyright (C) 2005 - Paolo Maggi 
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
+ * <preamble>
+ * gswat - A graphical program debugger for Gnome
+ * Copyright (C) 2006  Robert Bragg
+ * </preamble>
+ * 
+ * <license>
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
+ * 
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, 
- * Boston, MA 02111-1307, USA.
- */
- 
-/*
- * Modified by the gedit Team, 2005. See the AUTHORS file for a 
- * list of people on the gedit Team.  
- * See the ChangeLog files for a list of changes. 
- */
-
-/* This file is a modified version of the epiphany file ephy-notebook.c
- * Here the relevant copyright:
- *
- *  Copyright (C) 2002 Christophe Fergeau
- *  Copyright (C) 2003 Marco Pesenti Gritti
- *  Copyright (C) 2003, 2004 Christian Persch
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ * </license>
  *
  */
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <glib-object.h>
+#include <gtk/gtk.h>
 #include <glib/gi18n.h>
-#include <gtk/gtkeventbox.h>
-#include <gtk/gtknotebook.h>
-#include <gtk/gtkhbox.h>
-#include <gtk/gtklabel.h>
-#include <gtk/gtkwidget.h>
-#include <gtk/gtkmain.h>
-#include <gtk/gtkstock.h>
-#include <gtk/gtkimage.h>
-#include <gtk/gtkbutton.h>
-#include <gtk/gtkiconfactory.h>
 
-#include "gswat-notebook.h"
-#include "gswat-tab.h"
-#include "gedit-marshal.h"
-//#include "gedit-window.h"
 #include "gedit-tooltips.h"
 #include "gedit-spinner.h"
 
-#define AFTER_ALL_TABS -1
-#define NOT_IN_APP_WINDOWS -2
+#include "gswat-utils.h"
+#include "gswat-tabable.h"
+#include "gswat-notebook.h"
 
+/* Macros and defines */
 #define GSWAT_NOTEBOOK_GET_PRIVATE(object)(G_TYPE_INSTANCE_GET_PRIVATE ((object), GSWAT_TYPE_NOTEBOOK, GSwatNotebookPrivate))
+
+/* Enums/Typedefs */
+/* add your signals here */
+enum {
+    TAB_ADDED,
+    TAB_CLOSE_REQUEST,
+    LAST_SIGNAL
+};
+
+#if 0
+enum {
+    PROP_0,
+    PROP_NAME,
+};
+#endif
 
 struct _GSwatNotebookPrivate
 {
-	GList         *focused_pages;
-	GeditTooltips *title_tips;
-	gulong         motion_notify_handler_id;
-	gint           x_start;
-	gint           y_start;
-	gint           drag_in_progress : 1;
-	gint	       always_show_tabs : 1;
-	gint           close_buttons_sensitive : 1;
-	gint           tab_drag_and_drop_enabled : 1;
+	GeditTooltips   *tool_tips;
+	gint	        always_show_tabs : 1;
 };
 
-G_DEFINE_TYPE(GSwatNotebook, gswat_notebook, GTK_TYPE_NOTEBOOK)
 
-static void gswat_notebook_finalize (GObject *object);
+/* Function definitions */
+static void gswat_notebook_class_init(GSwatNotebookClass *klass);
+static void gswat_notebook_get_property(GObject *object,
+                                        guint id,
+                                        GValue *value,
+                                        GParamSpec *pspec);
+static void gswat_notebook_set_property(GObject *object,
+                                        guint property_id,
+                                        const GValue *value,
+                                        GParamSpec *pspec);
+//static void gswat_notebook_mydoable_interface_init(gpointer interface,
+//                                             gpointer data);
+static void gswat_notebook_init(GSwatNotebook *self);
+static void gswat_notebook_finalize(GObject *self);
 
-static void move_current_tab_to_another_notebook  (GSwatNotebook  *src,
-						   GSwatNotebook  *dest,
-						   GdkEventMotion *event,
-						   gint            dest_position);
+static GtkWidget *build_blank_tab_label(GSwatNotebook *self);
+static void on_gswat_tabbable_state_flags_update(GObject *object,
+                                                 GParamSpec *property,
+                                                 gpointer data);
+static void on_gswat_tabbable_label_text_update(GObject *object,
+                                                GParamSpec *property,
+                                                gpointer data);
+static void on_gswat_tabbable_icon_update(GObject *object,
+                                          GParamSpec *property,
+                                          gpointer data);
+static void on_gswat_tabbable_tooltip_update(GObject *object,
+                                             GParamSpec *property,
+                                             gpointer data);
+static void update_tabs_visibility(GSwatNotebook *self);
+static void on_tab_close_button_clicked(GtkWidget *widget, 
+                                        gpointer data);
 
-/* Local variables */
-static GdkCursor *cursor = NULL;
+/* Variables */
+static GObjectClass *parent_class = NULL;
+static guint gswat_notebook_signals[LAST_SIGNAL] = { 0 };
 
-/* Signals */
-enum
+GType
+gswat_notebook_get_type(void) /* Typechecking */
 {
-	TAB_ADDED,
-	TAB_REMOVED,
-	TABS_REORDERED,
-	TAB_DETACHED,
-	TAB_CLOSE_REQUEST,
-	LAST_SIGNAL
-};
+    static GType self_type = 0;
 
-static guint signals[LAST_SIGNAL] = { 0 };
+    if (!self_type)
+    {
+        static const GTypeInfo object_info =
+        {
+            sizeof(GSwatNotebookClass), /* class structure size */
+            NULL, /* base class initializer */
+            NULL, /* base class finalizer */
+            (GClassInitFunc)gswat_notebook_class_init, /* class initializer */
+            NULL, /* class finalizer */
+            NULL, /* class data */
+            sizeof(GSwatNotebook), /* instance structure size */
+            0, /* preallocated instances */
+            (GInstanceInitFunc)gswat_notebook_init, /* instance initializer */
+            NULL /* function table */
+        };
+
+        /* add the type of your parent class here */
+        self_type = g_type_register_static(GTK_TYPE_NOTEBOOK, /* parent GType */
+                                           "GSwatNotebook", /* type name */
+                                           &object_info, /* type info */
+                                           0 /* flags */
+                                          );
+#if 0
+        /* add interfaces here */
+        static const GInterfaceInfo mydoable_info =
+        {
+            (GInterfaceInitFunc)
+                gswat_notebook_mydoable_interface_init,
+            (GInterfaceFinalizeFunc)NULL,
+            NULL /* interface data */
+        };
+
+        if(self_type != G_TYPE_INVALID) {
+            g_type_add_interface_static(self_type,
+                                        MY_TYPE_MYDOABLE,
+                                        &mydoable_info);
+        }
+#endif
+    }
+
+    return self_type;
+}
 
 static void
-gswat_notebook_class_init (GSwatNotebookClass *klass)
-{
-	GObjectClass *object_class = G_OBJECT_CLASS (klass);
+gswat_notebook_class_init(GSwatNotebookClass *klass) /* Class Initialization */
+{   
+    GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+    //GParamSpec *new_param;
 
-	object_class->finalize = gswat_notebook_finalize;
+    parent_class = g_type_class_peek_parent(klass);
 
-	signals[TAB_ADDED] =
-		g_signal_new ("tab_added",
-			      G_OBJECT_CLASS_TYPE (object_class),
-			      G_SIGNAL_RUN_FIRST,
-			      G_STRUCT_OFFSET (GSwatNotebookClass, tab_added),
-			      NULL, NULL,
-			      g_cclosure_marshal_VOID__OBJECT,
-			      G_TYPE_NONE,
-			      1,
-			      GSWAT_TYPE_TAB);
-	signals[TAB_REMOVED] =
-		g_signal_new ("tab_removed",
-			      G_OBJECT_CLASS_TYPE (object_class),
-			      G_SIGNAL_RUN_FIRST,
-			      G_STRUCT_OFFSET (GSwatNotebookClass, tab_removed),
-			      NULL, NULL,
-			      g_cclosure_marshal_VOID__OBJECT,
-			      G_TYPE_NONE,
-			      1,
-			      GSWAT_TYPE_TAB);
-	signals[TAB_DETACHED] =
-		g_signal_new ("tab_detached",
-			      G_OBJECT_CLASS_TYPE (object_class),
-			      G_SIGNAL_RUN_FIRST,
-			      G_STRUCT_OFFSET (GSwatNotebookClass, tab_detached),
-			      NULL, NULL,
-			      g_cclosure_marshal_VOID__OBJECT,
-			      G_TYPE_NONE,
-			      1,
-			      GSWAT_TYPE_TAB);
-	signals[TABS_REORDERED] =
-		g_signal_new ("tabs_reordered",
-			      G_OBJECT_CLASS_TYPE (object_class),
-			      G_SIGNAL_RUN_FIRST,
-			      G_STRUCT_OFFSET (GSwatNotebookClass, tabs_reordered),
-			      NULL, NULL,
-			      g_cclosure_marshal_VOID__VOID,
-			      G_TYPE_NONE,
-			      0);
-	signals[TAB_CLOSE_REQUEST] =
-		g_signal_new ("tab-close-request",
-			      G_OBJECT_CLASS_TYPE (object_class),
-			      G_SIGNAL_RUN_LAST,
-			      G_STRUCT_OFFSET (GSwatNotebookClass, tab_close_request),
-			      NULL, NULL,
-			      g_cclosure_marshal_VOID__OBJECT,
-			      G_TYPE_NONE,
-			      1,
-			      GSWAT_TYPE_TAB);
+    gobject_class->finalize = gswat_notebook_finalize;
 
-	g_type_class_add_private (object_class, sizeof(GSwatNotebookPrivate));
+    gobject_class->get_property = gswat_notebook_get_property;
+    gobject_class->set_property = gswat_notebook_set_property;
+
+    /* set up properties */
+#if 0
+    //new_param = g_param_spec_int("name", /* name */
+    //new_param = g_param_spec_uint("name", /* name */
+    //new_param = g_param_spec_boolean("name", /* name */
+    //new_param = g_param_spec_object("name", /* name */
+    new_param = g_param_spec_pointer("name", /* name */
+                                     "Name", /* nick name */
+                                     "Name", /* description */
+#if INT/UINT/CHAR/LONG/FLOAT...
+                                     10, /* minimum */
+                                     100, /* maximum */
+                                     0, /* default */
+#elif BOOLEAN
+                                     FALSE, /* default */
+#elif STRING
+                                     NULL, /* default */
+#elif OBJECT
+                                     MY_TYPE_PARAM_OBJ, /* GType */
+#elif POINTER
+                                     /* nothing extra */
+#endif
+                                     GSWAT_PARAM_READABLE /* flags */
+                                     GSWAT_PARAM_WRITABLE /* flags */
+                                     GSWAT_PARAM_READWRITE /* flags */
+                                     | G_PARAM_CONSTRUCT
+                                     | G_PARAM_CONSTRUCT_ONLY
+                                     );
+    g_object_class_install_property(gobject_class,
+                                    PROP_NAME,
+                                    new_param);
+#endif
+
+    /* set up signals */
+#if 0 /* template code */
+    klass->signal_member = signal_default_handler;
+    gswat_notebook_signals[SIGNAL_NAME] =
+        g_signal_new("signal_name", /* name */
+                     G_TYPE_FROM_CLASS(klass), /* interface GType */
+                     G_SIGNAL_RUN_LAST, /* signal flags */
+                     G_STRUCT_OFFSET(GSwatNotebookClass, signal_member),
+                     NULL, /* accumulator */
+                     NULL, /* accumulator data */
+                     g_cclosure_marshal_VOID__VOID, /* c marshaller */
+                     G_TYPE_NONE, /* return type */
+                     0 /* number of parameters */
+                     /* vararg, list of param types */
+                    );
+#endif
+    klass->tab_added = NULL;
+    gswat_notebook_signals[TAB_ADDED] =
+        g_signal_new("tab-added", /* name */
+                     G_TYPE_FROM_CLASS(klass), /* interface GType */
+                     G_SIGNAL_RUN_LAST, /* signal flags */
+                     G_STRUCT_OFFSET(GSwatNotebookClass, tab_added),
+                     NULL, /* accumulator */
+                     NULL, /* accumulator data */
+                     g_cclosure_marshal_VOID__OBJECT, /* c marshaller */
+                     G_TYPE_NONE, /* return type */
+                     1, /* number of parameters */
+                     /* vararg, list of param types */
+                     GSWAT_TYPE_TABABLE
+                    );
+
+    klass->tab_close_request = NULL;
+    gswat_notebook_signals[TAB_CLOSE_REQUEST] =
+        g_signal_new("tab-close-request", /* name */
+                     G_TYPE_FROM_CLASS(klass), /* interface GType */
+                     G_SIGNAL_RUN_LAST, /* signal flags */
+                     G_STRUCT_OFFSET(GSwatNotebookClass, tab_close_request),
+                     NULL, /* accumulator */
+                     NULL, /* accumulator data */
+                     g_cclosure_marshal_VOID__OBJECT, /* c marshaller */
+                     G_TYPE_NONE, /* return type */
+                     1, /* number of parameters */
+                     /* vararg, list of param types */
+                     GSWAT_TYPE_TABABLE
+                    );
+
+    g_type_class_add_private(klass, sizeof(GSwatNotebookPrivate));
 }
 
-static GSwatNotebook *
-find_notebook_at_pointer (gint abs_x, gint abs_y)
+static void
+gswat_notebook_get_property(GObject *object,
+                            guint id,
+                            GValue *value,
+                            GParamSpec *pspec)
 {
-	GdkWindow *win_at_pointer;
-	GdkWindow *toplevel_win;
-	gpointer notepad = NULL;
-	gint x, y;
+    //GSwatNotebook* self = GSWAT_NOTEBOOK(object);
 
-	/* FIXME multi-head */
-	win_at_pointer = gdk_window_at_pointer (&x, &y);
-	if (win_at_pointer == NULL)
-	{
-		/* We are outside all windows of the same application */
-		return NULL;
-	}
-
-	toplevel_win = gdk_window_get_toplevel (win_at_pointer);
-
-	/* get the GtkWidget which owns the toplevel GdkWindow */
-    notepad = g_object_get_data(G_OBJECT(toplevel_win), "gswat_notebook");
-
-	/* toplevel should be an GeditWindow */
-	if ((notepad != NULL) && 
-	    GEDIT_IS_NOTEBOOK(notepad))
-	{
-		return GSWAT_NOTEBOOK(notepad);
-	}
-
-	/* We are outside all windows containing a notebook */
-	return NULL;
+    switch(id) {
+#if 0 /* template code */
+        case PROP_NAME:
+            g_value_set_int(value, self->priv->property);
+            g_value_set_uint(value, self->priv->property);
+            g_value_set_boolean(value, self->priv->property);
+            /* don't forget that this will dup the string for you: */
+            g_value_set_string(value, self->priv->property);
+            g_value_set_object(value, self->priv->property);
+            g_value_set_pointer(value, self->priv->property);
+            break;
+#endif
+        default:
+            G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+            break;
+    }
 }
 
-static gboolean
-is_in_notebook_window (GSwatNotebook *notebook,
-		       gint           abs_x, 
-		       gint           abs_y)
-{
-	GSwatNotebook *nb_at_pointer;
+static void
+gswat_notebook_set_property(GObject *object,
+                            guint property_id,
+                            const GValue *value,
+                            GParamSpec *pspec)
+{   
+    //GSwatNotebook* self = GSWAT_NOTEBOOK(object);
 
-	g_return_val_if_fail (notebook != NULL, FALSE);
-
-	nb_at_pointer = find_notebook_at_pointer (abs_x, abs_y);
-
-	return (nb_at_pointer == notebook);
+    switch(property_id)
+    {
+#if 0 /* template code */
+        case PROP_NAME:
+            gswat_notebook_set_property(self, g_value_get_int(value));
+            gswat_notebook_set_property(self, g_value_get_uint(value));
+            gswat_notebook_set_property(self, g_value_get_boolean(value));
+            gswat_notebook_set_property(self, g_value_get_string(value));
+            gswat_notebook_set_property(self, g_value_get_object(value));
+            gswat_notebook_set_property(self, g_value_get_pointer(value));
+            break;
+#endif
+        default:
+            g_warning("gswat_notebook_set_property on unknown property");
+            return;
+    }
 }
 
-static gint
-find_tab_num_at_pos (GSwatNotebook *notebook, 
-		     gint           abs_x, 
-		     gint           abs_y)
+/* Initialize interfaces here */
+
+#if 0
+static void
+gswat_notebook_mydoable_interface_init(gpointer interface,
+                                       gpointer data)
 {
-	GtkPositionType tab_pos;
-	int page_num = 0;
-	GtkNotebook *nb = GTK_NOTEBOOK (notebook);
-	GtkWidget *page;
+    MyDoableClass *mydoable = interface;
+    g_assert(G_TYPE_FROM_INTERFACE(mydoable) = MY_TYPE_MYDOABLE);
 
-	tab_pos = gtk_notebook_get_tab_pos (GTK_NOTEBOOK (notebook));
+    mydoable->method1 = gswat_notebook_method1;
+    mydoable->method2 = gswat_notebook_method2;
+}
+#endif
 
-	if (GTK_NOTEBOOK (notebook)->first_tab == NULL)
-	{
-		return AFTER_ALL_TABS;
-	}
+/* Instance Construction */
+static void
+gswat_notebook_init(GSwatNotebook *self)
+{
+    self->priv = GSWAT_NOTEBOOK_GET_PRIVATE(self);
 
-	/* For some reason unfullscreen + quick click can
-	   cause a wrong click event to be reported to the tab */
-	if (!is_in_notebook_window (notebook, abs_x, abs_y))
-	{
-		return NOT_IN_APP_WINDOWS;
-	}
+    gtk_notebook_set_scrollable(GTK_NOTEBOOK(self), TRUE);
+    gtk_notebook_set_show_border(GTK_NOTEBOOK(self), FALSE);
+    gtk_notebook_set_show_tabs(GTK_NOTEBOOK(self), TRUE);
 
-	while ((page = gtk_notebook_get_nth_page (nb, page_num)) != NULL)
-	{
-		GtkWidget *tab;
-		gint max_x, max_y;
-		gint x_root, y_root;
+    self->priv->tool_tips = gedit_tooltips_new();
+    g_object_ref(G_OBJECT(self->priv->tool_tips));
+    gtk_object_sink(GTK_OBJECT(self->priv->tool_tips));
 
-		tab = gtk_notebook_get_tab_label (nb, page);
-		g_return_val_if_fail (tab != NULL, AFTER_ALL_TABS);
+    self->priv->always_show_tabs = TRUE;
+#if 0
+    g_signal_connect_after(G_OBJECT(self), 
+                           "switch_page",
+                           G_CALLBACK(on_gswat_notebook_switch_page),
+                           NULL);
+#endif
 
-		if (!GTK_WIDGET_MAPPED (GTK_WIDGET (tab)))
-		{
-			++page_num;
-			continue;
-		}
-
-		gdk_window_get_origin (GDK_WINDOW (tab->window),
-				       &x_root, &y_root);
-
-		max_x = x_root + tab->allocation.x + tab->allocation.width;
-		max_y = y_root + tab->allocation.y + tab->allocation.height;
-
-		if (((tab_pos == GTK_POS_TOP) || 
-		     (tab_pos == GTK_POS_BOTTOM)) &&
-		    (abs_x <= max_x))
-		{
-			return page_num;
-		}
-		else if (((tab_pos == GTK_POS_LEFT) || 
-		          (tab_pos == GTK_POS_RIGHT)) && 
-		         (abs_y <= max_y))
-		{
-			return page_num;
-		}
-
-		++page_num;
-	}
-	
-	return AFTER_ALL_TABS;
 }
 
-static gint 
-find_notebook_and_tab_at_pos (gint            abs_x, 
-			      gint            abs_y,
-			      GSwatNotebook **notebook,
-			      gint           *page_num)
+/* Instantiation wrapper */
+GSwatNotebook*
+gswat_notebook_new(void)
 {
-	*notebook = find_notebook_at_pointer (abs_x, abs_y);
-	if (*notebook == NULL)
-	{
-		return NOT_IN_APP_WINDOWS;
-	}
-	
-	*page_num = find_tab_num_at_pos (*notebook, abs_x, abs_y);
-
-	if (*page_num < 0)
-	{
-		return *page_num;
-	}
-	else
-	{
-		return 0;
-	}
+    return GSWAT_NOTEBOOK(g_object_new(gswat_notebook_get_type(), NULL));
 }
 
-/* If dest_position is greater than or equal to the number of tabs 
-   of the destination nootebook or negative, tab will be moved to the 
-   end of the tabs. */
+/* Instance Destruction */
 void
-gswat_notebook_move_tab (GSwatNotebook *src,
-			 GSwatNotebook *dest,
-			 GSwatTab      *tab,
-			 gint           dest_position)
+gswat_notebook_finalize(GObject *object)
 {
-	g_return_if_fail (GEDIT_IS_NOTEBOOK (src));	
-	g_return_if_fail (GEDIT_IS_NOTEBOOK (dest));
-	g_return_if_fail (src != dest);
-	g_return_if_fail (GSWAT_IS_TAB (tab));
+    GSwatNotebook *self = GSWAT_NOTEBOOK(object);
 
-	/* make sure the tab isn't destroyed while we move it */
-	g_object_ref (tab);
-	gswat_notebook_remove_tab (src, tab);
-	gswat_notebook_add_tab (dest, tab, dest_position, TRUE);
-	g_object_unref (tab);
+    g_object_unref(self->priv->tool_tips);
+
+    G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
-/* If dest_position is greater than or equal to the number of tabs 
-   of the destination nootebook or negative, tab will be moved to the 
-   end of the tabs. */
-void
-gswat_notebook_reorder_tab (GSwatNotebook *src,
-			    GSwatTab      *tab,
-			    gint           dest_position)
-{
-	g_return_if_fail (GEDIT_IS_NOTEBOOK (src));	
-	g_return_if_fail (GSWAT_IS_TAB (tab));
 
-	gtk_notebook_reorder_child (GTK_NOTEBOOK (src), 
-					    GTK_WIDGET (tab), 
-					    dest_position);
-		
-	if (!src->priv->drag_in_progress)
-	{
-		g_signal_emit (G_OBJECT (src), 
-			       signals[TABS_REORDERED], 
-			       0);
-	}
-}
 
-static void
-drag_start (GSwatNotebook *notebook,
-	    guint32        time)
-{
-	notebook->priv->drag_in_progress = TRUE;
+/* add new methods here */
 
-	/* get a new cursor, if necessary */
-	/* FIXME multi-head */
-	if (cursor == NULL)
-		cursor = gdk_cursor_new (GDK_FLEUR);
-
-	/* grab the pointer */
-	gtk_grab_add (GTK_WIDGET (notebook));
-
-	/* FIXME multi-head */
-	if (!gdk_pointer_is_grabbed ())
-	{
-		gdk_pointer_grab (GTK_WIDGET (notebook)->window,
-				  FALSE,
-				  GDK_BUTTON1_MOTION_MASK | GDK_BUTTON_RELEASE_MASK,
-				  NULL, 
-				  cursor, 
-				  time);
-	}
-}
-
-static void
-drag_stop (GSwatNotebook *notebook)
-{
-	if (notebook->priv->drag_in_progress)
-	{
-		g_signal_emit (G_OBJECT (notebook), 
-			       signals[TABS_REORDERED], 
-			       0);
-	}
-
-	notebook->priv->drag_in_progress = FALSE;
-	if (notebook->priv->motion_notify_handler_id != 0)
-	{
-		g_signal_handler_disconnect (G_OBJECT (notebook),
-					     notebook->priv->motion_notify_handler_id);
-		notebook->priv->motion_notify_handler_id = 0;
-	}
-}
-
-/* This function is only called during dnd, we don't need to emit TABS_REORDERED
- * here, instead we do it on drag_stop
+/**
+ * function_name:
+ * @par1:  description of parameter 1. These can extend over more than
+ * one line.
+ * @par2:  description of parameter 2
+ *
+ * The function description goes here.
+ *
+ * Returns: an integer.
  */
+#if 0
+For more gtk-doc notes, see:
+http://developer.gnome.org/arch/doc/authors.html
+#endif
+
+
+#if 0 // getter/setter templates
+/**
+ * gswat_notebook_get_PROPERTY:
+ * @self:  A GSwatNotebook.
+ *
+ * Fetches the PROPERTY of the GSwatNotebook. FIXME, add more info!
+ *
+ * Returns: The value of PROPERTY. FIXME, add more info!
+ */
+PropType
+gswat_notebook_get_PROPERTY(GSwatNotebook *self)
+{
+    g_return_val_if_fail(GSWAT_IS_NOTEBOOK(self), /* FIXME */);
+
+    //return self->priv->PROPERTY;
+    //return g_strdup(self->priv->PROPERTY);
+    //return g_object_ref(self->priv->PROPERTY);
+}
+
+/**
+ * gswat_notebook_set_PROPERTY:
+ * @self:  A GSwatNotebook.
+ * @property:  The value to set. FIXME, add more info!
+ *
+ * Sets this properties value.
+ *
+ * This will also clear the properties previous value.
+ */
+void
+gswat_notebook_set_PROPERTY(GSwatNotebook *self, PropType PROPERTY)
+{
+    g_return_if_fail(GSWAT_IS_NOTEBOOK(self));
+
+    //if(self->priv->PROPERTY == PROPERTY)
+    //if(self->priv->PROPERTY == NULL
+    //   || strcmp(self->priv->PROPERTY, PROPERTY) != 0)
+    {
+        //    self->priv->PROPERTY = PROPERTY;
+        //    g_free(self->priv->PROPERTY);
+        //    self->priv->PROPERTY = g_strdup(PROPERTY);
+        //    g_object_unref(self->priv->PROPERTY);
+        //    self->priv->PROPERTY = g_object_ref(PROPERTY);
+        //    g_object_notify(G_OBJECT(self), "PROPERTY");
+    }
+}
+#endif
+
+void
+gswat_notebook_insert_page(GSwatNotebook *self,
+                          GSwatTabable *tabable,
+                          gint position,
+                          gboolean jump_to)
+{
+    GtkWidget *tab_label;
+    GtkWidget *close_button;
+    GtkWidget *page_widget;
+    
+    tab_label = build_blank_tab_label(self);
+
+    close_button = g_object_get_data(G_OBJECT(tab_label), "close-button");
+    
+    g_object_set_data(G_OBJECT(tabable),
+                      "gswat-notepad-label",
+                      tab_label);
+
+    g_object_set_data(G_OBJECT(tabable),
+                      "gswat-notebook",
+                      self);
+
+
+    g_signal_connect(G_OBJECT(close_button),
+                     "clicked",
+                     G_CALLBACK(on_tab_close_button_clicked),
+                     tabable);
+
+    g_signal_connect(G_OBJECT(tabable),
+                     "notify::tab-state",
+                     G_CALLBACK(on_gswat_tabbable_state_flags_update),
+                     tab_label);
+
+    g_signal_connect(G_OBJECT(tabable),
+                     "notify::tab-label-text",
+                     G_CALLBACK(on_gswat_tabbable_label_text_update),
+                     tab_label);
+
+    g_signal_connect(G_OBJECT(tabable),
+                     "notify::tab-icon",
+                     G_CALLBACK(on_gswat_tabbable_icon_update),
+                     tab_label);
+
+    g_signal_connect(G_OBJECT(tabable),
+                     "notify::tab-tooltip",
+                     G_CALLBACK(on_gswat_tabbable_tooltip_update),
+                     self);
+
+    /* synthesize notifications to synchronize the
+     * notebooks label state with the tabable */
+    g_object_notify(G_OBJECT(tabable), "tab-state");
+    g_object_notify(G_OBJECT(tabable), "tab-label-text");
+    g_object_notify(G_OBJECT(tabable), "tab-icon");
+    g_object_notify(G_OBJECT(tabable), "tab-tooltip");
+
+    page_widget = gswat_tabable_get_page_widget(tabable);
+
+    gtk_notebook_insert_page(GTK_NOTEBOOK(self), 
+                             GTK_WIDGET(page_widget),
+                             tab_label, 
+                             position);
+
+    update_tabs_visibility(self);
+
+    g_signal_emit(G_OBJECT(self),
+                  gswat_notebook_signals[TAB_ADDED],
+                  0,
+                  tabable);
+
+    /* The signal handler may have reordered the tabs */
+    position = gtk_notebook_page_num(GTK_NOTEBOOK(self), 
+                                     GTK_WIDGET(page_widget));
+
+    if(jump_to)
+    {
+        GtkWidget *focal_point;
+        gtk_notebook_set_current_page(GTK_NOTEBOOK(self), position);
+        focal_point  = gswat_tabable_get_focal_widget(tabable);
+        if(focal_point)
+        {
+            gtk_widget_grab_focus(GTK_WIDGET(focal_point));
+            g_object_unref(focal_point);
+        }
+    }
+
+    g_object_unref(page_widget);
+
+}
+
+static GtkWidget *
+build_blank_tab_label(GSwatNotebook *self)
+{
+    GtkWidget *hbox, *label_hbox, *label_ebox;
+    GtkWidget *label, *dummy_label;
+    GtkWidget *close_button;
+    GtkSettings *settings;
+    gint w, h;
+    GtkWidget *image;
+    GtkWidget *spinner;
+    GtkWidget *icon;
+
+    hbox = gtk_hbox_new (FALSE, 0);
+
+    label_ebox = gtk_event_box_new();
+    gtk_event_box_set_visible_window(GTK_EVENT_BOX(label_ebox), FALSE);
+    gtk_box_pack_start(GTK_BOX(hbox), label_ebox, TRUE, TRUE, 0);
+
+    label_hbox = gtk_hbox_new(FALSE, 0);
+    gtk_container_add(GTK_CONTAINER(label_ebox), label_hbox);
+
+    /* setup close button */
+    close_button = gtk_button_new();
+    gtk_button_set_relief(GTK_BUTTON(close_button),
+                          GTK_RELIEF_NONE);
+    /* don't allow focus on the close button */
+    gtk_button_set_focus_on_click(GTK_BUTTON(close_button), FALSE);
+
+    /* fetch the size of an icon */
+    settings = gtk_widget_get_settings(GTK_WIDGET(self));
+    gtk_icon_size_lookup_for_settings(settings,
+                                      GTK_ICON_SIZE_MENU,
+                                      &w,
+                                      &h);
+    image = gtk_image_new_from_stock(GTK_STOCK_CLOSE, GTK_ICON_SIZE_MENU);
+    gtk_widget_set_size_request(close_button, w + 2, h + 2);
+    gtk_container_add(GTK_CONTAINER(close_button), image);
+    gtk_box_pack_start(GTK_BOX(hbox), close_button, FALSE, FALSE, 0);
+
+    gedit_tooltips_set_tip(self->priv->tool_tips,
+                           close_button,
+                           _("Close document"),
+                           NULL);
+
+    /* setup spinner */
+    spinner = gedit_spinner_new();
+    gedit_spinner_set_size(GEDIT_SPINNER(spinner), GTK_ICON_SIZE_MENU);
+    gtk_box_pack_start(GTK_BOX(label_hbox), spinner, FALSE, FALSE, 0);
+
+    /* setup site icon, empty by default */
+    icon = gtk_image_new();
+    gtk_box_pack_start(GTK_BOX(label_hbox), icon, FALSE, FALSE, 0);
+
+    /* setup label */
+    label = gtk_label_new("");
+    gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
+    gtk_misc_set_padding(GTK_MISC (label), 2, 0);
+    gtk_box_pack_start(GTK_BOX(label_hbox), label, FALSE, FALSE, 0);
+
+    dummy_label = gtk_label_new("");
+    gtk_box_pack_start(GTK_BOX(label_hbox), dummy_label, TRUE, TRUE, 0);
+
+    gtk_widget_show(hbox);
+    gtk_widget_show(label_ebox);
+    gtk_widget_show(label_hbox);
+    gtk_widget_show(label);
+    gtk_widget_show(dummy_label);	
+    gtk_widget_show(image);
+    gtk_widget_show(close_button);
+    gtk_widget_show(icon);
+
+    g_object_set_data(G_OBJECT(hbox), "label", label);
+    g_object_set_data(G_OBJECT(hbox), "label-ebox", label_ebox);
+    g_object_set_data(G_OBJECT(hbox), "spinner", spinner);
+    g_object_set_data(G_OBJECT(hbox), "icon", icon);
+    g_object_set_data(G_OBJECT(hbox), "close-button", close_button);
+    g_object_set_data(G_OBJECT(hbox), "tooltips", self->priv->tool_tips);
+
+    return hbox;
+}
+
+
 static void
-move_current_tab (GSwatNotebook *notebook,
-	          gint           dest_position)
+on_gswat_tabbable_state_flags_update(GObject *object,
+                                     GParamSpec *property,
+                                     gpointer data)
 {
-	gint cur_page_num;
+    GSwatTabable *tabable = GSWAT_TABABLE(object);
+    GtkWidget *label = GTK_WIDGET(data);
+    GtkWidget *spinner;
+    GtkImage *icon;
+    gulong flags;
 
-	cur_page_num = gtk_notebook_get_current_page (GTK_NOTEBOOK (notebook));
+    spinner = GTK_WIDGET(g_object_get_data(G_OBJECT(label),
+                                           "spinner"));
+    icon = GTK_IMAGE(g_object_get_data(G_OBJECT(label), "icon"));
 
-	if (dest_position != cur_page_num)
-	{
-		GtkWidget *cur_tab;
-		
-		cur_tab = gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook),
-						     cur_page_num);
-						     
-		gswat_notebook_reorder_tab (GSWAT_NOTEBOOK (notebook),
-					    GSWAT_TAB (cur_tab),
-					    dest_position);
-	}
+    flags = gswat_tabable_get_state_flags(tabable);
+    if(flags & GSWAT_TABABLE_BUSY)
+    {
+        gtk_widget_hide(GTK_WIDGET(icon));
+
+        gtk_widget_show(spinner);
+        gedit_spinner_start(GEDIT_SPINNER(spinner));
+    }
+    else
+    {
+        gtk_widget_hide(spinner);
+        gedit_spinner_stop(GEDIT_SPINNER(spinner));
+
+        gtk_widget_show(GTK_WIDGET (icon));
+    }
 }
 
-static gboolean
-motion_notify_cb (GSwatNotebook  *notebook,
-		  GdkEventMotion *event,
-		  gpointer        data)
-{
-	GSwatNotebook *dest;
-	gint page_num;
-	gint result;
-
-	if (notebook->priv->drag_in_progress == FALSE)
-	{
-		if (notebook->priv->tab_drag_and_drop_enabled == FALSE)
-			return FALSE;
-			
-		if (gtk_drag_check_threshold (GTK_WIDGET (notebook),
-					      notebook->priv->x_start,
-					      notebook->priv->y_start,
-					      event->x_root, 
-					      event->y_root))
-		{
-			drag_start (notebook, event->time);
-			return TRUE;
-		}
-
-		return FALSE;
-	}
-
-	result = find_notebook_and_tab_at_pos ((gint)event->x_root,
-					       (gint)event->y_root,
-					       &dest, 
-					       &page_num);
-
-	if (result != NOT_IN_APP_WINDOWS)
-	{
-		if (dest != notebook)
-		{
-			move_current_tab_to_another_notebook (notebook, 
-							      dest,
-						      	      event, 
-						      	      page_num);
-		}
-		else
-		{
-			g_return_val_if_fail (page_num >= -1, FALSE);
-			move_current_tab (notebook, page_num);
-		}
-	}
-
-	return FALSE;
-}
 
 static void
-move_current_tab_to_another_notebook (GSwatNotebook  *src,
-				      GSwatNotebook  *dest,
-				      GdkEventMotion *event,
-				      gint            dest_position)
+on_gswat_tabbable_label_text_update(GObject *object,
+                                    GParamSpec *property,
+                                    gpointer data)
 {
-	GSwatTab *tab;
-	gint cur_page;
+    GSwatTabable *tabable = GSWAT_TABABLE(object);
+    GtkWidget *tab_label = GTK_WIDGET(data);
+    GtkWidget *text_label;
+    gchar *label_str;
 
-	/* This is getting tricky, the tab was dragged in a notebook
-	 * in another window of the same app, we move the tab
-	 * to that new notebook, and let this notebook handle the
-	 * drag
-	 */
-	g_return_if_fail (GEDIT_IS_NOTEBOOK (dest));
-	g_return_if_fail (dest != src);
-
-	cur_page = gtk_notebook_get_current_page (GTK_NOTEBOOK (src));
-	tab = GSWAT_TAB (gtk_notebook_get_nth_page (GTK_NOTEBOOK (src), 
-						    cur_page));
-
-	/* stop drag in origin window */
-	/* ungrab the pointer if it's grabbed */
-	drag_stop (src);
-	if (gdk_pointer_is_grabbed ())
-	{
-		gdk_pointer_ungrab (event->time);
-	}
-	gtk_grab_remove (GTK_WIDGET (src));
-
-	gswat_notebook_move_tab (src, dest, tab, dest_position);
-
-	/* start drag handling in dest notebook */
-	dest->priv->motion_notify_handler_id =
-		g_signal_connect (G_OBJECT (dest),
-				  "motion-notify-event",
-				  G_CALLBACK (motion_notify_cb),
-				  NULL);
-
-	drag_start (dest, event->time);
+    text_label = GTK_WIDGET(g_object_get_data(G_OBJECT(tab_label), "label"));
+    label_str = gswat_tabable_get_label_text(tabable);
+    if(label_str)
+    {
+        gtk_label_set_text(GTK_LABEL(text_label), label_str);
+        g_free(label_str);
+    }
+    else
+    {
+        gtk_label_set_text(GTK_LABEL(text_label), "");
+    }
 }
 
-static gboolean
-button_release_cb (GSwatNotebook  *notebook,
-		   GdkEventButton *event,
-		   gpointer        data)
-{
-	if (notebook->priv->drag_in_progress)
-	{
-		gint cur_page_num;
-		GtkWidget *cur_page;
-
-		cur_page_num = gtk_notebook_get_current_page (GTK_NOTEBOOK (notebook));
-		cur_page = gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook),
-						      cur_page_num);
-
-		/* CHECK: I don't follow the code here -- Paolo  */
-		if (!is_in_notebook_window (notebook, event->x_root, event->y_root) &&
-		    (gtk_notebook_get_n_pages (GTK_NOTEBOOK (notebook)) > 1))
-		{
-			/* Tab was detached */
-			g_signal_emit (G_OBJECT (notebook),
-				       signals[TAB_DETACHED], 
-				       0, 
-				       cur_page);
-		}
-
-		/* ungrab the pointer if it's grabbed */
-		if (gdk_pointer_is_grabbed ())
-		{
-			gdk_pointer_ungrab (event->time);
-		}
-		gtk_grab_remove (GTK_WIDGET (notebook));
-	}
-
-	/* This must be called even if a drag isn't happening */
-	drag_stop (notebook);
-
-	return FALSE;
-}
-
-static gboolean
-button_press_cb (GSwatNotebook  *notebook,
-		 GdkEventButton *event,
-		 gpointer        data)
-{
-	gint tab_clicked;
-
-	if (notebook->priv->drag_in_progress)
-		return TRUE;
-
-	tab_clicked = find_tab_num_at_pos (notebook,
-					   event->x_root,
-					   event->y_root);
-					   
-	if ((event->button == 1) && 
-	    (event->type == GDK_BUTTON_PRESS) && 
-	    (tab_clicked >= 0))
-	{
-		notebook->priv->x_start = event->x_root;
-		notebook->priv->y_start = event->y_root;
-		
-		notebook->priv->motion_notify_handler_id =
-			g_signal_connect (G_OBJECT (notebook),
-					  "motion-notify-event",
-					  G_CALLBACK (motion_notify_cb), 
-					  NULL);
-	}
-	else if ((event->type == GDK_BUTTON_PRESS) && 
-		 (event->button == 3))
-	{
-		if (tab_clicked == -1)
-		{
-			// CHECK: do we really need it?
-			
-			/* consume event, so that we don't pop up the context menu when
-			 * the mouse if not over a tab label
-			 */
-			return TRUE;
-		}
-		else
-		{
-			/* Switch to the page the mouse is over, but don't consume the event */
-			gtk_notebook_set_current_page (GTK_NOTEBOOK (notebook), 
-						       tab_clicked);
-		}
-	}
-
-	return FALSE;
-}
-
-GtkWidget *
-gswat_notebook_new (void)
-{
-	return GTK_WIDGET (g_object_new (GSWAT_TYPE_NOTEBOOK, NULL));
-}
 
 static void
-gswat_notebook_switch_page_cb (GtkNotebook     *notebook,
-                               GtkNotebookPage *page,
-                               guint            page_num,
-                               gpointer         data)
+on_gswat_tabbable_icon_update(GObject *object,
+                              GParamSpec *property,
+                              gpointer data)
 {
-	GSwatNotebook *nb = GSWAT_NOTEBOOK (notebook);
-	GtkWidget *child;
-	GSwatView *view;
+    GSwatTabable *tabable = GSWAT_TABABLE(object);
+    GtkWidget *label = GTK_WIDGET(data);
+    GtkImage *icon;
+    GdkPixbuf *pixbuf;
 
-	child = gtk_notebook_get_nth_page(notebook, page_num);
+    icon = GTK_IMAGE(g_object_get_data(G_OBJECT(label), "icon"));
 
-	/* Remove the old page, we dont want to grow unnecessarily
-	 * the list */
-	if (nb->priv->focused_pages)
-	{
-		nb->priv->focused_pages =
-			g_list_remove(nb->priv->focused_pages, child);
-	}
+    pixbuf = gswat_tabable_get_icon(tabable);
+    if(pixbuf)
+    {
+        gtk_image_set_from_pixbuf(icon, pixbuf);
 
-	nb->priv->focused_pages = g_list_append(nb->priv->focused_pages,
-						 child);
-
-	/* give focus to the view */
-	view = gswat_tab_get_view(GSWAT_TAB(child));
-	gtk_widget_grab_focus(GTK_WIDGET(view));
+        g_object_unref(pixbuf);
+    }
+    else
+    {
+        gtk_image_clear(icon);
+    }
 }
+
+
+static void
+on_gswat_tabbable_tooltip_update(GObject *object,
+                                 GParamSpec *property,
+                                 gpointer data)
+{
+    GSwatNotebook *self = GSWAT_NOTEBOOK(data);
+    GSwatTabable *tabable = GSWAT_TABABLE(object);
+    GtkWidget *label;
+    gchar *tooltip;
+    
+    label = g_object_get_data(G_OBJECT(tabable),
+                              "gswat-notepad-label");
+
+    tooltip = gswat_tabable_get_tooltip(tabable);
+    gedit_tooltips_set_tip(self->priv->tool_tips,
+                           label,
+                           tooltip,
+                           NULL);
+    if(tooltip)
+    {
+        g_free(tooltip);
+    }
+}
+
 
 /*
  * update_tabs_visibility: Hide tabs if there is only one tab
  * and the pref is not set.
  */
 static void
-update_tabs_visibility (GSwatNotebook *nb, 
-			gboolean       before_inserting)
+update_tabs_visibility(GSwatNotebook *self)
 {
-	gboolean show_tabs;
-	guint num;
+    gboolean show_tabs;
+    guint num;
 
-	num = gtk_notebook_get_n_pages (GTK_NOTEBOOK (nb));
+    num = gtk_notebook_get_n_pages(GTK_NOTEBOOK(self));
 
-	if (before_inserting) num++;
+    show_tabs = (self->priv->always_show_tabs || num > 1);
 
-	show_tabs = (nb->priv->always_show_tabs || num > 1);
-
-	gtk_notebook_set_show_tabs (GTK_NOTEBOOK (nb), show_tabs);
+    gtk_notebook_set_show_tabs(GTK_NOTEBOOK(self), show_tabs);
 }
+
+#if 0
+static void
+on_gswat_notebook_switch_page(GtkNotebook *notebook,
+                              GtkNotebookPage *page,
+                              guint page_num,
+                              gpointer data)
+{
+    GSwatNotebook *self = GSWAT_NOTEBOOK(notebook);
+    GtkWidget *child;
+
+    child = gtk_notebook_get_nth_page(notebook, page_num);
+
+    gtk_widget_grab_focus(GTK_WIDGET(child));
+}
+#endif
+
 
 static void
-gswat_notebook_init (GSwatNotebook *notebook)
+on_tab_close_button_clicked(GtkWidget *widget, 
+                            gpointer data)
 {
-	notebook->priv = GSWAT_NOTEBOOK_GET_PRIVATE (notebook);
+    GSwatNotebook *notebook;
+    GSwatTabable *tabable = GSWAT_TABABLE(data);
 
-	notebook->priv->close_buttons_sensitive = TRUE;
-	notebook->priv->tab_drag_and_drop_enabled = TRUE;
-	
-	gtk_notebook_set_scrollable (GTK_NOTEBOOK (notebook), TRUE);
-	gtk_notebook_set_show_border (GTK_NOTEBOOK (notebook), FALSE);
-	gtk_notebook_set_show_tabs (GTK_NOTEBOOK (notebook), FALSE);
-
-	notebook->priv->title_tips = gedit_tooltips_new ();
-	g_object_ref (G_OBJECT (notebook->priv->title_tips));
-	gtk_object_sink (GTK_OBJECT (notebook->priv->title_tips));
-
-	notebook->priv->always_show_tabs = TRUE;
-
-	g_signal_connect (notebook, 
-			  "button-press-event",
-			  (GCallback)button_press_cb, 
-			  NULL);
-	g_signal_connect (notebook, 
-			  "button-release-event",
-			  (GCallback)button_release_cb,
-			  NULL);
-	gtk_widget_add_events (GTK_WIDGET (notebook), 
-			       GDK_BUTTON1_MOTION_MASK);
-
-	g_signal_connect_after (G_OBJECT (notebook), 
-				"switch_page",
-                                G_CALLBACK (gswat_notebook_switch_page_cb),
-                                NULL);
-}
-
-static void
-gswat_notebook_finalize (GObject *object)
-{
-	GSwatNotebook *notebook = GSWAT_NOTEBOOK (object);
-
-	if (notebook->priv->focused_pages)
-		g_list_free (notebook->priv->focused_pages);
-		
-	g_object_unref (notebook->priv->title_tips);
-
-	G_OBJECT_CLASS (gswat_notebook_parent_class)->finalize (object);
-}
-
-static void
-sync_name (GSwatTab *tab, GParamSpec *pspec, GtkWidget *hbox)
-{
-	GSwatNotebook *nb;
-	GtkWidget *label;
-	GtkWidget *ebox;
-	GtkWidget *button;
-	GtkWidget *spinner;
-	GeditTooltips *tips;	
-	gchar *str;
-	GtkImage *icon;
-	GSwatTabState  state;
-	
-	tips = GEDIT_TOOLTIPS (g_object_get_data (G_OBJECT (hbox), "tooltips"));
-	label = GTK_WIDGET (g_object_get_data (G_OBJECT (hbox), "label"));
-	ebox = GTK_WIDGET (g_object_get_data (G_OBJECT (hbox), "label-ebox"));
-	icon = GTK_IMAGE (g_object_get_data (G_OBJECT (hbox), "icon"));
-	button = GTK_WIDGET (g_object_get_data (G_OBJECT (hbox), "close-button"));
-	spinner = GTK_WIDGET (g_object_get_data (G_OBJECT (hbox), "spinner"));
-
-	nb = GSWAT_NOTEBOOK (gtk_widget_get_parent (GTK_WIDGET (tab)));
-
-	g_return_if_fail ((tips    != NULL) && 
-			  (label   != NULL) && 
-			  (ebox    != NULL) && 
-			  (button  != NULL) &&
-			  (icon    != NULL) &&
-			  (spinner != NULL) &&
-			  (nb      != NULL));
-
-	str = _gswat_tab_get_name (tab);
-	g_return_if_fail (str != NULL);
-	
-	gtk_label_set_text (GTK_LABEL (label), str);
-	g_free (str);
-	
-	str = _gswat_tab_get_tooltips (tab);
-	g_return_if_fail (str != NULL);
-	
-	gedit_tooltips_set_tip (tips, ebox, str, NULL);
-	g_free (str);
-		
-	state = gswat_tab_get_state (tab);
-	
-	gtk_widget_set_sensitive (button,
-				  nb->priv->close_buttons_sensitive &&  
-				  (state != GSWAT_TAB_STATE_CLOSING) &&
-				  (state != GSWAT_TAB_STATE_SAVING)  &&
-				  (state != GSWAT_TAB_STATE_SHOWING_PRINT_PREVIEW) &&
-				  (state != GSWAT_TAB_STATE_SAVING_ERROR));
-				  
-	if ((state == GSWAT_TAB_STATE_LOADING)   ||
-	    (state == GSWAT_TAB_STATE_SAVING)    ||
-	    (state == GSWAT_TAB_STATE_REVERTING))
-	{
-		gtk_widget_hide (GTK_WIDGET (icon));
-		
-		gtk_widget_show (spinner);
-		gedit_spinner_start (GEDIT_SPINNER (spinner));
-	}
-	else
-	{
-		GdkPixbuf *pixbuf;
-		
-		pixbuf = _gswat_tab_get_icon (tab);
-		gtk_image_set_from_pixbuf (icon, pixbuf);
-
-		if (pixbuf != NULL)
-			g_object_unref (pixbuf);
-
-		gtk_widget_show (GTK_WIDGET (icon));
-		
-		gtk_widget_hide (spinner);
-		gedit_spinner_stop (GEDIT_SPINNER (spinner));
-	}
-}
-
-static void
-close_button_clicked_cb (GtkWidget *widget, 
-			 GtkWidget *tab)
-{
-	GSwatNotebook *notebook;
-
-	notebook = GSWAT_NOTEBOOK (gtk_widget_get_parent (tab));
-	g_signal_emit (notebook, signals[TAB_CLOSE_REQUEST], 0, tab);
-}
-
-static GtkWidget *
-build_tab_label (GSwatNotebook *nb, 
-		 GSwatTab      *tab)
-{
-	GtkWidget *hbox, *label_hbox, *label_ebox;
-	GtkWidget *label, *dummy_label;
-	GtkWidget *close_button;
-	GtkSettings *settings;
-	gint w, h;
-	GtkWidget *image;
-	GtkWidget *spinner;
-	GtkWidget *icon;
-
-	hbox = gtk_hbox_new (FALSE, 0);
-
-	label_ebox = gtk_event_box_new ();
-	gtk_event_box_set_visible_window (GTK_EVENT_BOX (label_ebox), FALSE);
-	gtk_box_pack_start (GTK_BOX (hbox), label_ebox, TRUE, TRUE, 0);
-
-	label_hbox = gtk_hbox_new (FALSE, 0);
-	gtk_container_add (GTK_CONTAINER (label_ebox), label_hbox);
-
-	/* setup close button */
-	close_button = gtk_button_new ();
-	gtk_button_set_relief (GTK_BUTTON (close_button),
-			       GTK_RELIEF_NONE);
-	/* don't allow focus on the close button */
-	gtk_button_set_focus_on_click (GTK_BUTTON (close_button), FALSE);
-
-	/* fetch the size of an icon */
-	settings = gtk_widget_get_settings (GTK_WIDGET (tab));
-	gtk_icon_size_lookup_for_settings (settings,
-					   GTK_ICON_SIZE_MENU,
-					   &w, &h);
-	image = gtk_image_new_from_stock (GTK_STOCK_CLOSE, GTK_ICON_SIZE_MENU);
-	gtk_widget_set_size_request (close_button, w + 2, h + 2);
-	gtk_container_add (GTK_CONTAINER (close_button), image);
-	gtk_box_pack_start (GTK_BOX (hbox), close_button, FALSE, FALSE, 0);
-
-	gedit_tooltips_set_tip (nb->priv->title_tips, close_button,
-			      _("Close document"), NULL);
-
-	g_signal_connect (G_OBJECT (close_button), "clicked",
-                          G_CALLBACK (close_button_clicked_cb),
-                          tab);
-
-	/* setup spinner */
-	spinner = gedit_spinner_new ();
-	gedit_spinner_set_size (GEDIT_SPINNER (spinner), GTK_ICON_SIZE_MENU);
-	gtk_box_pack_start (GTK_BOX (label_hbox), spinner, FALSE, FALSE, 0);
-
-	/* setup site icon, empty by default */
-	icon = gtk_image_new ();
-	gtk_box_pack_start (GTK_BOX (label_hbox), icon, FALSE, FALSE, 0);
-	
-	/* setup label */
-        label = gtk_label_new ("");
-	gtk_misc_set_alignment (GTK_MISC (label), 0.0, 0.5);
-        gtk_misc_set_padding (GTK_MISC (label), 2, 0);
-	gtk_box_pack_start (GTK_BOX (label_hbox), label, FALSE, FALSE, 0);
-
-	dummy_label = gtk_label_new ("");
-	gtk_box_pack_start (GTK_BOX (label_hbox), dummy_label, TRUE, TRUE, 0);
-	
-	gtk_widget_show (hbox);
-	gtk_widget_show (label_ebox);
-	gtk_widget_show (label_hbox);
-	gtk_widget_show (label);
-	gtk_widget_show (dummy_label);	
-	gtk_widget_show (image);
-	gtk_widget_show (close_button);
-	gtk_widget_show (icon);
-	
-	g_object_set_data (G_OBJECT (hbox), "label", label);
-	g_object_set_data (G_OBJECT (hbox), "label-ebox", label_ebox);
-	g_object_set_data (G_OBJECT (hbox), "spinner", spinner);
-	g_object_set_data (G_OBJECT (hbox), "icon", icon);
-	g_object_set_data (G_OBJECT (hbox), "close-button", close_button);
-	g_object_set_data (G_OBJECT (tab), "close-button", close_button);
-	g_object_set_data (G_OBJECT (hbox), "tooltips", nb->priv->title_tips);
-
-	return hbox;
-}
-
-void
-gswat_notebook_set_always_show_tabs (GSwatNotebook *nb, 
-				     gboolean       show_tabs)
-{
-	g_return_if_fail (GEDIT_IS_NOTEBOOK (nb));
-
-	nb->priv->always_show_tabs = (show_tabs != FALSE);
-
-	update_tabs_visibility (nb, FALSE);
-}
-
-void
-gswat_notebook_add_tab (GSwatNotebook *nb,
-		        GSwatTab      *tab,
-		        gint           position,
-		        gboolean       jump_to)
-{
-	GtkWidget *label;
-
-	g_return_if_fail (GEDIT_IS_NOTEBOOK (nb));
-	g_return_if_fail (GSWAT_IS_TAB (tab));
-
-	label = build_tab_label (nb, tab);
-
-	update_tabs_visibility (nb, TRUE);
-
-	gtk_notebook_insert_page (GTK_NOTEBOOK (nb), 
-				  GTK_WIDGET (tab),
-				  label, 
-				  position);
-
-	sync_name (tab, NULL, label);
-		         
-	g_signal_connect_object (tab, 
-				 "notify::name",
-			         G_CALLBACK (sync_name), 
-			         label, 
-			         0);
-	g_signal_connect_object (tab, 
-				 "notify::state",
-			         G_CALLBACK (sync_name), 
-			         label, 
-			         0);			         
-
-	g_signal_emit (G_OBJECT (nb), signals[TAB_ADDED], 0, tab);
-
-	/* The signal handler may have reordered the tabs */
-	position = gtk_notebook_page_num (GTK_NOTEBOOK (nb), 
-					  GTK_WIDGET (tab));
-
-	if (jump_to)
-	{
-		GSwatView *view;
-		
-		gtk_notebook_set_current_page (GTK_NOTEBOOK (nb), position);
-		g_object_set_data (G_OBJECT (tab), 
-				   "jump_to",
-				   GINT_TO_POINTER (jump_to));
-		view = gswat_tab_get_view (tab);
-		
-		gtk_widget_grab_focus (GTK_WIDGET (view));
-	}
-}
-
-static void
-smart_tab_switching_on_closure (GSwatNotebook *nb,
-				GSwatTab      *tab)
-{
-	gboolean jump_to;
-
-	jump_to = GPOINTER_TO_INT (g_object_get_data
-				   (G_OBJECT (tab), "jump_to"));
-
-	if (!jump_to || !nb->priv->focused_pages)
-	{
-		gtk_notebook_next_page (GTK_NOTEBOOK (nb));
-	}
-	else
-	{
-		GList *l;
-		GtkWidget *child;
-		int page_num;
-
-		/* activate the last focused tab */
-		l = g_list_last (nb->priv->focused_pages);
-		child = GTK_WIDGET (l->data);
-		page_num = gtk_notebook_page_num (GTK_NOTEBOOK (nb),
-						  child);
-		gtk_notebook_set_current_page (GTK_NOTEBOOK (nb), 
-					       page_num);
-	}
-}
-
-static void
-remove_tab (GSwatTab      *tab,
-	    GSwatNotebook *nb)
-{
-	GtkWidget *label, *ebox;
-	gint position;
-	
-	position = gtk_notebook_page_num (GTK_NOTEBOOK (nb), GTK_WIDGET (tab));
-	
-	label = gtk_notebook_get_tab_label (GTK_NOTEBOOK (nb), GTK_WIDGET (tab));
-	ebox = GTK_WIDGET (g_object_get_data (G_OBJECT (label), "label-ebox"));
-	gedit_tooltips_set_tip (GEDIT_TOOLTIPS (nb->priv->title_tips), 
-			        ebox, 
-			        NULL, 
-			        NULL);
-					      
-	g_signal_handlers_disconnect_by_func (tab,
-					      G_CALLBACK (sync_name), 
-					      label);
-
-	/**
-	 * we ref the tab so that it's still alive while the tabs_removed
-	 * signal is processed.
-	 */
-	g_object_ref (tab);
-
-	gtk_notebook_remove_page (GTK_NOTEBOOK (nb), position);
-
-	update_tabs_visibility (nb, FALSE);
-
-	g_signal_emit (G_OBJECT (nb), signals[TAB_REMOVED], 0, tab);
-
-	g_object_unref (tab);	
-}
-
-void
-gswat_notebook_remove_tab (GSwatNotebook *nb,
-			   GSwatTab      *tab)
-{
-	gint position, curr;
-
-	g_return_if_fail (GEDIT_IS_NOTEBOOK (nb));
-	g_return_if_fail (GSWAT_IS_TAB (tab));
-
-	/* Remove the page from the focused pages list */
-	nb->priv->focused_pages =  g_list_remove (nb->priv->focused_pages,
-						  tab);
-
-	position = gtk_notebook_page_num (GTK_NOTEBOOK (nb), GTK_WIDGET (tab));
-	curr = gtk_notebook_get_current_page (GTK_NOTEBOOK (nb));
-
-	if (position == curr)
-	{
-		smart_tab_switching_on_closure (nb, tab);
-	}
-
-	remove_tab (tab, nb);
-}
-
-void
-gswat_notebook_remove_all_tabs (GSwatNotebook *nb)
-{	
-	g_return_if_fail (GEDIT_IS_NOTEBOOK (nb));
-	
-	g_list_free (nb->priv->focused_pages);
-	nb->priv->focused_pages = NULL;
-
-	gtk_container_foreach (GTK_CONTAINER (nb),
-			       (GtkCallback)remove_tab,
-			       nb);
-}
-
-static void
-set_close_buttons_sensitivity (GSwatTab      *tab,
-                               GSwatNotebook *nb)
-{
-	GtkWidget     *button;
-	GSwatTabState  state;
-	
-	button = GTK_WIDGET (g_object_get_data (G_OBJECT (tab), 
-						"close-button"));	
-	g_return_if_fail (button != NULL);
-	
-	state = gswat_tab_get_state (tab);
-	
-	gtk_widget_set_sensitive (button, 
-				  nb->priv->close_buttons_sensitive &&
-				  (state != GSWAT_TAB_STATE_CLOSING) &&
-				  (state != GSWAT_TAB_STATE_SAVING)  &&
-				  (state != GSWAT_TAB_STATE_SHOWING_PRINT_PREVIEW) &&
-				  (state != GSWAT_TAB_STATE_SAVING_ERROR));
-}
-
-void
-gswat_notebook_set_close_buttons_sensitive (GSwatNotebook *nb,
-					    gboolean       sensitive)
-{
-	g_return_if_fail (GEDIT_IS_NOTEBOOK (nb));
-	
-	sensitive = (sensitive != FALSE);
-	
-	if (sensitive == nb->priv->close_buttons_sensitive)
-		return;
-	
-	nb->priv->close_buttons_sensitive = sensitive;
-	
-	gtk_container_foreach (GTK_CONTAINER (nb),
-			       (GtkCallback)set_close_buttons_sensitivity,
-			       nb);
-}
-
-gboolean
-gswat_notebook_get_close_buttons_sensitive (GSwatNotebook *nb)
-{
-	g_return_val_if_fail (GEDIT_IS_NOTEBOOK (nb), TRUE);
-	
-	return nb->priv->close_buttons_sensitive;
-}
-
-void
-gswat_notebook_set_tab_drag_and_drop_enabled (GSwatNotebook *nb,
-					      gboolean       enable)
-{
-	g_return_if_fail (GEDIT_IS_NOTEBOOK (nb));
-	
-	enable = (enable != FALSE);
-	
-	if (enable == nb->priv->tab_drag_and_drop_enabled)
-		return;
-		
-	nb->priv->tab_drag_and_drop_enabled = enable;		
-}
-
-gboolean	
-gswat_notebook_get_tab_drag_and_drop_enabled(GSwatNotebook *nb)
-{
-	g_return_val_if_fail (GEDIT_IS_NOTEBOOK (nb), TRUE);
-	
-	return nb->priv->tab_drag_and_drop_enabled;
+    notebook = g_object_get_data(G_OBJECT(tabable), "gswat-notebook");
+    g_signal_emit(notebook,
+                  gswat_notebook_signals[TAB_CLOSE_REQUEST],
+                  0,
+                  tabable);
 }
 

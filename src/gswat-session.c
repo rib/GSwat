@@ -30,6 +30,7 @@
 #include <libxml/xmlreader.h>
 #include <libgnome/gnome-util.h>
 
+#include "gswat-utils.h"
 #include "gswat-session.h"
 
 
@@ -223,9 +224,9 @@ gswat_session_class_init(GSwatSessionClass *klass) /* Class Initialization */
 #elif POINTER
                                      /* nothing extra */
 #endif
-                                     MY_PARAM_READABLE /* flags */
-                                     MY_PARAM_WRITEABLE /* flags */
-                                     MY_PARAM_READWRITE /* flags */
+                                     GSWAT_PARAM_READABLE /* flags */
+                                     GSWAT_PARAM_WRITABLE /* flags */
+                                     GSWAT_PARAM_READWRITE /* flags */
                                      | G_PARAM_CONSTRUCT
                                      | G_PARAM_CONSTRUCT_ONLY
                                      );
@@ -1254,45 +1255,6 @@ gswat_session_set_PROPERTY(GSwatSession *self, PropType PROPERTY)
 #endif
 
 /**
- * gswat_session_get_target:
- * @self:  A MyObject.
- *
- * Fetches the target of the MyObject.
- *
- * Returns: The sessions target name.
- */
-gchar *
-gswat_session_get_target(GSwatSession *self)
-{
-    g_return_val_if_fail(GSWAT_IS_SESSION(self), NULL);
-
-    return g_strdup(self->priv->target);
-}
-
-/**
- * gswat_session_set_target:
- * @self:  A GSwatSession.
- * @property:  The target name to set.
- *
- * Sets the sessions target name.
- *
- * This will also clear the properties previous value.
- */
-void
-gswat_session_set_target(GSwatSession *self, const gchar *target)
-{
-    g_return_if_fail(GSWAT_IS_SESSION(self));
-
-    if(self->priv->target == NULL
-       || strcmp(self->priv->target, target) != 0)
-    {
-        g_free(self->priv->target);
-        self->priv->target = g_strdup(target);
-        g_object_notify(G_OBJECT(self), "target");
-    }
-}
-
-/**
  * gswat_session_get_name:
  * @self:  A GSwatSession.
  *
@@ -1329,6 +1291,45 @@ gswat_session_set_name(GSwatSession* self, const gchar *name)
         g_free(self->priv->name);
         self->priv->name = g_strdup(name);
         g_object_notify(G_OBJECT(self), "name");
+    }
+}
+
+/**
+ * gswat_session_get_target:
+ * @self:  A MyObject.
+ *
+ * Fetches the target of the MyObject.
+ *
+ * Returns: The sessions target name.
+ */
+gchar *
+gswat_session_get_target(GSwatSession *self)
+{
+    g_return_val_if_fail(GSWAT_IS_SESSION(self), NULL);
+
+    return g_strdup(self->priv->target);
+}
+
+/**
+ * gswat_session_set_target:
+ * @self:  A GSwatSession.
+ * @property:  The target name to set.
+ *
+ * Sets the sessions target name.
+ *
+ * This will also clear the properties previous value.
+ */
+void
+gswat_session_set_target(GSwatSession *self, const gchar *target)
+{
+    g_return_if_fail(GSWAT_IS_SESSION(self));
+
+    if(self->priv->target == NULL
+       || strcmp(self->priv->target, target) != 0)
+    {
+        g_free(self->priv->target);
+        self->priv->target = g_strdup(target);
+        g_object_notify(G_OBJECT(self), "target");
     }
 }
 
@@ -1416,32 +1417,4 @@ gswat_session_set_working_dir(GSwatSession* self, const gchar *working_dir)
         g_object_notify(G_OBJECT(self), "working-dir");
     }
 }
-
-
-#if 0
-void
-gswat_save_session(GSwatSession* self)
-{
-    /* read in the session file */
-
-    /* remove any session with the same name */
-
-    /* Add the new session */
-
-    /* write back the session file */
-}
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
 

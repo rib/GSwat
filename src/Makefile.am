@@ -10,9 +10,10 @@ GSWAT_SOURCES = main.c \
 		gswat-variable-object.c \
 		gswat-gdb-debugger.c \
 		gswat-gdb-variable-object.c \
-		gswat-view.c \
+		gswat-tabable.c \
 		gswat-notebook.c \
-		gswat-tab.c \
+		gswat-src-view-tab.c \
+		gswat-view.c \
 		sexy-icon-entry.c \
 		gswat-gdbmi.c
 

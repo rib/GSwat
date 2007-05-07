@@ -35,8 +35,9 @@
 #include "gedit-document.h"
 #include "gedit-view.h"
 
+#include "gswat-utils.h"
 #include "gswat-notebook.h"
-#include "gswat-tab.h"
+#include "gswat-src-view-tab.h"
 #include "gswat-view.h"
 #include "gswat-session.h"
 #include "gswat-debuggable.h"
@@ -268,9 +269,9 @@ gswat_window_class_init(GSwatWindowClass *klass) /* Class Initialization */
 #elif POINTER
                                      /* nothing extra */
 #endif
-                                     MY_PARAM_READABLE /* flags */
-                                     MY_PARAM_WRITEABLE /* flags */
-                                     MY_PARAM_READWRITE /* flags */
+                                     GSWAT_PARAM_READABLE /* flags */
+                                     GSWAT_PARAM_WRITABLE /* flags */
+                                     GSWAT_PARAM_READWRITE /* flags */
                                      | G_PARAM_CONSTRUCT
                                      | G_PARAM_CONSTRUCT_ONLY
                                      );
@@ -409,6 +410,7 @@ gswat_window_init(GSwatWindow *self)
                     );
 
     button = glade_xml_get_widget(self->priv->xml, "gswat_window_next_button");
+    
     self->priv->next_button = button;
     g_signal_connect(button,
                      "clicked",
@@ -603,13 +605,13 @@ create_sourceview(GSwatWindow *self)
                                    "gswat_window_h_panes");
 
     self->priv->notebook = GSWAT_NOTEBOOK(gswat_notebook_new());
-
+    
     gtk_widget_show(GTK_WIDGET(self->priv->notebook));
 
     gtk_container_remove(GTK_CONTAINER(h_panes),
                          gtk_paned_get_child1((GTK_PANED(h_panes))));
     gtk_paned_add1(GTK_PANED(h_panes), GTK_WIDGET(self->priv->notebook));
-
+    
 }
 
 
@@ -627,6 +629,8 @@ set_toolbar_state(GSwatWindow *self, guint state)
     {
         case GSWAT_DEBUGGABLE_RUNNING:
             g_message("******** setting toolbar state GSWAT_DEBUGGABLE_RUNNING");
+//http://bugzilla.gnome.org/show_bug.cgi?id=56070
+#if 0 
             gtk_widget_set_sensitive(self->priv->step_button, FALSE);
             gtk_widget_set_sensitive(self->priv->next_button, FALSE);
             gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
@@ -634,18 +638,24 @@ set_toolbar_state(GSwatWindow *self, guint state)
             gtk_widget_set_sensitive(self->priv->break_button, TRUE);
             gtk_widget_set_sensitive(self->priv->restart_button, TRUE);
             gtk_widget_set_sensitive(self->priv->add_break_button, FALSE);
+#endif
             break;
         case GSWAT_DEBUGGABLE_NOT_RUNNING:
             g_message("******** setting toolbar state GSWAT_DEBUGGABLE_NOT_RUNNING");
+//http://bugzilla.gnome.org/show_bug.cgi?id=56070
+#if 0
             gtk_widget_set_sensitive(self->priv->step_button, FALSE);
             gtk_widget_set_sensitive(self->priv->next_button, FALSE);
             gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
             gtk_widget_set_sensitive(self->priv->finish_button, FALSE);
             gtk_widget_set_sensitive(self->priv->break_button, FALSE);
             gtk_widget_set_sensitive(self->priv->add_break_button, TRUE);
+#endif
             break;
         case GSWAT_DEBUGGABLE_INTERRUPTED:
             g_message("******** setting toolbar state GSWAT_DEBUGGABLE_INTERRUPTED");
+//http://bugzilla.gnome.org/show_bug.cgi?id=56070
+#if 0
             gtk_widget_set_sensitive(self->priv->step_button, TRUE);
             gtk_widget_set_sensitive(self->priv->next_button, TRUE);
             gtk_widget_set_sensitive(self->priv->continue_button, TRUE);
@@ -653,9 +663,12 @@ set_toolbar_state(GSwatWindow *self, guint state)
             gtk_widget_set_sensitive(self->priv->break_button, FALSE);
             gtk_widget_set_sensitive(self->priv->restart_button, TRUE);
             gtk_widget_set_sensitive(self->priv->add_break_button, TRUE);
+#endif
             break;
         default:
             g_warning("unexpected debuggable state");
+//http://bugzilla.gnome.org/show_bug.cgi?id=56070
+#if 0
             gtk_widget_set_sensitive(self->priv->step_button, FALSE);
             gtk_widget_set_sensitive(self->priv->next_button, FALSE);
             gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
@@ -663,6 +676,7 @@ set_toolbar_state(GSwatWindow *self, guint state)
             gtk_widget_set_sensitive(self->priv->break_button, FALSE);
             gtk_widget_set_sensitive(self->priv->restart_button, FALSE);
             gtk_widget_set_sensitive(self->priv->add_break_button, FALSE);
+#endif
             break;
     }
 
@@ -818,8 +832,8 @@ on_gswat_window_add_break_button_clicked(GtkToolButton   *toolbutton,
     gint line; 
 
     source_view = get_current_view(self);
-    g_assert(source_view != NULL);
-
+    g_return_if_fail(source_view != NULL);
+    
     source_buffer = GTK_TEXT_VIEW(source_view)->buffer;
 
     current_document = gswat_view_get_document(source_view);
@@ -843,12 +857,23 @@ get_current_view(GSwatWindow *self)
 {
     GtkNotebook *notebook = GTK_NOTEBOOK(self->priv->notebook);
     GtkWidget *current_page;
-
-    current_page = gtk_notebook_get_nth_page(
-                                             notebook,
-                                             gtk_notebook_get_current_page(notebook)
-                                            );
-    return gswat_tab_get_view(GSWAT_TAB(current_page));
+    GSwatSrcViewTab *src_view_tab;
+    
+    current_page = 
+        gtk_notebook_get_nth_page(notebook,
+                                  gtk_notebook_get_current_page(notebook)
+                                 );
+    
+    src_view_tab = g_object_get_data(G_OBJECT(current_page),
+                                     "gswat-src-view-tab");
+    if(src_view_tab)
+    {
+        return gswat_src_view_tab_get_view(src_view_tab);
+    }
+    else
+    {
+        return NULL;
+    }
 }
 
 
@@ -896,7 +921,7 @@ update_source_view(GSwatWindow *self,
     GSwatView       *gswat_view;
     GeditDocument   *gedit_document;
     GtkTextIter     iter;
-    GtkWidget       *new_tab;
+    GSwatSrcViewTab *new_tab;
 
     file_uri = gswat_debuggable_get_source_uri(debuggable);
     line = gswat_debuggable_get_source_line(debuggable);
@@ -907,31 +932,32 @@ update_source_view(GSwatWindow *self,
 
     for(tmp=tabs; tmp!=NULL; tmp=tmp->next)
     {
-        GSwatTab *current_tab;
+        GSwatSrcViewTab *current_tab;
         GSwatView *current_view;
         GeditDocument *current_document;
-
-
         char *uri;
-        if(!GSWAT_IS_TAB(tmp->data))
+
+        current_tab = 
+            g_object_get_data(G_OBJECT(tmp->data),
+                              "gswat-src-view-tab");
+        if(!GSWAT_IS_SRC_VIEW_TAB(current_tab))
         {
             continue;
         }
 
-        current_tab = GSWAT_TAB(tmp->data);
-
-        /* FIXME I don't think tabs should care that they
-         * contain a GSwatView specificlly */
-        current_view = gswat_tab_get_view(current_tab);
+        current_view = gswat_src_view_tab_get_view(current_tab);
 
         current_document = gswat_view_get_document(current_view);
         uri = gedit_document_get_uri(current_document);
         if(strcmp(uri, file_uri)==0)
         {
             gint page;
+            GtkWidget *tabs_page_widget;
+
+            tabs_page_widget = gswat_tabable_get_page_widget(current_tab);
 
             page = gtk_notebook_page_num(GTK_NOTEBOOK(self->priv->notebook),
-                                         GTK_WIDGET(current_tab));
+                                         tabs_page_widget);
             gtk_notebook_set_current_page(GTK_NOTEBOOK(self->priv->notebook),
                                           page);
 
@@ -958,19 +984,19 @@ update_source_view(GSwatWindow *self,
     /* If we don't already have a tab with the right file
      * open ...
      */
+    
+    new_tab = gswat_src_view_tab_new(file_uri, line);
+    
+    g_object_set_data(G_OBJECT(gswat_tabable_get_page_widget(new_tab)),
+                      "gswat-src-view-tab",
+                      new_tab);
 
-    new_tab = _gswat_tab_new_from_uri(file_uri,
-                                      NULL,
-                                      line,			
-                                      FALSE);
-    gtk_widget_show(new_tab);
-    gswat_notebook_add_tab(self->priv->notebook,
-                           GSWAT_TAB(new_tab),
-                           -1,
-                           TRUE);
+    gswat_notebook_insert_page(self->priv->notebook,
+                               GSWAT_TABABLE(new_tab),
+                               -1,
+                               TRUE);
 
-    gswat_view = gswat_tab_get_view(GSWAT_TAB(new_tab));
-    g_assert(GSWAT_IS_VIEW(gswat_view));
+    gswat_view = gswat_src_view_tab_get_view(GSWAT_SRC_VIEW_TAB(new_tab));
 
     gtk_source_view_set_show_line_numbers(GTK_SOURCE_VIEW(gswat_view), TRUE);
     gtk_source_view_set_highlight_current_line(GTK_SOURCE_VIEW(gswat_view), FALSE);
@@ -1025,19 +1051,18 @@ update_line_highlights(GSwatWindow *self)
     tabs = gtk_container_get_children(GTK_CONTAINER(self->priv->notebook));
     for(tmp=tabs;tmp!=NULL;tmp=tmp->next)
     {
-        GSwatTab *current_tab;
+        GSwatSrcViewTab *current_tab;
         GSwatView *current_gswat_view;
-
-        if(!GSWAT_IS_TAB(tmp->data))
+        
+        current_tab = 
+            g_object_get_data(G_OBJECT(tmp->data),
+                              "gswat-src-view-tab");
+        if(!GSWAT_IS_SRC_VIEW_TAB(current_tab))
         {
             continue;
         }
-        current_tab = (GSwatTab *)tmp->data;
 
-        /* FIXME I don't think tabs should care that they
-         * contain a GSwatView specificlly */
-        current_gswat_view = gswat_tab_get_view(current_tab);
-
+        current_gswat_view = gswat_src_view_tab_get_view(current_tab);
 
         current_doc_uri 
             = gedit_document_get_uri(gswat_view_get_document(current_gswat_view));
@@ -1080,7 +1105,6 @@ update_line_highlights(GSwatWindow *self)
         }
         g_list_free(highlights);
         highlights=NULL;
-
     }
 }
 

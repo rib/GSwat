@@ -33,6 +33,7 @@
 
 #include <glib/gi18n.h>
 
+#include "gswat-utils.h"
 #include "gswat-view.h"
 
 /* Function definitions */
@@ -176,9 +177,9 @@ gswat_view_class_init(GSwatViewClass *klass) /* Class Initialization */
 #elif POINTER
                                      /* nothing extra */
 #endif
-                                     MY_PARAM_READABLE /* flags */
-                                     MY_PARAM_WRITEABLE /* flags */
-                                     MY_PARAM_READWRITE /* flags */
+                                     GSWAT_PARAM_READABLE /* flags */
+                                     GSWAT_PARAM_WRITABLE /* flags */
+                                     GSWAT_PARAM_READWRITE /* flags */
                                      | G_PARAM_CONSTRUCT
                                      | G_PARAM_CONSTRUCT_ONLY
                                      );
