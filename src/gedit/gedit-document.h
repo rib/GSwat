@@ -167,6 +167,8 @@ gboolean	 gedit_document_insert_file	(GeditDocument       *doc,
 						 const gchar         *uri, 
 						 const GeditEncoding *encoding);
 
+gboolean     gedit_document_is_loading(GeditDocument *doc);
+
 gboolean	 gedit_document_load_cancel	(GeditDocument       *doc);
 
 #if 0

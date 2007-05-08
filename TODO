@@ -2,18 +2,20 @@ todo
 ----
 
 engineer a nicer object/interface model
-- create a tabable interface
-- enhance the source view class to implement the tabable interface
-    - integrate code from gswat-tab.c into the source view as appropriate
 - convert all my code to use my object/interface templates
- - still todo:
-  - gswat-notebook.c
-  - gswat-tab.c
 - remove sexyicon code - I remember someone complaining that gedit was 
 misusing this, so we shouldn't copy them!
+- change tab creation model:
+   don't automatically open a new tab for each new file entered
+   instead just use one tab for now. In the future add the concept
+   of pinning a tab. I.e. once a tab is pinned then it displays
+   a snapshot in time and further state changes are reflected by
+   opening a new tab.
   
+Perhaps find a work around for the gtk sensitive bug.
+  Ideally I'd like to implement my original idea which is that buttons
+  should disapear from the toolbar when they can't be pressed.
 
-fix rendering - on-going issue
 tidy up menus so they work
 make sure the terminal always closes when gswat closes!
 Perhaps add mouse over variable bubbles to display their value

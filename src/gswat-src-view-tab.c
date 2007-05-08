@@ -339,6 +339,14 @@ gswat_src_view_tab_init(GSwatSrcViewTab *self)
 
     self->priv->view = gswat_view_new(doc);
     g_object_unref(doc);
+    
+    gtk_source_view_set_show_line_numbers(GTK_SOURCE_VIEW(self->priv->view),
+                                          TRUE);
+    gtk_source_view_set_highlight_current_line(GTK_SOURCE_VIEW(self->priv->view),
+                                               FALSE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(self->priv->view), FALSE);
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(self->priv->view), FALSE);
+
     gtk_widget_show(self->priv->view);
 
     gtk_box_pack_end(GTK_BOX(vbox), sw, TRUE, TRUE, 0);
@@ -364,7 +372,7 @@ gswat_src_view_tab_new(gchar *file_uri, gint line)
     GSwatView *view;
     GeditDocument *doc;
     const GeditEncoding *encoding;
-    
+
 
     self = 
         GSWAT_SRC_VIEW_TAB(g_object_new(gswat_src_view_tab_get_type(),
@@ -484,7 +492,7 @@ on_gedit_document_loaded(GeditDocument *doc,
     /* Truncate the name so it doesn't get insanely wide. */
     label_text = 
         gedit_utils_str_middle_truncate(name, MAX_DOC_NAME_LENGTH);
-        
+
     g_free(name);
 
     g_free(self->priv->tab_label_text);

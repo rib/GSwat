@@ -925,6 +925,8 @@ document_loader_loaded (GeditDocumentLoader *loader,
 			const GError        *error,
 			GeditDocument       *doc)
 {
+    GError *error_copy;
+
 	/* load was successful */
 	if (error == NULL)
 	{
@@ -985,7 +987,7 @@ document_loader_loaded (GeditDocumentLoader *loader,
 	else if (doc->priv->create &&
 	         (error->code == GNOME_VFS_ERROR_NOT_FOUND))
 	{
-		reset_temp_loading_data (doc);
+		reset_temp_loading_data(doc);
 		// FIXME: do other stuff??
 
 		g_signal_emit (doc,
@@ -996,12 +998,21 @@ document_loader_loaded (GeditDocumentLoader *loader,
 		return;
 	}
 	
-	g_signal_emit (doc,
+    /* We need to do the reset before sending the signal
+     * so that a signal handler can initiate a file
+     * load
+     */
+    if(error)
+        error_copy = g_error_copy(error);
+	reset_temp_loading_data(doc);
+    
+	g_signal_emit(doc,
 		       document_signals[LOADED],
 		       0,
-		       error);
-
-	reset_temp_loading_data (doc);
+		       error_copy);
+    
+    if(error_copy)
+        g_error_free(error_copy);
 }
 
 static void
@@ -1074,6 +1085,16 @@ gedit_document_load_cancel (GeditDocument *doc)
 }
 
 
+gboolean
+gedit_document_is_loading(GeditDocument *doc)
+{
+    g_return_val_if_fail(GEDIT_IS_DOCUMENT(doc), FALSE);
+    
+    if(doc->priv->loader != NULL)
+		return TRUE;
+    else
+        return FALSE;
+}
 
 gboolean
 gedit_document_insert_file (GeditDocument       *doc,
