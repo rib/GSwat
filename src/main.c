@@ -23,6 +23,7 @@
  */
 
 #include <gnome.h>
+#include "rb-file-helpers.h"
 
 #include <config.h>
 
@@ -41,6 +42,8 @@ static GSwatWindow *main_window = NULL;
 int
 main(int argc, char **argv)
 {
+    GnomeProgram *program = NULL;
+	GOptionContext *option_context;
     gchar **remaining_args = NULL;
 
 	GOptionEntry option_entries[] = {
@@ -61,9 +64,6 @@ main(int argc, char **argv)
 		{ NULL }
 	};
 
-	GOptionContext *option_context;
-	GnomeProgram *my_app;
-
 	option_context = g_option_context_new("gswat");
 
 	/* if you are using any libraries that have command line options
@@ -77,7 +77,7 @@ main(int argc, char **argv)
 	 */
 	g_option_context_add_main_entries(option_context, option_entries, NULL);
 
-	my_app = gnome_program_init(PACKAGE, VERSION,
+	program = gnome_program_init(PACKAGE, VERSION,
 	                            LIBGNOMEUI_MODULE, argc, argv,
 	                            GNOME_PARAM_GOPTION_CONTEXT, option_context,
 	                            GNOME_PARAM_NONE);
@@ -117,10 +117,11 @@ main(int argc, char **argv)
          */
         gswat_session_set_command(session, remaining_args[0]);
     }
+    
+    rb_file_helpers_init();
 
     /* Normal case: display GUI */
     main_window = gswat_window_new(session);
-
     
     if (remaining_args != NULL) {
    		g_strfreev (remaining_args);
@@ -138,6 +139,7 @@ main(int argc, char **argv)
 
     g_object_unref(main_window);
 
+    rb_file_helpers_shutdown();
 
     return 0;
 }

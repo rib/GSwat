@@ -142,7 +142,10 @@ gswat_debuggable_target_connect(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    debuggable->target_connect(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_DISCONNECTED)
+    {
+        debuggable->target_connect(object);
+    }
     g_object_unref(object);
 }
 
@@ -157,7 +160,10 @@ gswat_debuggable_request_line_breakpoint(GSwatDebuggable* object,
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    debuggable->request_line_breakpoint(object, uri, line);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        debuggable->request_line_breakpoint(object, uri, line);
+    }
     g_object_unref(object);
 }
 
@@ -171,7 +177,10 @@ gswat_debuggable_request_function_breakpoint(GSwatDebuggable* object,
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    debuggable->request_function_breakpoint(object, symbol);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        debuggable->request_function_breakpoint(object, symbol);
+    }
     g_object_unref(object);
 }
 
@@ -185,13 +194,20 @@ gswat_debuggable_get_source_uri(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    ret = debuggable->get_source_uri(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        ret = debuggable->get_source_uri(object);
+    }
+    else
+    {
+        ret = NULL;
+    }
     g_object_unref(object);
 
     return ret;
 }
 
-gulong 
+gint
 gswat_debuggable_get_source_line(GSwatDebuggable* object)
 {
     GSwatDebuggableIface *debuggable;
@@ -201,7 +217,14 @@ gswat_debuggable_get_source_line(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    ret = debuggable->get_source_line(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        ret = debuggable->get_source_line(object);
+    }
+    else
+    {
+        ret = 0;
+    }
     g_object_unref(object);
 
     return ret;
@@ -216,7 +239,10 @@ gswat_debuggable_continue(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    debuggable->cont(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        debuggable->cont(object);
+    }
     g_object_unref(object);
 }
 
@@ -229,7 +255,10 @@ gswat_debuggable_finish(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    debuggable->finish(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        debuggable->finish(object);
+    }
     g_object_unref(object);
 }
 
@@ -242,7 +271,10 @@ gswat_debuggable_next(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    debuggable->next(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        debuggable->next(object);
+    }
     g_object_unref(object);
 }
 
@@ -255,7 +287,10 @@ gswat_debuggable_step_into(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    debuggable->step_into(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        debuggable->step_into(object);
+    }
     g_object_unref(object);
 }
 
@@ -268,7 +303,10 @@ gswat_debuggable_interrupt(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    debuggable->interrupt(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_RUNNING)
+    {
+        debuggable->interrupt(object);
+    }
     g_object_unref(object);
 }
 
@@ -281,7 +319,10 @@ gswat_debuggable_restart(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    debuggable->restart(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        debuggable->restart(object);
+    }
     g_object_unref(object);
 }
 
@@ -327,11 +368,48 @@ gswat_debuggable_get_stack(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    ret = debuggable->get_stack(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        ret = debuggable->get_stack(object);
+    }
+    else
+    {
+        ret = NULL;
+    }
     g_object_unref(object);
 
     return ret;
 }
+
+void
+gswat_debuggable_free_stack(GList *stack)
+{
+    GList *tmp, *tmp2;
+
+    for(tmp=stack; tmp!=NULL; tmp=tmp->next)
+    {
+        GSwatDebuggableFrame *current_frame = 
+            (GSwatDebuggableFrame *)tmp->data;
+        
+        g_free(current_frame->function);
+        
+        for(tmp2=current_frame->arguments; tmp2!=NULL; tmp2=tmp2->next)
+        {
+            GSwatDebuggableFrameArgument *current_arg = 
+                (GSwatDebuggableFrameArgument *)tmp2->data;
+            
+            g_free(current_arg->name);
+            g_free(current_arg->value);
+            g_free(current_arg);
+        }
+        g_list_free(current_frame->arguments);
+
+        g_free(current_frame);
+    }
+    g_list_free(stack);
+    
+}
+
 
 GList *
 gswat_debuggable_get_breakpoints(GSwatDebuggable* object)
@@ -343,11 +421,33 @@ gswat_debuggable_get_breakpoints(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    ret = debuggable->get_breakpoints(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        ret = debuggable->get_breakpoints(object);
+    }
+    else
+    {
+        ret = NULL;
+    }
     g_object_unref(object);
 
     return ret;
 }
+
+void
+gswat_debuggable_free_breakpoints(GList *breakpoints)
+{
+    GList *tmp;
+
+    for(tmp=breakpoints; tmp!=NULL; tmp=tmp->next)
+    {
+        GSwatDebuggableBreakpoint *current_breakpoint = 
+            (GSwatDebuggableBreakpoint *)tmp->data;
+        g_free(current_breakpoint->source_uri);
+    }
+    g_list_free(breakpoints);
+}
+
 
 GList *
 gswat_debuggable_get_locals_list(GSwatDebuggable* object)
@@ -359,7 +459,14 @@ gswat_debuggable_get_locals_list(GSwatDebuggable* object)
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
-    ret = debuggable->get_locals_list(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        ret = debuggable->get_locals_list(object);
+    }
+    else
+    {
+        ret = NULL;
+    }
     g_object_unref(object);
 
     return ret;

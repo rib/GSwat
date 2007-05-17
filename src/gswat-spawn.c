@@ -88,7 +88,7 @@ main(int argc, char **argv)
 	 */
 	g_option_context_add_main_entries(option_context, option_entries, NULL);
 
-
+    
     g_option_context_parse(option_context, &argc, &argv, &error);
     
 	/* parse remaining command-line arguments that are not
@@ -107,7 +107,6 @@ main(int argc, char **argv)
 
     spawn_loop(rfifo, wfifo);
     
-
     return 0;
 }
 
@@ -127,6 +126,8 @@ spawn_loop(gchar *read_fifo_name, gchar *write_fifo_name)
     GIOChannel *write_fifo;
     gsize written;
     GString *fifo_data;
+    GError *error = NULL;
+    GIOStatus status;
     gint argc;
     gchar **argv;
     pid_t pid;
@@ -135,11 +136,10 @@ spawn_loop(gchar *read_fifo_name, gchar *write_fifo_name)
     pid_t pgrp;
     int ctty;
     
-    
     g_message("read_fifo_name=%s", read_fifo_name);
     g_message("write_fifo_name=%s", write_fifo_name);
-
-
+    
+    
     write_fifo_fd = open(write_fifo_name, O_WRONLY);
     read_fifo_fd = open(read_fifo_name, O_RDONLY);
 
@@ -165,59 +165,126 @@ spawn_loop(gchar *read_fifo_name, gchar *write_fifo_name)
     fifo_data = g_string_new("");
 
     g_string_printf(fifo_data, "%d\n", getpid());
-    g_io_channel_write_chars(write_fifo,
+    status = g_io_channel_write_chars(write_fifo,
                                  fifo_data->str,
-                                 fifo_data->len,
+                                 -1,
                                  &written,
-                                 NULL);
-    g_io_channel_flush(write_fifo, NULL);
+                                 &error);
+    if(error)
+    {
+        fprintf(stderr, "Failed to write PID: %s\n", error->message);
+        g_error_free(error);
+        error = NULL;
+        g_string_free(fifo_data, TRUE);
+        return;
+    }
+    g_assert(status == G_IO_STATUS_NORMAL);
+    fprintf(stderr, "writtenn=%d fifo_data->len=%d\n",
+            written,
+            fifo_data->len);
+    g_assert(written == fifo_data->len);
 
+    status = g_io_channel_flush(write_fifo, &error);
+    if(error)
+    {
+        fprintf(stderr, "Failed to flush io channel: %s\n", error->message);
+        g_error_free(error);
+        error = NULL;
+        g_string_free(fifo_data, TRUE);
+        return;
+    }
+    g_assert(status == G_IO_STATUS_NORMAL);
 
     
     while(1)
     {
         /* acknowledge the connection */
-        g_io_channel_write_chars(write_fifo,
+        status = g_io_channel_write_chars(write_fifo,
                                  "ACK\n",
-                                 strlen("ACK\n"),
+                                 -1,
                                  &written,
-                                 NULL);
-        g_io_channel_flush(write_fifo, NULL);
+                                 &error);
+        if(error)
+        {
+            fprintf(stderr, "Failed to write ACK: %s\n", error->message);
+            g_error_free(error);
+            error = NULL;
+            continue;
+        }
+        g_assert(status == G_IO_STATUS_NORMAL);
+
+        g_io_channel_flush(write_fifo, &error);
+        if(error)
+        {
+            fprintf(stderr, "Failed to flush io channel: %s\n", error->message);
+            g_error_free(error);
+            error = NULL;
+            continue;
+        }
+        g_assert(status == G_IO_STATUS_NORMAL);
 
         /* read the command to run */
-        g_io_channel_read_line_string(read_fifo,
+        status = g_io_channel_read_line_string(read_fifo,
                                       fifo_data,
                                       NULL,
-                                      NULL);
+                                      &error);
+        if(error)
+        {
+            fprintf(stderr, "Failed to read command: %s\n", error->message);
+            g_error_free(error);
+            error = NULL;
+            continue;
+        }
+        g_assert(status == G_IO_STATUS_NORMAL);
         g_message("command=%s", fifo_data->str);
 
         g_shell_parse_argv(fifo_data->str, &argc, &argv, NULL);
 
         /* read the working directory */
-        g_io_channel_read_line_string(read_fifo,
+        status = g_io_channel_read_line_string(read_fifo,
                                       fifo_data,
                                       NULL,
-                                      NULL);
+                                      &error);
+        if(error)
+        {
+            fprintf(stderr, "Failed to read working dir: %s\n", error->message);
+            g_error_free(error);
+            error = NULL;
+            continue;
+        }
+        g_assert(status == G_IO_STATUS_NORMAL);
         g_message("dir=%s", fifo_data->str);
         chdir(fifo_data->str);
 
         /* read the session environment */
         while(1)
         {
-            g_io_channel_read_line_string(read_fifo,
+            status = g_io_channel_read_line_string(read_fifo,
                                           fifo_data,
                                           NULL,
-                                          NULL);
+                                          &error);
+            if(error)
+            {
+                fprintf(stderr, "Failed to read environment: %s\n", error->message);
+                g_error_free(error);
+                error = NULL;
+                break;
+            }
+            g_assert(status == G_IO_STATUS_NORMAL);
 
             if(strcmp(fifo_data->str, "*** END ENV ***\n") == 0)
             {
                 break;
             }
         }
+        if(status == G_IO_STATUS_ERROR)
+        {
+            continue;
+        }
         g_message("env done");
         
         
-    
+        
         switch(pid=fork())
         {
             case -1:
@@ -243,13 +310,14 @@ spawn_loop(gchar *read_fifo_name, gchar *write_fifo_name)
                 
                 break;
         }
+        g_strfreev(argv);
 
         
         /* make sure the process group for the new app
          * controls the terminal
          */
-        signal (SIGTTOU, SIG_IGN);
-        signal (SIGTTIN, SIG_IGN);
+        signal(SIGTTOU, SIG_IGN);
+        signal(SIGTTIN, SIG_IGN);
         tcsetpgrp(fileno(stderr), pid);
 
         /* wait for the first ptrace signal */
@@ -260,21 +328,41 @@ spawn_loop(gchar *read_fifo_name, gchar *write_fifo_name)
 
 
         /* detach from the app */
-        ptrace (PTRACE_DETACH, pid, 0, 0);
+        ptrace(PTRACE_DETACH, pid, 0, 0);
 
 
         /* Send the new PID back to gswat */
         g_string_printf(fifo_data, "%d\n", pid);
 
-        g_io_channel_write_chars(write_fifo,
+        status = g_io_channel_write_chars(write_fifo,
                                  fifo_data->str,
-                                 fifo_data->len,
+                                 -1,
                                  &written,
-                                 NULL);
-        g_io_channel_flush(write_fifo, NULL);
-        
-        g_strfreev(argv);
+                                 &error);
+        if(error)
+        {
+            fprintf(stderr, "Failed to send child PID back: %s\n", error->message);
+            g_error_free(error);
+            error = NULL;
+            kill(pid, SIGKILL);
+            wait(&wait_val);
+            continue;
+        }
+        g_assert(status == G_IO_STATUS_NORMAL);
+        g_assert(written == fifo_data->len);
 
+        status = g_io_channel_flush(write_fifo, NULL);
+        if(error)
+        {
+            fprintf(stderr, "Failed to flush IO: %s\n", error->message);
+            g_error_free(error);
+            error = NULL;
+            kill(pid, SIGKILL);
+            wait(&wait_val);
+            continue;
+        }
+        g_assert(status == G_IO_STATUS_NORMAL);
+        
         /* wait for the process to quit */
         wait(&wait_val);
     }

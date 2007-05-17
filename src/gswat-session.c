@@ -1192,8 +1192,8 @@ gswat_session_abort_edit(GSwatSession *session)
     xml = session->priv->editor->dialog_xml;
 
     dialog = glade_xml_get_widget(xml, "gswat_new_session_dialog");
-    gtk_widget_hide(dialog);
-
+    //gtk_widget_hide(dialog);
+    gtk_widget_destroy(dialog);
 
     g_object_unref(xml);
     g_object_unref(session->priv->editor->name_combo);
@@ -1202,7 +1202,6 @@ gswat_session_abort_edit(GSwatSession *session)
     g_free(session->priv->editor);
     session->priv->editor = NULL;
 
-    gtk_widget_destroy(dialog);
 
     g_signal_emit_by_name(session, "edit-abort");
 }

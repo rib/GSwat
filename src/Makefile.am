@@ -1,4 +1,3 @@
-SUBDIRS = glade_files
 
 bin_PROGRAMS = gswat gswat-spawner
 
@@ -42,7 +41,7 @@ GEDIT_SOURCES = $(BUILT_SOURCES) \
 	gedit/gedit-spinner.c \
 	gedit/gedit-help.c
 
-DIALOG_SOURCES = 			\
+DIALOG_SOURCES = \
 	dialogs/gedit-page-setup-dialog.c		\
 	dialogs/gedit-page-setup-dialog.h		\
 	dialogs/gedit-preferences-dialog.h		\
@@ -56,7 +55,15 @@ DIALOG_SOURCES = 			\
 	dialogs/gedit-search-dialog.h			\
 	dialogs/gedit-search-dialog.c
 
-gswat_SOURCES = $(GSWAT_SOURCES) $(GEDIT_SOURCES) $(DIALOG_SOURCES)
+RHYTHMBOX_SOURCES = \
+	rhythmbox/rb-file-helpers.c \
+	rhythmbox/rb-file-helpers.h
+
+gswat_SOURCES = \
+	$(GSWAT_SOURCES) \
+	$(GEDIT_SOURCES) \
+	$(DIALOG_SOURCES) \
+	$(RHYTHMBOX_SOURCES)
 
 		
 gswat_LDADD = @DEPS_LIBS@
@@ -65,9 +72,11 @@ gswat_CFLAGS = @EXTRA_CFLAGS@ @DEPS_CFLAGS@
 gswat_CPPFLAGS = -DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"	\
 	   	 		 -DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
 				 -DGNOME_ICONDIR=\""$(datadir)/pixmaps"\" 		\
+				 -DSHARE_DIR=\"$(pkgdatadir)\"                  \
 		 		 -I$(top_srcdir)								\
 		 		 -I$(top_srcdir)/src							\
 		 		 -I$(top_srcdir)/src/gedit						\
+		 		 -I$(top_srcdir)/src/rhythmbox					\
 	   	 		 @EXTRA_CPPFLAGS@
 
 gswat_spawner_SOURCES = gswat-spawn.c
@@ -76,16 +85,24 @@ gswat_spawner_CFLAGS = @EXTRA_CFLAGS@ @DEPS_CFLAGS@
 gswat_spawner_CPPFLAGS = @EXTRA_CPPFLAGS@
 
 
-GSWAT_EXTRA_DIST =	gswat-debugger.h \
+GSWAT_EXTRA_DIST = \
+		gswat-debugger.h \
 		gswat-gdbmi.h \
 		gswat-main-window.h \
 		gswat-session.h \
 		gswat-spawn.h \
 		gswat-view.h \
 		sexy-icon-entry.h \
-		gswat-variable-object.h
+		gswat-variable-object.h \
+		templates/g-object-class.c \
+		templates/g-object-class.h \
+		templates/new_g_object_class.sh \
+		templates/g-interface.c \
+		templates/g-interface.h \
+		templates/new_interface.sh
 
-GEDIT_EXTRA_DIST =	gedit-marshal.list \
+GEDIT_EXTRA_DIST = \
+		gedit-marshal.list \
 		gedit-convert.h \
 		gedit-debug.h \
 		gedit-document.h \
@@ -114,15 +131,24 @@ GEDIT_EXTRA_DIST =	gedit-marshal.list \
 
 gladedir = $(datadir)/gswat/glade/
 
-glade_DATA =									\
-	glade_files/gswat.glade						\
+glade_DATA = \
+	data/glade/gswat.glade						\
 	dialogs/gedit-encodings-dialog.glade		\
 	dialogs/gedit-open-location-dialog.glade	\
 	dialogs/gedit-page-setup-dialog.glade		\
 	dialogs/gedit-preferences-dialog.glade		\
 	dialogs/gedit-search-dialog.glade
 
-EXTRA_DIST = $(GSWAT_EXTRA_DIST) $(GEDIT_EXTRA_DIST) $(glade_DATA)
+uidir = $(datadir)/gswat/ui/
+
+ui_DATA = \
+	data/ui/toolbar-menu-ui.xml
+
+EXTRA_DIST = \
+	$(GSWAT_EXTRA_DIST) \
+	$(GEDIT_EXTRA_DIST) \
+	$(glade_DATA) \
+	$(ui_DATA)
 
 
 gedit/gedit-marshal.h: gedit/gedit-marshal.list $(GLIB_GENMARSHAL)

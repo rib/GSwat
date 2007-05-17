@@ -91,7 +91,7 @@ void gswat_gdb_debugger_next(GSwatDebuggable* object);
 void gswat_gdb_debugger_interrupt(GSwatDebuggable* object);
 void gswat_gdb_debugger_restart(GSwatDebuggable* object);
 gchar *gswat_gdb_debugger_get_source_uri(GSwatDebuggable* object);
-gulong gswat_gdb_debugger_get_source_line(GSwatDebuggable* object);
+gint gswat_gdb_debugger_get_source_line(GSwatDebuggable* object);
 guint gswat_gdb_debugger_get_state(GSwatDebuggable* object);
 guint gswat_gdb_debugger_get_state_stamp(GSwatDebuggable* object);
 GList *gswat_gdb_debugger_get_stack(GSwatDebuggable* object);

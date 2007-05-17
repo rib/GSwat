@@ -27,6 +27,8 @@
 #include <libgnomeui/libgnomeui.h>
 #include <glade/glade.h>
 #include <gtksourceview/gtksourceview.h>
+#include <glib/gi18n.h>
+#include "rb-file-helpers.h"
 
 #include <config.h>
 
@@ -60,28 +62,35 @@ static void gswat_window_set_property(GObject *object,
 static void gswat_window_init(GSwatWindow *self);
 static void gswat_window_finalize(GObject *self);
 
-static void create_sourceview(GSwatWindow *self);
-static void destroy_sourceview(GSwatWindow *self);
+static void construct_widgets(GSwatWindow *self);
+static void destruct_widgets(GSwatWindow *self);
+//static void create_sourceview(GSwatWindow *self);
+//static void destroy_sourceview(GSwatWindow *self);
 static void set_toolbar_state(GSwatWindow *self, guint state);
-static void on_gswat_window_new_button_clicked(GtkWidget *widget,
-                                               gpointer data);
+static void on_session_new_activate(GtkAction *action,
+                                    GSwatWindow *self);
 static void on_gswat_session_edit_done(GSwatSession *session,
                                        GSwatWindow *window);
-static void on_gswat_window_next_button_clicked(GtkToolButton *toolbutton,
-                                                gpointer data);
-static void on_gswat_window_step_button_clicked(GtkToolButton *toolbutton,
-                                                gpointer data);
-static void on_gswat_window_finish_button_clicked(GtkToolButton *toolbutton,
-                                                  gpointer data);
-static void on_gswat_window_continue_button_clicked(GtkToolButton *toolbutton,
-                                                    gpointer data);
-static void on_gswat_window_break_button_clicked(GtkToolButton *toolbutton,
-                                                 gpointer data);
-static void on_gswat_window_run_button_clicked(GtkToolButton *toolbutton,
-                                               gpointer data);
-static void
-on_gswat_window_add_break_button_clicked(GtkToolButton *toolbutton,
-                                                     gpointer data);
+static void on_session_quit_activate(GtkAction *action,
+                                     GSwatWindow *self);
+static void on_edit_preferences_activate(GtkAction *action,
+                                         GSwatWindow *self);
+static void on_help_about_activate(GtkAction *action,
+                                   GSwatWindow *self);
+static void on_debugger_step_activate(GtkAction *action,
+                                      GSwatWindow *self);
+static void on_debugger_next_activate(GtkAction *action,
+                                      GSwatWindow *self);
+static void on_debugger_up_frame_activate(GtkAction *action,
+                                          GSwatWindow *self);
+static void on_debugger_continue_activate(GtkAction *action,
+                                          GSwatWindow *self);
+static void on_debugger_interrupt_activate(GtkAction *action,
+                                       GSwatWindow *self);
+static void on_debugger_restart_activate(GtkAction *action,
+                                         GSwatWindow *self);
+static void on_debugger_add_break_activate(GtkAction *action,
+                                           GSwatWindow *self);
 static GSwatView *get_current_view(GSwatWindow *self);
 static void on_gswat_window_debug_button_clicked(GtkToolButton *toolbutton,
                                                  gpointer data);
@@ -150,32 +159,44 @@ enum {
 
 struct _GSwatWindowPrivate
 {
-    GladeXML        *xml;
+    GtkWidget *window;
+    GtkWidget *top_vbox;
+    GtkWidget *center_vpaned;
+    GtkWidget *center_hpaned;
+    GtkWidget *right_vpaned;
+    GtkTreeView *stack_view;
+    GtkTreeView *variable_view;
 
+    GtkUIManager *ui_manager;
+    GtkActionGroup *actiongroup;
+    
+    
+    /********************
+     * Per Session Data *
+     ********************/
+    /* (i.e. needs to be freed
+     *  correctly when starting
+     *  a new session!)
+     */
+    
     GSwatDebuggable *debuggable;
-
+    
+    /* The notebook itself is persistent
+     * accross sessions, but 
+     * GSwatSrcViewTab children are per
+     * session */
     GSwatNotebook   *notebook;
-
+    
     GtkListStore    *stack_list_store;
     GList           *stack;
-
-    GtkTreeView     *variable_view;
+    
     GtkTreeStore    *variable_store;
     //GtkTreeStore    *variables_tree_store;
     //GList           *variables;
 
-    /* toolbar buttons */
-    GtkWidget *step_button;
-    GtkWidget *next_button;
-    GtkWidget *continue_button;
-    GtkWidget *finish_button;
-    GtkWidget *break_button;
-    GtkWidget *restart_button;
-    GtkWidget *add_break_button;
 };
 
 typedef struct {
-    GSwatDebuggableFrame *dbg_frame;
     GString *display;
 }GSwatWindowFrame;
 
@@ -188,6 +209,59 @@ typedef struct {
 /* Variables */
 static GObjectClass *parent_class = NULL;
 //static guint gswat_window_signals[LAST_SIGNAL] = { 0 };
+
+static GtkActionEntry gswat_window_actions [] =
+{
+    { "Session", NULL, N_("_Session") },
+    { "Edit", NULL, N_("_Edit") },
+    { "Help", NULL, N_("_Help") },
+
+    { "SessionNew", GTK_STOCK_FILE, N_("_New Session..."), NULL,
+        N_("Start a new debugging session"),
+        G_CALLBACK(on_session_new_activate) },
+    { "SessionQuit", GTK_STOCK_QUIT, N_("_Quit"), NULL,
+        N_("Quit the debugger"),
+        G_CALLBACK(on_session_quit_activate) },
+
+    { "EditPreferences", GTK_STOCK_PREFERENCES, N_("Prefere_nces..."), NULL,
+        N_("Edit debugger preferences"),
+        G_CALLBACK(on_edit_preferences_activate) },
+
+    { "HelpAbout", GTK_STOCK_ABOUT, N_("_About"), NULL,
+        N_("Show information about the debugger"),
+        G_CALLBACK(on_help_about_activate) },
+
+    /* Toolbar actions */
+    { "SessionNew", GTK_STOCK_FILE, N_("New"), NULL,
+        N_("Start a new debugging session."),
+        G_CALLBACK(on_session_new_activate) },
+
+    { "DebuggerStepIn", GTK_STOCK_JUMP_TO, N_("Step In"), NULL,
+        N_("Step program until it reaches a different source line."),
+        G_CALLBACK(on_debugger_step_activate) },
+    { "DebuggerNext", GTK_STOCK_GO_FORWARD, N_("Next"), NULL,
+        N_("Step program, proceeding through subroutine calls."),
+        G_CALLBACK(on_debugger_next_activate) },
+    { "DebuggerUpFrame", GTK_STOCK_GO_UP, N_("Up Frame"), NULL,
+        N_("Step program, proceeding through subroutine calls."),
+        G_CALLBACK(on_debugger_up_frame_activate) },
+    { "DebuggerContinue", GTK_STOCK_MEDIA_FORWARD, N_("Continue"), NULL,
+        N_("Continue program being debugged, after signal or breakpoint."),
+        G_CALLBACK(on_debugger_continue_activate) },
+
+    { "DebuggerBreak", GTK_STOCK_STOP, N_("Interrupt"), NULL,
+        N_("Interrupt program execution"),
+        G_CALLBACK(on_debugger_interrupt_activate) },
+    { "DebuggerRestart", GTK_STOCK_REFRESH, N_("Restart"), NULL,
+        N_("Restart program execution"),
+        G_CALLBACK(on_debugger_restart_activate) },
+
+    { "DebuggerAddBreak", GTK_STOCK_STOP, N_("Add Break"), NULL,
+        N_("Set breakpoint at current line"),
+        G_CALLBACK(on_debugger_add_break_activate) },
+};
+
+static guint gswat_window_n_actions = G_N_ELEMENTS(gswat_window_actions);
 
 GType
 gswat_window_get_type(void) /* Typechecking */
@@ -376,174 +450,11 @@ gswat_window_mydoable_interface_init(gpointer interface,
 static void
 gswat_window_init(GSwatWindow *self)
 {
-    GnomeApp *main_window = NULL;
-    GtkWidget *button;
-    GtkWidget *item;
-    GtkTreeView *stack_widget;
-    GtkCellRenderer *renderer;
-    GtkTreeViewColumn *column;
-    GtkTreeView *variable_view;
-    GtkTreeStore *variable_store;
-
     self->priv = GSWAT_WINDOW_GET_PRIVATE(self);
 
-    /* load the main window */
-    self->priv->xml = glade_xml_new(GSWAT_GLADEDIR "gswat.glade", "gswat_main_window", NULL);
-
-    /* in case we can't load the interface, bail */
-    if(!self->priv->xml)
-    {
-        g_critical("We could not load the interface!");
-    } 
-
-    glade_xml_signal_autoconnect(self->priv->xml);
-
-
-    button = glade_xml_get_widget(self->priv->xml, "gswat_window_new_button");
-    g_signal_connect(button,
-                     "clicked",
-                     G_CALLBACK(on_gswat_window_new_button_clicked),
-                     self
-                    );
-    item = glade_xml_get_widget(self->priv->xml, "gswat_window_file_new_menu_item");
-    g_signal_connect(item,
-                     "activate",
-                     G_CALLBACK(on_gswat_window_new_button_clicked),
-                     self
-                    );
-
-    button = glade_xml_get_widget(self->priv->xml, "gswat_window_next_button");
-
-    self->priv->next_button = button;
-    g_signal_connect(button,
-                     "clicked",
-                     G_CALLBACK(on_gswat_window_next_button_clicked),
-                     self
-                    );
-
-    button = glade_xml_get_widget(self->priv->xml, "gswat_window_step_button");
-    self->priv->step_button = button;
-    g_signal_connect(button,
-                     "clicked",
-                     G_CALLBACK(on_gswat_window_step_button_clicked),
-                     self
-                    );
-
-    button = glade_xml_get_widget(self->priv->xml, "gswat_window_finish_button");
-    self->priv->finish_button = button;
-    g_signal_connect(button,
-                     "clicked",
-                     G_CALLBACK(on_gswat_window_finish_button_clicked),
-                     self
-                    );
-
-    button = glade_xml_get_widget(self->priv->xml, "gswat_window_continue_button");
-    self->priv->continue_button = button;
-    g_signal_connect(button,
-                     "clicked",
-                     G_CALLBACK(on_gswat_window_continue_button_clicked),
-                     self
-                    );
-
-    button = glade_xml_get_widget(self->priv->xml, "gswat_window_break_button");
-    self->priv->break_button = button;
-    g_signal_connect(button,
-                     "clicked",
-                     G_CALLBACK(on_gswat_window_break_button_clicked),
-                     self
-                    );
-
-    button = glade_xml_get_widget(self->priv->xml, "gswat_window_run_button");
-    self->priv->restart_button = button;
-    g_signal_connect(button,
-                     "clicked",
-                     G_CALLBACK(on_gswat_window_run_button_clicked),
-                     self
-                    );
-    button = glade_xml_get_widget(self->priv->xml, "gswat_window_add_break_button");
-    self->priv->add_break_button = button;
-    g_signal_connect(button,
-                     "clicked",
-                     G_CALLBACK(on_gswat_window_add_break_button_clicked),
-                     self
-                    );
-    button = glade_xml_get_widget(self->priv->xml, "debug_button");
-    g_signal_connect(button,
-                     "clicked",
-                     G_CALLBACK(on_gswat_window_debug_button_clicked),
-                     self
-                    );
-
-
-    main_window = GNOME_APP(glade_xml_get_widget(self->priv->xml,
-                                                 "gswat_main_window")
-                           );
-
-    if(!main_window)
-    {
-        g_critical("Could not find main window in gswat.glade");
-    }
-
-
-    create_sourceview(self);
-
-
-    set_toolbar_state(self, GSWAT_DEBUGGABLE_NOT_RUNNING);
-
-
-    /* Setup the stack view */
-    stack_widget = 
-        (GtkTreeView *)glade_xml_get_widget(self->priv->xml, 
-                                            "gswat_window_stack_widget"
-                                           );
-
-    renderer = gtk_cell_renderer_text_new();
-    column = gtk_tree_view_column_new_with_attributes("Stack",
-                                                      renderer,
-                                                      "markup", GSWAT_WINDOW_STACK_FUNC_COL,
-                                                      NULL);
-    gtk_tree_view_append_column(stack_widget, column);
-
-
-
-    /* Setup the variable view */
-    variable_view = 
-        (GtkTreeView *)glade_xml_get_widget(self->priv->xml, 
-                                            "gswat_window_variable_view"
-                                           );
-    gtk_tree_view_set_rules_hint(variable_view, TRUE);
-
-
-    renderer = gtk_cell_renderer_text_new();
-    column = gtk_tree_view_column_new_with_attributes("Variable",
-                                                      renderer,
-                                                      "markup", GSWAT_WINDOW_VARIABLE_NAME_COL,
-                                                      NULL);
-    gtk_tree_view_append_column(variable_view, column);
-
-
-    renderer = gtk_cell_renderer_text_new();
-    column = gtk_tree_view_column_new_with_attributes("Value",
-                                                      renderer,
-                                                      "markup", GSWAT_WINDOW_VARIABLE_VALUE_COL,
-                                                      NULL);
-    gtk_tree_view_append_column(variable_view, column);
-
-    g_signal_connect(variable_view,
-                     "row_expanded",
-                     G_CALLBACK(on_gswat_window_variable_view_row_expanded),
-                     self);
-    self->priv->variable_view = variable_view;
-
-    variable_store = gtk_tree_store_new(GSWAT_WINDOW_VARIABLES_N_COLS,
-                                        G_TYPE_STRING,
-                                        G_TYPE_STRING,
-                                        G_TYPE_OBJECT);
-    gtk_tree_view_set_model(variable_view, GTK_TREE_MODEL(variable_store));
-    self->priv->variable_store = variable_store;
-
-
-    gtk_widget_show(GTK_WIDGET(main_window));
+    construct_widgets(self);
+    //connect_signals();
+    //set_toolbar_state(self, GSWAT_DEBUGGABLE_NOT_RUNNING);
 }
 
 /* Instantiation wrapper */
@@ -570,11 +481,12 @@ gswat_window_new(GSwatSession *session)
 void
 gswat_window_finalize(GObject *object)
 {
-    GSwatWindow *window;
+    GSwatWindow *self;
 
-    window = GSWAT_WINDOW(object);
+    self = GSWAT_WINDOW(object);
 
-    destroy_sourceview(window);
+    destruct_widgets(self);
+    //destroy_sourceview(self);
 
     G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -598,30 +510,170 @@ For more gtk-doc notes, see:
 http://developer.gnome.org/arch/doc/authors.html
 #endif
 
-
 static void
-create_sourceview(GSwatWindow *self)
+construct_widgets(GSwatWindow *self)
 {
-    GtkWidget       *h_panes;
+    GtkWindow *window;
+    GtkWidget *hbox;
+    GtkWidget *menubar;
+    GtkWidget *toolbar;
+    GtkWidget *scrolled_window;
+    GtkWidget *drawing_area;
+    GtkTreeView *stack_view;
+    GtkTreeView *variable_view;
+    GtkTreeStore *variable_store;
+    GtkCellRenderer *renderer;
+    GtkTreeViewColumn *column;
+    GError *error=NULL;
 
-    h_panes = glade_xml_get_widget(self->priv->xml,
-                                   "gswat_window_h_panes");
 
+    /* Create the top level container widgets */
+    window = GTK_WINDOW(gtk_window_new(GTK_WINDOW_TOPLEVEL));
+    gtk_window_set_default_size(window, 1024, 768);
+    self->priv->window = GTK_WIDGET(window);
+    gtk_window_set_title(window, _("Debugger"));
+    self->priv->top_vbox = gtk_vbox_new(FALSE, 0);
+    gtk_widget_show(self->priv->top_vbox);
+    gtk_container_add(GTK_CONTAINER(window), self->priv->top_vbox);
+    gtk_container_set_border_width(GTK_CONTAINER(self->priv->top_vbox), 0);
+
+    /* Create the menus/toolbar */
+    self->priv->actiongroup = gtk_action_group_new("MainActions");
+    gtk_action_group_add_actions(self->priv->actiongroup,
+                                 gswat_window_actions,
+                                 gswat_window_n_actions,
+                                 self);
+    self->priv->ui_manager = gtk_ui_manager_new(); 
+    gtk_ui_manager_insert_action_group(self->priv->ui_manager,
+                                       self->priv->actiongroup, 
+                                       0);
+    gtk_ui_manager_add_ui_from_file(self->priv->ui_manager,
+                                    rb_file("toolbar-menu-ui.xml"),
+                                    &error);
+    if (error != NULL) {
+        g_warning("Couldn't merge %s: %s",
+                  rb_file("toolbar-menu-ui.xml"), error->message);
+        g_clear_error(&error);
+    }
+    menubar = gtk_ui_manager_get_widget(self->priv->ui_manager, "/MenuBar");
+    gtk_box_pack_start(GTK_BOX(self->priv->top_vbox),
+                       menubar, FALSE, FALSE, 0);
+    hbox = gtk_hbox_new(FALSE, 0);
+    gtk_widget_show(hbox);
+    gtk_box_pack_start(GTK_BOX(self->priv->top_vbox),
+                       hbox, FALSE, FALSE, 0);
+    toolbar = gtk_ui_manager_get_widget(self->priv->ui_manager, "/ToolBar");
+    gtk_box_pack_start_defaults(GTK_BOX(hbox), toolbar);
+
+
+    /* Create the central debugger layout widgets */
+    /* Top level vpaned (source view etc top, drawing area bottom) */
+    self->priv->center_vpaned = gtk_vpaned_new();
+    gtk_box_pack_start(GTK_BOX(self->priv->top_vbox),
+                       self->priv->center_vpaned, TRUE, TRUE, 0);
+    /* A hpaned (source view left, stack/variables right) */
+    self->priv->center_hpaned = gtk_hpaned_new();
+    gtk_paned_set_position(GTK_PANED(self->priv->center_hpaned), 700);
+    gtk_paned_pack1(GTK_PANED(self->priv->center_vpaned),
+                    self->priv->center_hpaned, TRUE, TRUE);
+    /* A notebook for the left source view */
     self->priv->notebook = GSWAT_NOTEBOOK(gswat_notebook_new());
+    gtk_paned_pack1(GTK_PANED(self->priv->center_hpaned),
+                    GTK_WIDGET(self->priv->notebook), TRUE, TRUE);
+    /* A vpaned for the right (variables top, stack bottom) */
+    self->priv->right_vpaned = gtk_vpaned_new();
+    gtk_paned_pack2(GTK_PANED(self->priv->center_hpaned),
+                   self->priv->right_vpaned, TRUE, TRUE);
+    
 
-    gtk_widget_show(GTK_WIDGET(self->priv->notebook));
 
-    gtk_container_remove(GTK_CONTAINER(h_panes),
-                         gtk_paned_get_child1((GTK_PANED(h_panes))));
-    gtk_paned_add1(GTK_PANED(h_panes), GTK_WIDGET(self->priv->notebook));
+    /* Put the bottom drawing area in place */
+    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+    gtk_paned_add2(GTK_PANED(self->priv->center_vpaned),
+                   scrolled_window);
+    drawing_area = gtk_label_new("drawing_area"); //gtk_drawing_area_new();
+    gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrolled_window),
+                                          drawing_area);
+    gtk_paned_add2(GTK_PANED(self->priv->center_vpaned),
+                   drawing_area);
+    gtk_widget_show(drawing_area);
+    
+    
+    /* Setup the local variables view */
+    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+    gtk_paned_pack1(GTK_PANED(self->priv->right_vpaned),
+                   scrolled_window, FALSE, TRUE);
+    variable_view = GTK_TREE_VIEW(gtk_tree_view_new());
+    self->priv->variable_view = variable_view;
+    gtk_container_add(GTK_CONTAINER(scrolled_window),
+                    GTK_WIDGET(variable_view));
+    gtk_tree_view_set_rules_hint(variable_view, TRUE);
+    
+    renderer = gtk_cell_renderer_text_new();
+    column = 
+        gtk_tree_view_column_new_with_attributes("Variable",
+                                                 renderer,
+                                                 "markup",
+                                                 GSWAT_WINDOW_VARIABLE_NAME_COL,
+                                                 NULL);
+    gtk_tree_view_append_column(variable_view, column);
+    
+    
+    renderer = gtk_cell_renderer_text_new();
+    column = 
+        gtk_tree_view_column_new_with_attributes("Value",
+                                                 renderer,
+                                                 "markup",
+                                                 GSWAT_WINDOW_VARIABLE_VALUE_COL,
+                                                 NULL);
+    gtk_tree_view_append_column(variable_view, column);
+    
+    g_signal_connect(variable_view,
+                     "row_expanded",
+                     G_CALLBACK(on_gswat_window_variable_view_row_expanded),
+                     self);
+    
+    variable_store = gtk_tree_store_new(GSWAT_WINDOW_VARIABLES_N_COLS,
+                                        G_TYPE_STRING,
+                                        G_TYPE_STRING,
+                                        G_TYPE_OBJECT);
+    gtk_tree_view_set_model(variable_view, GTK_TREE_MODEL(variable_store));
+    self->priv->variable_store = variable_store;
 
+
+
+    /* Setup the stack view */
+    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+    gtk_paned_pack2(GTK_PANED(self->priv->right_vpaned),
+                   scrolled_window, FALSE, TRUE);
+    stack_view = GTK_TREE_VIEW(gtk_tree_view_new());
+    self->priv->stack_view = stack_view;
+    gtk_container_add(GTK_CONTAINER(scrolled_window),
+                    GTK_WIDGET(stack_view));
+    renderer = gtk_cell_renderer_text_new();
+    column = gtk_tree_view_column_new_with_attributes("Stack",
+                                                      renderer,
+                                                      "markup",
+                                                      GSWAT_WINDOW_STACK_FUNC_COL,
+                                                      NULL);
+    gtk_tree_view_append_column(stack_view, column);
+   
+    
+    gtk_widget_show_all(self->priv->center_vpaned);
+
+    /* Create the footer widgets */
+    //self->priv->statusbar = gswat_statusbar_new();
+
+
+    /* Finally display it all */
+    gtk_ui_manager_ensure_update(self->priv->ui_manager);
+    gtk_widget_show(self->priv->window);
 }
 
-
 static void
-destroy_sourceview(GSwatWindow *self)
+destruct_widgets(GSwatWindow *self)
 {
-    gtk_widget_destroy(GTK_WIDGET(self->priv->notebook));
+    gtk_widget_destroy(self->priv->window);
 }
 
 
@@ -643,8 +695,8 @@ set_toolbar_state(GSwatWindow *self, guint state)
             gtk_widget_set_sensitive(self->priv->add_break_button, FALSE);
 #endif
             break;
-        case GSWAT_DEBUGGABLE_NOT_RUNNING:
-            g_message("******** setting toolbar state GSWAT_DEBUGGABLE_NOT_RUNNING");
+        case GSWAT_DEBUGGABLE_DISCONNECTED:
+            g_message("******** setting toolbar state GSWAT_DEBUGGABLE_DISCONNECTED");
             //http://bugzilla.gnome.org/show_bug.cgi?id=56070
 #if 0
             gtk_widget_set_sensitive(self->priv->step_button, FALSE);
@@ -686,11 +738,9 @@ set_toolbar_state(GSwatWindow *self, guint state)
 }
 
 
-static void
-on_gswat_window_new_button_clicked(GtkWidget   *widget,
-                                   gpointer     data)
+static void on_session_new_activate(GtkAction *action,
+                                    GSwatWindow *self)
 {
-    GSwatWindow *self = GSWAT_WINDOW(data);
     GSwatSession *gswat_session;
 
 
@@ -709,8 +759,8 @@ on_gswat_window_new_button_clicked(GtkWidget   *widget,
        */
     gswat_session_edit(gswat_session);
 
-}
 
+}
 
 static void
 on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
@@ -724,10 +774,21 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
         tabs = gtk_container_get_children(GTK_CONTAINER(window->priv->notebook));
         for(tmp=tabs;tmp!=NULL;tmp=tmp->next)
         {
-            gtk_widget_destroy(GTK_WIDGET(tmp->data));
+            GSwatSrcViewTab *current_tab;
+
+            current_tab = 
+                g_object_get_data(G_OBJECT(tmp->data),
+                                  "gswat-src-view-tab");
+            if(GSWAT_IS_SRC_VIEW_TAB(current_tab))
+            {
+                gtk_widget_destroy(GTK_WIDGET(tmp->data));
+            }
         }
         g_list_free(tabs);
+
+        /* FIXME - free all other per session data! */
     }
+
 
     window->priv->debuggable 
         = GSWAT_DEBUGGABLE(gswat_gdb_debugger_new(session));
@@ -767,66 +828,64 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
     gswat_debuggable_target_connect(window->priv->debuggable);
 }
 
-
-static void
-on_gswat_window_next_button_clicked(GtkToolButton   *toolbutton,
-                                    gpointer         data)
+static void on_session_quit_activate(GtkAction *action,
+                                     GSwatWindow *self)
 {
-    GSwatWindow *self = GSWAT_WINDOW(data);
-    gswat_debuggable_next(self->priv->debuggable);
+    g_object_unref(self->priv->debuggable);
+    gtk_main_quit();
 }
 
-
-static void
-on_gswat_window_step_button_clicked(GtkToolButton   *toolbutton,
-                                    gpointer         data)
+static void on_edit_preferences_activate(GtkAction *action,
+                                         GSwatWindow *self)
 {
-    GSwatWindow *self = GSWAT_WINDOW(data);
+
+}
+
+static void on_help_about_activate(GtkAction *action,
+                                   GSwatWindow *self)
+{
+
+}
+
+static void on_debugger_step_activate(GtkAction *action,
+                                      GSwatWindow *self)
+{
     gswat_debuggable_step_into(self->priv->debuggable);
 }
 
-
-static void
-on_gswat_window_finish_button_clicked(GtkToolButton   *toolbutton,
-                                      gpointer         data)
+static void on_debugger_next_activate(GtkAction *action,
+                                      GSwatWindow *self)
 {
-    GSwatWindow *self = GSWAT_WINDOW(data);
+    gswat_debuggable_next(self->priv->debuggable);
+}
+
+static void on_debugger_up_frame_activate(GtkAction *action,
+                                          GSwatWindow *self)
+{
     gswat_debuggable_finish(self->priv->debuggable);
 }
 
-
-static void
-on_gswat_window_continue_button_clicked  (GtkToolButton   *toolbutton,
-                                          gpointer         data)
+static void on_debugger_continue_activate(GtkAction *action,
+                                          GSwatWindow *self)
 {
-    GSwatWindow *self = GSWAT_WINDOW(data);
     gswat_debuggable_continue(self->priv->debuggable);
 }
 
-
-static void
-on_gswat_window_break_button_clicked(GtkToolButton   *toolbutton,
-                                     gpointer         data)
+static void on_debugger_interrupt_activate(GtkAction *action,
+                                           GSwatWindow *self)
 {
-    GSwatWindow *self = GSWAT_WINDOW(data);
     gswat_debuggable_interrupt(self->priv->debuggable);
 }
 
-
-static void
-on_gswat_window_run_button_clicked(GtkToolButton   *toolbutton,
-                                   gpointer         data)
+static void on_debugger_restart_activate(GtkAction *action,
+                                         GSwatWindow *self)
 {
-    GSwatWindow *self = GSWAT_WINDOW(data);
     gswat_debuggable_restart(self->priv->debuggable);
 }
 
-
-static void
-on_gswat_window_add_break_button_clicked(GtkToolButton   *toolbutton,
-                                         gpointer         data)
+static void on_debugger_add_break_activate(GtkAction *action,
+                                           GSwatWindow *self)
 {
-    GSwatWindow *self = GSWAT_WINDOW(data);
     GSwatView *source_view = NULL;
     GtkTextBuffer *source_buffer = NULL;
     GeditDocument *current_document;
@@ -852,6 +911,7 @@ on_gswat_window_add_break_button_clicked(GtkToolButton   *toolbutton,
 
     /* FIXME this should be triggered by a signal */
     update_line_highlights(self);
+
 }
 
 
@@ -928,6 +988,11 @@ update_source_view(GSwatWindow *self)
     debuggable = self->priv->debuggable;
 
     file_uri = gswat_debuggable_get_source_uri(debuggable);
+    if(!file_uri)
+    {
+        return;
+    }
+
     line = gswat_debuggable_get_source_line(debuggable);
 
     g_message("gswat-window update_source_view file=%s, line=%d", file_uri, line);
@@ -1096,6 +1161,11 @@ update_line_highlights(GSwatWindow *self)
 
         current_doc_uri 
             = gedit_document_get_uri(gswat_view_get_document(current_gswat_view));
+        if(!current_doc_uri)
+        {
+            g_object_unref(current_gswat_view);
+            continue;
+        }
 
         breakpoint_color = gedit_prefs_manager_get_breakpoint_bg_color();
 
@@ -1127,6 +1197,7 @@ update_line_highlights(GSwatWindow *self)
         }
 
         gswat_view_set_line_highlights(current_gswat_view, highlights);
+        g_object_unref(current_gswat_view);
 
         /* free the list */
         for(tmp2=highlights; tmp2!=NULL; tmp2=tmp2->next)
@@ -1208,6 +1279,7 @@ update_variable_view(gpointer data)
         path = gtk_tree_model_get_path(GTK_TREE_MODEL(variable_store), &iter);
         row_ref = gtk_tree_row_reference_new(GTK_TREE_MODEL(variable_store), path);
         gtk_tree_path_free(path);
+        g_assert(gtk_tree_row_reference_get_path(row_ref)!=NULL);
         g_object_set_data(G_OBJECT(variable_object),
                           "gswat_row_reference",
                           row_ref);
@@ -1409,17 +1481,6 @@ on_gswat_debuggable_stack_notify(GObject *object,
 
     stack = gswat_debuggable_get_stack(debuggable);
 
-    /* TODO look up the stack tree view widget */
-    xml = self->priv->xml;
-    stack_widget = (GtkTreeView *)glade_xml_get_widget(xml, "gswat_window_stack_widget");
-
-
-    list_store = gtk_list_store_new(GSWAT_WINDOW_STACK_N_COLS,
-                                    G_TYPE_STRING,
-                                    G_TYPE_ULONG);
-
-
-
     /* create new display strings for the stack */
     for(tmp=stack; tmp!=NULL; tmp=tmp->next)
     {
@@ -1461,15 +1522,23 @@ on_gswat_debuggable_stack_notify(GObject *object,
 
         display = g_string_append(display, ")");
 
-        display_frame->dbg_frame = frame;
         display_frame->display = display;
 
         disp_stack = g_list_prepend(disp_stack, display_frame);
     }
     disp_stack = g_list_reverse(disp_stack);
 
+    gswat_debuggable_free_stack(stack);
+    stack = NULL;
+    
 
     /* start displaying the new stack frames */
+    stack_widget = GTK_TREE_VIEW(self->priv->stack_view);
+
+    list_store = gtk_list_store_new(GSWAT_WINDOW_STACK_N_COLS,
+                                    G_TYPE_STRING,
+                                    G_TYPE_ULONG);
+
     for(tmp=disp_stack; tmp!=NULL; tmp=tmp->next)
     {
         GSwatWindowFrame *display_frame = (GSwatWindowFrame *)tmp->data;
@@ -1499,20 +1568,12 @@ on_gswat_debuggable_stack_notify(GObject *object,
         GSwatWindowFrame *display_frame = (GSwatWindowFrame *)tmp->data;
 
         g_string_free(display_frame->display, TRUE);
-        for(tmp2=display_frame->dbg_frame->arguments; tmp2!=NULL; tmp2=tmp2->next)
-        {   
-            arg = (GSwatDebuggableFrameArgument *)tmp2->data;
-
-            g_free(arg->name);
-            g_free(arg->value);
-            g_free(arg);
-        }
-        g_list_free(display_frame->dbg_frame->arguments);
 
         g_free(display_frame);
     }
     g_list_free(self->priv->stack);
     self->priv->stack=disp_stack;
+
 }
 
 

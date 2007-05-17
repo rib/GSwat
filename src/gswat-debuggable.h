@@ -22,13 +22,14 @@ struct _GSwatDebuggableIface
 
     /* VTable: */
     void (*target_connect)(GSwatDebuggable* object);
+    void (*target_disconnect)(GSwatDebuggable* object);
     void (*request_line_breakpoint)(GSwatDebuggable* object,
                                     gchar *uri,
                                     guint line);
     void (*request_function_breakpoint)(GSwatDebuggable* object,
                                         gchar *symbol);
     gchar *(*get_source_uri)(GSwatDebuggable* object);
-    gulong (*get_source_line)(GSwatDebuggable* object);
+    gint (*get_source_line)(GSwatDebuggable* object);
     void (*cont)(GSwatDebuggable* object);
     void (*finish)(GSwatDebuggable* object);
     void (*next)(GSwatDebuggable* object);
@@ -43,7 +44,7 @@ struct _GSwatDebuggableIface
 };
 
 typedef enum {
-    GSWAT_DEBUGGABLE_NOT_RUNNING,
+    GSWAT_DEBUGGABLE_DISCONNECTED,
 	GSWAT_DEBUGGABLE_RUNNING,
     GSWAT_DEBUGGABLE_INTERRUPTED
 }GSwatDebuggableState;
@@ -69,23 +70,25 @@ GType gswat_debuggable_get_type(void);
 
 /* Interface functions */
 void gswat_debuggable_target_connect(GSwatDebuggable* object);
+guint gswat_debuggable_get_state(GSwatDebuggable* object);
 void gswat_debuggable_request_line_breakpoint(GSwatDebuggable* object,
                                               gchar *uri,
                                               guint line);
 void gswat_debuggable_request_function_breakpoint(GSwatDebuggable* object,
                                                   gchar *symbol);
 gchar *gswat_debuggable_get_source_uri(GSwatDebuggable* object);
-gulong gswat_debuggable_get_source_line(GSwatDebuggable* object);
+gint gswat_debuggable_get_source_line(GSwatDebuggable* object);
 void gswat_debuggable_continue(GSwatDebuggable* object);
 void gswat_debuggable_finish(GSwatDebuggable* object);
 void gswat_debuggable_next(GSwatDebuggable* object);
 void gswat_debuggable_step_into(GSwatDebuggable* object);
 void gswat_debuggable_interrupt(GSwatDebuggable* object);
 void gswat_debuggable_restart(GSwatDebuggable* object);
-guint gswat_debuggable_get_state(GSwatDebuggable* object);
 guint gswat_debuggable_get_state_stamp(GSwatDebuggable* object);
 GList *gswat_debuggable_get_stack(GSwatDebuggable* object);
+void gswat_debuggable_free_stack(GList *stack);
 GList *gswat_debuggable_get_breakpoints(GSwatDebuggable* object);
+void gswat_debuggable_free_breakpoints(GList *breakpoints);
 GList *gswat_debuggable_get_locals_list(GSwatDebuggable* object);
 
 G_END_DECLS

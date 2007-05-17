@@ -925,7 +925,7 @@ document_loader_loaded (GeditDocumentLoader *loader,
 			const GError        *error,
 			GeditDocument       *doc)
 {
-    GError *error_copy;
+    GError *error_copy = NULL;
 
 	/* load was successful */
 	if (error == NULL)
