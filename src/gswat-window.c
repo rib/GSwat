@@ -100,6 +100,10 @@ static void on_gswat_debuggable_source_uri_notify(GObject *debuggable,
 static void on_gswat_debuggable_source_line_notify(GObject *debuggable,
                                                    GParamSpec *property,
                                                    gpointer data);
+static void on_gswat_debuggable_breakpoints_notify(GObject *debuggable,
+                                                  GParamSpec *property,
+                                                  gpointer data);
+
 static void update_source_view(GSwatWindow *self);
 static void on_gedit_document_loaded(GeditDocument *doc,
                                      const GError *error,
@@ -157,6 +161,15 @@ enum {
     GSWAT_WINDOW_VARIABLES_N_COLS
 };
 
+/* may become part of a plugin interface: */
+enum {
+    GSWAT_WINDOW_CONTAINER_MAIN,
+    GSWAT_WINDOW_CONTAINER_RIGHT0,
+    GSWAT_WINDOW_CONTAINER_RIGHT1,
+    GSWAT_WINDOW_CONTAINER_BOTTOM,
+    GSWAT_WINDOW_CONTAINER_COUNT
+};
+
 struct _GSwatWindowPrivate
 {
     GtkWidget *window;
@@ -169,8 +182,8 @@ struct _GSwatWindowPrivate
 
     GtkUIManager *ui_manager;
     GtkActionGroup *actiongroup;
-    
-    
+
+
     /********************
      * Per Session Data *
      ********************/
@@ -178,18 +191,18 @@ struct _GSwatWindowPrivate
      *  correctly when starting
      *  a new session!)
      */
-    
+
     GSwatDebuggable *debuggable;
-    
+
     /* The notebook itself is persistent
      * accross sessions, but 
      * GSwatSrcViewTab children are per
      * session */
-    GSwatNotebook   *notebook;
-    
+    GSwatNotebook   *notebook[GSWAT_WINDOW_CONTAINER_COUNT];
+
     GtkListStore    *stack_list_store;
     GList           *stack;
-    
+
     GtkTreeStore    *variable_store;
     //GtkTreeStore    *variables_tree_store;
     //GList           *variables;
@@ -517,6 +530,7 @@ construct_widgets(GSwatWindow *self)
     GtkWidget *hbox;
     GtkWidget *menubar;
     GtkWidget *toolbar;
+    GSwatNotebook *notebook;
     GtkWidget *scrolled_window;
     GtkWidget *drawing_area;
     GtkTreeView *stack_view;
@@ -576,39 +590,39 @@ construct_widgets(GSwatWindow *self)
     gtk_paned_set_position(GTK_PANED(self->priv->center_hpaned), 700);
     gtk_paned_pack1(GTK_PANED(self->priv->center_vpaned),
                     self->priv->center_hpaned, TRUE, TRUE);
-    /* A notebook for the left source view */
-    self->priv->notebook = GSWAT_NOTEBOOK(gswat_notebook_new());
+    /* A notebook for the main source view */
+    notebook = GSWAT_NOTEBOOK(gswat_notebook_new());
+    self->priv->notebook[GSWAT_WINDOW_CONTAINER_MAIN] = notebook;
     gtk_paned_pack1(GTK_PANED(self->priv->center_hpaned),
-                    GTK_WIDGET(self->priv->notebook), TRUE, TRUE);
-    /* A vpaned for the right (variables top, stack bottom) */
+                    GTK_WIDGET(notebook), TRUE, TRUE);
+    /* A vpaned+notebooks for the right (variables top, stack bottom) */
     self->priv->right_vpaned = gtk_vpaned_new();
     gtk_paned_pack2(GTK_PANED(self->priv->center_hpaned),
-                   self->priv->right_vpaned, TRUE, TRUE);
-    
+                    self->priv->right_vpaned, TRUE, TRUE);
+    notebook = GSWAT_NOTEBOOK(gswat_notebook_new());
+    gtk_notebook_set_show_tabs(GTK_NOTEBOOK(notebook), FALSE);
+    self->priv->notebook[GSWAT_WINDOW_CONTAINER_RIGHT0] = notebook;
+    gtk_paned_pack1(GTK_PANED(self->priv->right_vpaned),
+                    GTK_WIDGET(notebook), FALSE, TRUE);
+    notebook = GSWAT_NOTEBOOK(gswat_notebook_new());
+    gtk_notebook_set_show_tabs(GTK_NOTEBOOK(notebook), FALSE);
+    self->priv->notebook[GSWAT_WINDOW_CONTAINER_RIGHT1] = notebook;
+    gtk_paned_pack2(GTK_PANED(self->priv->right_vpaned),
+                    GTK_WIDGET(notebook), FALSE, TRUE);
 
 
-    /* Put the bottom drawing area in place */
-    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
-    gtk_paned_add2(GTK_PANED(self->priv->center_vpaned),
-                   scrolled_window);
-    drawing_area = gtk_label_new("drawing_area"); //gtk_drawing_area_new();
-    gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrolled_window),
-                                          drawing_area);
-    gtk_paned_add2(GTK_PANED(self->priv->center_vpaned),
-                   drawing_area);
-    gtk_widget_show(drawing_area);
-    
-    
+
     /* Setup the local variables view */
     scrolled_window = gtk_scrolled_window_new(NULL, NULL);
-    gtk_paned_pack1(GTK_PANED(self->priv->right_vpaned),
-                   scrolled_window, FALSE, TRUE);
+    notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_RIGHT0];
+    //gswat_notebook_insert_page(notebook, /* FIXME */, -1, TRUE);
+    gtk_notebook_insert_page(GTK_NOTEBOOK(notebook), scrolled_window, NULL, -1);
     variable_view = GTK_TREE_VIEW(gtk_tree_view_new());
     self->priv->variable_view = variable_view;
     gtk_container_add(GTK_CONTAINER(scrolled_window),
-                    GTK_WIDGET(variable_view));
+                      GTK_WIDGET(variable_view));
     gtk_tree_view_set_rules_hint(variable_view, TRUE);
-    
+
     renderer = gtk_cell_renderer_text_new();
     column = 
         gtk_tree_view_column_new_with_attributes("Variable",
@@ -617,8 +631,8 @@ construct_widgets(GSwatWindow *self)
                                                  GSWAT_WINDOW_VARIABLE_NAME_COL,
                                                  NULL);
     gtk_tree_view_append_column(variable_view, column);
-    
-    
+
+
     renderer = gtk_cell_renderer_text_new();
     column = 
         gtk_tree_view_column_new_with_attributes("Value",
@@ -627,12 +641,12 @@ construct_widgets(GSwatWindow *self)
                                                  GSWAT_WINDOW_VARIABLE_VALUE_COL,
                                                  NULL);
     gtk_tree_view_append_column(variable_view, column);
-    
+
     g_signal_connect(variable_view,
                      "row_expanded",
                      G_CALLBACK(on_gswat_window_variable_view_row_expanded),
                      self);
-    
+
     variable_store = gtk_tree_store_new(GSWAT_WINDOW_VARIABLES_N_COLS,
                                         G_TYPE_STRING,
                                         G_TYPE_STRING,
@@ -644,12 +658,13 @@ construct_widgets(GSwatWindow *self)
 
     /* Setup the stack view */
     scrolled_window = gtk_scrolled_window_new(NULL, NULL);
-    gtk_paned_pack2(GTK_PANED(self->priv->right_vpaned),
-                   scrolled_window, FALSE, TRUE);
+    notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_RIGHT1];
+    //gswat_notebook_insert_page(notebook, /* FIXME */, -1, TRUE);
+    gtk_notebook_insert_page(GTK_NOTEBOOK(notebook), scrolled_window, NULL, -1);
     stack_view = GTK_TREE_VIEW(gtk_tree_view_new());
     self->priv->stack_view = stack_view;
     gtk_container_add(GTK_CONTAINER(scrolled_window),
-                    GTK_WIDGET(stack_view));
+                      GTK_WIDGET(stack_view));
     renderer = gtk_cell_renderer_text_new();
     column = gtk_tree_view_column_new_with_attributes("Stack",
                                                       renderer,
@@ -657,8 +672,26 @@ construct_widgets(GSwatWindow *self)
                                                       GSWAT_WINDOW_STACK_FUNC_COL,
                                                       NULL);
     gtk_tree_view_append_column(stack_view, column);
-   
-    
+
+
+    /* Put the bottom drawing area in place */
+    notebook = GSWAT_NOTEBOOK(gswat_notebook_new());
+    gtk_notebook_set_show_tabs(GTK_NOTEBOOK(notebook), FALSE);
+    self->priv->notebook[GSWAT_WINDOW_CONTAINER_BOTTOM] = notebook;
+    gtk_paned_add2(GTK_PANED(self->priv->center_vpaned),
+                   GTK_WIDGET(notebook));
+    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+    //gswat_notebook_insert_page(notebook, /* FIXME */, -1, TRUE);
+    gtk_notebook_insert_page(GTK_NOTEBOOK(notebook), scrolled_window, NULL, -1);
+    drawing_area = gtk_label_new("drawing_area"); //gtk_drawing_area_new();
+    gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrolled_window),
+                                          drawing_area);
+    gtk_paned_add2(GTK_PANED(self->priv->center_vpaned),
+                   drawing_area);
+    gtk_widget_show(drawing_area);
+
+
+
     gtk_widget_show_all(self->priv->center_vpaned);
 
     /* Create the footer widgets */
@@ -766,12 +799,13 @@ static void
 on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
 {
     GList *tabs, *tmp;
+    GSwatNotebook *notebook;
 
     if(window->priv->debuggable)
     {
         g_object_unref(window->priv->debuggable);
-
-        tabs = gtk_container_get_children(GTK_CONTAINER(window->priv->notebook));
+        notebook = window->priv->notebook[GSWAT_WINDOW_CONTAINER_MAIN];
+        tabs = gtk_container_get_children(GTK_CONTAINER(notebook));
         for(tmp=tabs;tmp!=NULL;tmp=tmp->next)
         {
             GSwatSrcViewTab *current_tab;
@@ -818,6 +852,12 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
                      "notify::source-line",
                      G_CALLBACK(on_gswat_debuggable_source_line_notify),
                      window);
+
+    g_signal_connect(G_OBJECT(window->priv->debuggable),
+                     "notify::breakpoints",
+                     G_CALLBACK(on_gswat_debuggable_breakpoints_notify),
+                     window);
+
 #if 0
     g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
                     update_variable_view,
@@ -909,22 +949,21 @@ static void on_debugger_add_break_activate(GtkAction *action,
 
     gswat_debuggable_request_line_breakpoint(self->priv->debuggable, uri, line + 1);
 
-    /* FIXME this should be triggered by a signal */
-    update_line_highlights(self);
-
 }
 
 
 static GSwatView *
 get_current_view(GSwatWindow *self)
 {
-    GtkNotebook *notebook = GTK_NOTEBOOK(self->priv->notebook);
+    GSwatNotebook *notebook;
     GtkWidget *current_page;
     GSwatSrcViewTab *src_view_tab;
 
+    notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_MAIN];
+
     current_page = 
-        gtk_notebook_get_nth_page(notebook,
-                                  gtk_notebook_get_current_page(notebook)
+        gtk_notebook_get_nth_page(GTK_NOTEBOOK(notebook),
+                                  gtk_notebook_get_current_page(GTK_NOTEBOOK(notebook))
                                  );
 
     src_view_tab = g_object_get_data(G_OBJECT(current_page),
@@ -969,6 +1008,15 @@ on_gswat_debuggable_source_line_notify(GObject *debuggable,
     update_source_view(self);
 }
 
+static void
+on_gswat_debuggable_breakpoints_notify(GObject *debuggable,
+                                      GParamSpec *property,
+                                      gpointer data)
+{
+    GSwatWindow *self = GSWAT_WINDOW(data);
+
+    update_line_highlights(self);
+}
 
 /* FIXME, this seems fairly heavy weight to happen every
  * time you step a single line while debugging
@@ -979,6 +1027,7 @@ update_source_view(GSwatWindow *self)
     GSwatDebuggable *debuggable;
     gchar           *file_uri;
     gint            line;
+    GSwatNotebook   *notebook;
     GList           *tabs, *tmp;
     GSwatView       *gswat_view;
     GeditDocument   *gedit_document;
@@ -1002,7 +1051,8 @@ update_source_view(GSwatWindow *self)
      */
 
     /* Look for the source view tab... */
-    tabs = gtk_container_get_children(GTK_CONTAINER(self->priv->notebook));
+    notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_MAIN];
+    tabs = gtk_container_get_children(GTK_CONTAINER(notebook));
     src_view_tab = NULL;
     for(tmp=tabs; tmp!=NULL; tmp=tmp->next)
     {
@@ -1081,7 +1131,7 @@ update_source_view(GSwatWindow *self)
                           "gswat-src-view-tab",
                           src_view_tab);
 
-        gswat_notebook_insert_page(self->priv->notebook,
+        gswat_notebook_insert_page(notebook,
                                    GSWAT_TABABLE(src_view_tab),
                                    -1,
                                    TRUE);
@@ -1126,6 +1176,7 @@ update_line_highlights(GSwatWindow *self)
 {
     /* request all debuggable breakpoints */
     GList *breakpoints;
+    GSwatNotebook *notebook;
     GList *tabs;
     GList *tmp, *tmp2;
     GList *highlights=NULL;
@@ -1143,7 +1194,8 @@ update_line_highlights(GSwatWindow *self)
 
     breakpoints = gswat_debuggable_get_breakpoints(self->priv->debuggable);
 
-    tabs = gtk_container_get_children(GTK_CONTAINER(self->priv->notebook));
+    notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_MAIN];
+    tabs = gtk_container_get_children(GTK_CONTAINER(notebook));
     for(tmp=tabs;tmp!=NULL;tmp=tmp->next)
     {
         GSwatSrcViewTab *current_tab;
@@ -1473,7 +1525,6 @@ on_gswat_debuggable_stack_notify(GObject *object,
     GSwatDebuggable *debuggable = GSWAT_DEBUGGABLE(object);
     GList *stack, *tmp, *tmp2;
     GSwatDebuggableFrameArgument *arg;
-    GladeXML *xml;
     GtkTreeView *stack_widget=NULL;
     GtkListStore *list_store;
     GtkTreeIter iter;
@@ -1530,7 +1581,7 @@ on_gswat_debuggable_stack_notify(GObject *object,
 
     gswat_debuggable_free_stack(stack);
     stack = NULL;
-    
+
 
     /* start displaying the new stack frames */
     stack_widget = GTK_TREE_VIEW(self->priv->stack_view);

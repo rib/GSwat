@@ -327,7 +327,7 @@ gswat_notebook_init(GSwatNotebook *self)
 }
 
 /* Instantiation wrapper */
-GSwatNotebook*
+GtkWidget*
 gswat_notebook_new(void)
 {
     return GSWAT_NOTEBOOK(g_object_new(gswat_notebook_get_type(), NULL));

@@ -45,18 +45,32 @@ struct _GSwatGdbDebuggerClass
     //void (* signal) (GSwatGdbDebugger *object);
 };
 
-/* FIXME - the namespacing here isn't consistent */
-typedef void (*GDBMIDoneCallback)(GSwatGdbDebugger *self,
-                                  gulong token,
-                                  const GDBMIValue *val,
-                                  GString *command,
-                                  gpointer data);
+
+typedef enum
+{
+    /* result record types */
+    GSWAT_GDB_MI_REC_TYPE_RESULT_DONE,
+    GSWAT_GDB_MI_REC_TYPE_RESULT_RUNNING,
+    GSWAT_GDB_MI_REC_TYPE_RESULT_CONNECTED,
+    GSWAT_GDB_MI_REC_TYPE_RESULT_ERROR,
+    GSWAT_GDB_MI_REC_TYPE_RESULT_EXIT,
+
+    /* out of band record types */
+    GSWAT_GDB_MI_REC_TYPE_OOB_STOPPED,
+
+    GSWAT_GDB_MI_REC_TYPE_UNKNOWN
+}GSwatGdbMIRecordType;
+
 
 typedef struct {
-    gulong token;
-    GDBMIDoneCallback callback;
-    gpointer data;
-}GDBMIDoneHandler;
+    GSwatGdbMIRecordType type;
+    GDBMIValue *val;
+}GSwatGdbMIRecord;
+
+typedef void (*GSwatGdbMIRecordCallback)(GSwatGdbDebugger *self,
+                                         const GSwatGdbMIRecord *record,
+                                         void *data);
+
 
 GType gswat_gdb_debugger_get_type(void);
 
@@ -64,19 +78,19 @@ GType gswat_gdb_debugger_get_type(void);
 GSwatGdbDebugger *gswat_gdb_debugger_new(GSwatSession *session);
 void gswat_gdb_debugger_target_connect(GSwatDebuggable* object);
 void gswat_gdb_debugger_target_disconnect(GSwatDebuggable* object);
-gulong gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* self,
-                                          gchar const* command);
-void gdb_debugger_mi_done_connect(GSwatDebuggable *object,
-                                  gulong token,
-                                  GDBMIDoneCallback callback,
-                                  gpointer *data);
-GDBMIValue *gswat_gdb_debugger_get_mi_value(GSwatGdbDebugger *self,
-                                            gulong token,
-                                            GDBMIValue **error);
-void gswat_gdb_debugger_mi_done_connect(GSwatGdbDebugger *self,
-                                        gulong token,
-                                        GDBMIDoneCallback callback,
-                                        gpointer *data);
+//gulong gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* self,
+//                                          gchar const* command);
+gulong gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* object,
+                                          const gchar* command,
+                                          GSwatGdbMIRecordCallback result_callback,
+                                          void *data);
+void gswat_gdb_debugger_nop_mi_callback(GSwatGdbDebugger *self,
+                                        const GSwatGdbMIRecord *record,
+                                        void *data);
+GSwatGdbMIRecord *
+gswat_gdb_debugger_get_mi_result_record(GSwatGdbDebugger *object,
+                                        gulong token);
+void gswat_gdb_debugger_free_mi_record(GSwatGdbMIRecord *record);
 void gswat_gdb_debugger_send_cli_command(GSwatGdbDebugger* self,
                                          gchar const* command);
 void gswat_gdb_debugger_request_line_breakpoint(GSwatDebuggable* object,

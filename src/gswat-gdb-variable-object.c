@@ -419,7 +419,7 @@ create_gdb_variable_object(GSwatGdbVariableObject *self)
 {
     gchar *command;
     gulong token;
-    GDBMIValue *val;
+    GSwatGdbMIRecord *result;
     const GDBMIValue *numchild_val;
 
     /* FIXME we only support expressions that are evaluated
@@ -428,12 +428,15 @@ create_gdb_variable_object(GSwatGdbVariableObject *self)
                               global_variable_object_index,
                               //self->priv->frame,
                               self->priv->expression);
-    token = gswat_gdb_debugger_send_mi_command(self->priv->debugger, command); 
+    token = gswat_gdb_debugger_send_mi_command(self->priv->debugger,
+                                               command,
+                                               NULL,
+                                               NULL); 
     g_free(command);
 
     /* FIXME - make sure we can cope with junk expressions */
-    val=gswat_gdb_debugger_get_mi_value(self->priv->debugger, token, NULL);
-    gdbmi_value_free(val);
+    result=gswat_gdb_debugger_get_mi_result_record(self->priv->debugger, token);
+    gswat_gdb_debugger_free_mi_record(result);
 
     self->priv->gdb_name = g_strdup_printf("v%d",
                                            global_variable_object_index);
@@ -443,9 +446,12 @@ create_gdb_variable_object(GSwatGdbVariableObject *self)
     /* find out if this expression has any children */
     command = g_strdup_printf("-var-info-num-children %s",
                               self->priv->gdb_name);
-    token = gswat_gdb_debugger_send_mi_command(self->priv->debugger, command);
-    val=gswat_gdb_debugger_get_mi_value(self->priv->debugger, token, NULL);
-    numchild_val=gdbmi_value_hash_lookup(val, "numchild");
+    token = gswat_gdb_debugger_send_mi_command(self->priv->debugger,
+                                               command,
+                                               NULL,
+                                               NULL);
+    result=gswat_gdb_debugger_get_mi_result_record(self->priv->debugger, token);
+    numchild_val=gdbmi_value_hash_lookup(result->val, "numchild");
     if(numchild_val)
     {
         const char *child_count;
@@ -456,11 +462,9 @@ create_gdb_variable_object(GSwatGdbVariableObject *self)
     {
         self->priv->child_count = 0;
     }
-    gdbmi_value_free(val);
+    gswat_gdb_debugger_free_mi_record(result);
 
     g_free(command);
-
-
 }
 
 
@@ -509,7 +513,9 @@ destroy_gdb_variable_object(GSwatGdbVariableObject *self)
     command = g_strdup_printf("-var-delete %s",
                               self->priv->gdb_name);
     gswat_gdb_debugger_send_mi_command(self->priv->debugger,
-                                 command);
+                                       command,
+                                       gswat_gdb_debugger_nop_mi_callback,
+                                       NULL);
     g_free(command);
 
     g_free(self->priv->cached_value);
@@ -566,8 +572,8 @@ gswat_gdb_variable_object_get_value(GSwatVariableObject *object,
 {
     GSwatGdbVariableObject *self;
     gulong token;
-    GDBMIValue *top_val;
-    const GDBMIValue *value;
+    GSwatGdbMIRecord *result;
+    const GDBMIValue *value = NULL;
     gchar *command;
     gchar *value_string;
     guint debugger_state_stamp;
@@ -595,19 +601,21 @@ gswat_gdb_variable_object_get_value(GSwatVariableObject *object,
                               self->priv->gdb_name);
 
     token = gswat_gdb_debugger_send_mi_command(self->priv->debugger,
-                                         command);
+                                               command,
+                                               NULL,
+                                               NULL);
 
     g_free(command);
 
-    top_val = gswat_gdb_debugger_get_mi_value(self->priv->debugger,
-                                              token,
-                                              NULL);
-    if(top_val)
+    result = gswat_gdb_debugger_get_mi_result_record(self->priv->debugger,
+                                             token);
+    if(result && result->val)
     {
-        value = gdbmi_value_hash_lookup(top_val, "value");
+        value = gdbmi_value_hash_lookup(result->val, "value");
+    }
 
-        g_assert(value);
-
+    if(value)
+    {
         value_string = g_strdup(gdbmi_value_literal_get(value));
     }
     else
@@ -630,8 +638,7 @@ gswat_gdb_variable_object_get_value(GSwatVariableObject *object,
     self->priv->cached_value = g_strdup(value_string);
     self->priv->debugger_state_stamp = debugger_state_stamp;
 
-    gdbmi_value_free(top_val);
-
+    gswat_gdb_debugger_free_mi_record(result);
 
     return value_string;
 }
@@ -656,7 +663,7 @@ gswat_gdb_variable_object_get_children(GSwatVariableObject *object)
     GList *tmp;
     gchar *command;
     gulong token;
-    GDBMIValue *top_val;
+    GSwatGdbMIRecord *result;
     const GDBMIValue *children_val, *child_val;
     int n;
     const gchar *child_value;
@@ -673,19 +680,20 @@ gswat_gdb_variable_object_get_children(GSwatVariableObject *object)
         }
         return g_list_copy(self->priv->children);
     }
-
-
+    
     command=g_strdup_printf("-var-list-children --simple-values %s",
                             self->priv->gdb_name);
-
-    token = gswat_gdb_debugger_send_mi_command(self->priv->debugger, command);
+    
+    token = gswat_gdb_debugger_send_mi_command(self->priv->debugger,
+                                               command,
+                                               NULL,
+                                               NULL);
     g_free(command);
-    top_val = gswat_gdb_debugger_get_mi_value(self->priv->debugger,
-                                              token,
-                                              NULL);
+    result = gswat_gdb_debugger_get_mi_result_record(self->priv->debugger,
+                                                     token);
 
 
-    children_val = gdbmi_value_hash_lookup(top_val, "children");
+    children_val = gdbmi_value_hash_lookup(result->val, "children");
     n=0;
     while((child_val = gdbmi_value_list_get_nth(children_val, n)))
     {
@@ -728,8 +736,8 @@ gswat_gdb_variable_object_get_children(GSwatVariableObject *object)
                                                      variable_object);
         n++;
     }
-
-    gdbmi_value_free(top_val);
+    
+    gswat_gdb_debugger_free_mi_record(result);
 
     return g_list_copy(self->priv->children);
 }

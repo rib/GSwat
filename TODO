@@ -5,24 +5,34 @@ todo
 misusing this, so we shouldn't copy them!
 
   
-Perhaps find a work around for the gtk sensitivity bug.
-  Ideally I'd like to implement my original idea which is that buttons
-  should disapear from the toolbar when they can't be pressed.
-
-tidy up menus so they work
-make sure the terminal always closes when gswat closes!
-Perhaps add mouse over variable bubbles to display their value
+- Perhaps find a work around for the gtk sensitivity bug.
+  (Ref: http://bugzilla.gnome.org/show_bug.cgi?id=56070)
+  - Ideally I'd like to implement my original idea which is that buttons
+    should disapear from the toolbar when they can't be pressed.
+    (special care taken e.g. for the "next" button so that we don't
+     re-layout for every click)
+- improve the menus
+   - edit preferences is currently broken
+   - implement help->about
+- make sure the terminal always closes when gswat closes!
+- Perhaps add mouse over variable bubbles to display their value
  - also allow highlighting expressions
  - Consider not using bubbles though since they get in the way
    of code.
-
-- put the side panes into gswat-notebooks
 - test and fix the break/restart button and make sure we
   can use the new button at any time without things
   getting tangled.
 - support clicking on frame entries within the stack view
   so that the source view gets updated appropriatly.
-
+- try and seperate/abstract things so that the variable
+  view and stack view work somewhat like mini plugins.
+- When a debuggable sends a state = detached notification
+  then we should blank the source view and other widgets
+  to reflect this.
+- I dont think the source view should wrap text by default
+- gswat-spawner processes are regularly being left clogging
+  the system.
+- implement socket based connections to a gswat-spwaner
 
 
 1.0
@@ -32,3 +42,4 @@ textual command interface
 python bindings
 
 2.0
+

@@ -70,7 +70,7 @@ struct _GSwatNotebookClass
 GType gswat_notebook_get_type(void);
 
 /* add additional methods here */
-GSwatNotebook *gswat_notebook_new(void);
+GtkWidget *gswat_notebook_new(void);
 void gswat_notebook_insert_page(GSwatNotebook *self,
                                 GSwatTabable *tabable,
                                 gint position,
