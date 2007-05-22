@@ -1073,13 +1073,15 @@ process_gdb_pending(GSwatGdbDebugger *self)
     /* We have to be carefull since processing
      * records can modify the queue: */
     copy = g_queue_copy(self->priv->gdb_pending);
-    
+
+#if 0
     g_message("Pending queue dump:");
     for(n=0, tmp=copy->head; tmp!=NULL; n++, tmp=tmp->next)
     {
         pending_record = tmp->data;
         g_message("index=%d: %s", n, pending_record->record_str->str); 
     }
+#endif
 
     for(n=0, tmp=copy->head; tmp!=NULL; n++, tmp=tmp->next)
     {
