@@ -29,10 +29,11 @@ misusing this, so we shouldn't copy them!
 - When a debuggable sends a state = detached notification
   then we should blank the source view and other widgets
   to reflect this.
-- I dont think the source view should wrap text by default
 - gswat-spawner processes are regularly being left clogging
   the system.
 - implement socket based connections to a gswat-spwaner
+- The variable view is currently only allowing you to expand
+  complex variables by one level
 
 
 1.0

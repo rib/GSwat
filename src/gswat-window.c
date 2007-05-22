@@ -1032,6 +1032,7 @@ update_source_view(GSwatWindow *self)
     GSwatView       *gswat_view;
     GeditDocument   *gedit_document;
     GtkTextIter     iter;
+    GtkTextMark     *mark;
     GSwatSrcViewTab *src_view_tab;
 
     debuggable = self->priv->debuggable;
@@ -1111,13 +1112,18 @@ update_source_view(GSwatWindow *self)
         gtk_text_buffer_get_iter_at_line(GTK_TEXT_BUFFER(gedit_document),
                                          &iter,
                                          line);
-        gtk_text_view_scroll_to_iter(GTK_TEXT_VIEW(gswat_view),
-                                     &iter,
+        mark = gtk_text_buffer_create_mark(GTK_TEXT_BUFFER(gedit_document),
+                                           NULL,
+                                           &iter,
+                                           TRUE);
+        gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(gswat_view),
+                                     mark,
                                      0.2,
                                      FALSE,
-                                     0,
-                                     0);
-        //gtk_text_buffer_place_cursor(GTK_TEXT_BUFFER(gedit_document), &iter);
+                                     0.0,
+                                     0.5);
+        gtk_text_buffer_delete_mark(GTK_TEXT_BUFFER(gedit_document),
+                                    mark);
 
         g_object_unref(gswat_view);
     }
@@ -1147,13 +1153,18 @@ update_source_view(GSwatWindow *self)
         gtk_text_buffer_get_iter_at_line(GTK_TEXT_BUFFER(gedit_document),
                                          &iter,
                                          line);
-        gtk_text_view_scroll_to_iter(GTK_TEXT_VIEW(gswat_view),
-                                     &iter,
+        mark = gtk_text_buffer_create_mark(GTK_TEXT_BUFFER(gedit_document),
+                                           NULL,
+                                           &iter,
+                                           TRUE);
+        gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(gswat_view),
+                                     mark,
                                      0.2,
                                      FALSE,
-                                     0,
-                                     0);
-        //gtk_text_buffer_place_cursor(GTK_TEXT_BUFFER(gedit_document), &iter);
+                                     0.0,
+                                     0.5);
+        gtk_text_buffer_delete_mark(GTK_TEXT_BUFFER(gedit_document),
+                                    mark);
     }
 
     update_line_highlights(self);

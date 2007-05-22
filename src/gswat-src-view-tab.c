@@ -346,7 +346,8 @@ gswat_src_view_tab_init(GSwatSrcViewTab *self)
                                                FALSE);
     gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(self->priv->view), FALSE);
     gtk_text_view_set_editable(GTK_TEXT_VIEW(self->priv->view), FALSE);
-
+    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(self->priv->view),
+                                GTK_WRAP_NONE);
     gtk_widget_show(self->priv->view);
 
     gtk_box_pack_end(GTK_BOX(vbox), sw, TRUE, TRUE, 0);
