@@ -132,6 +132,9 @@ on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
                                            GtkTreePath *iter_path,
                                            gpointer    data);
 
+static gboolean on_window_delete_event(GtkWidget *win,
+                                       GdkEventAny *event,
+                                       GSwatWindow *self);
 /* Macros and defines */
 #define GSWAT_WINDOW_GET_PRIVATE(object)(G_TYPE_INSTANCE_GET_PRIVATE ((object), GSWAT_TYPE_WINDOW, GSwatWindowPrivate))
 
@@ -500,8 +503,9 @@ gswat_window_finalize(GObject *object)
 
     self = GSWAT_WINDOW(object);
 
+    clean_up_current_session(self);
+    
     destruct_widgets(self);
-    //destroy_sourceview(self);
 
     G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -552,6 +556,13 @@ construct_widgets(GSwatWindow *self)
     gtk_widget_show(self->priv->top_vbox);
     gtk_container_add(GTK_CONTAINER(window), self->priv->top_vbox);
     gtk_container_set_border_width(GTK_CONTAINER(self->priv->top_vbox), 0);
+
+    /* connect after, so that things can affect behaviour */
+    g_signal_connect_object(G_OBJECT(window), "delete-event",
+                            G_CALLBACK(on_window_delete_event),
+                            self,
+                            G_CONNECT_AFTER);
+
 
     /* Create the menus/toolbar */
     self->priv->actiongroup = gtk_action_group_new("MainActions");
@@ -800,7 +811,7 @@ static void on_session_new_activate(GtkAction *action,
 static void
 on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
 {
-    
+
     clean_up_current_session(window);
 
     window->priv->debuggable 
@@ -859,13 +870,13 @@ clean_up_current_session(GSwatWindow *self)
         g_object_unref(self->priv->debuggable);
         self->priv->debuggable = NULL;
     }
-    
+
     notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_MAIN];
     tabs = gtk_container_get_children(GTK_CONTAINER(notebook));
     for(tmp=tabs;tmp!=NULL;tmp=tmp->next)
     {
         GSwatSrcViewTab *current_tab;
-        
+
         current_tab = 
             g_object_get_data(G_OBJECT(tmp->data),
                               "gswat-src-view-tab");
@@ -875,7 +886,7 @@ clean_up_current_session(GSwatWindow *self)
         }
     }
     g_list_free(tabs);
-    
+
     free_current_stack_view_entries(self);
 
     /* FIXME - clear all other per session data */
@@ -1333,12 +1344,12 @@ on_gswat_debuggable_state_notify(GObject *object,
     update_variable_view(self);
 
     state = gswat_debuggable_get_state(debuggable);
-    
+
     if(state == GSWAT_DEBUGGABLE_DISCONNECTED)
     {
         clean_up_current_session(self);
     }
-     
+
     set_toolbar_state(self, state);
 
 }
@@ -1496,7 +1507,7 @@ prune_variable_store(GtkTreeStore *variable_store,
                            GSWAT_WINDOW_VARIABLE_OBJECT_COL,
                            &current_variable_object,
                            -1);
-        
+
         if(g_list_find(variables, current_variable_object))
         {
             g_object_unref(G_OBJECT(current_variable_object));
@@ -1672,7 +1683,7 @@ on_gswat_debuggable_stack_notify(GObject *object,
 
     /* free the previously displayed stack */
     free_current_stack_view_entries(self);
-    
+
     self->priv->stack_list_store = list_store;
     self->priv->stack=disp_stack;
 
@@ -1859,4 +1870,13 @@ on_gswat_window_quit_activate(GtkMenuItem     *menuitem,
     gtk_main_quit();
 }
 
+static gboolean
+on_window_delete_event(GtkWidget *win,
+                       GdkEventAny *event,
+                       GSwatWindow *self)
+{
+    gtk_main_quit();
+
+    return TRUE;
+}
 

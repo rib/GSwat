@@ -26,8 +26,6 @@ misusing this, so we shouldn't copy them!
   so that the source view gets updated appropriatly.
 - try and seperate/abstract things so that the variable
   view and stack view work somewhat like mini plugins.
-- gswat-spawner processes are regularly being left clogging
-  the system.
 - implement socket based connections to a gswat-spwaner
 - The variable view is currently only allowing you to expand
   complex variables by one level

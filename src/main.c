@@ -131,7 +131,6 @@ main(int argc, char **argv)
 
     gtk_main();
 
-    
     if(session)
     {
         g_object_unref(session);
