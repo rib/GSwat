@@ -1,0 +1,34 @@
+<ui>
+  <menubar name="MenuBar">
+
+    <menu name="SessionMenu" action="Session">
+      <menuitem name="SessionNewItem" action="SessionNew"/>
+      <separator/>
+      <menuitem name="SessionQuitItem" action="SessionQuit"/>
+    </menu>
+
+    <menu name="EditMenu" action="Edit">
+      <menuitem name="EditPreferencesItem" action="EditPreferences"/>
+    </menu>
+
+    <menu name="HelpMenu" action="Help">
+      <menuitem name="HelpAboutItem" action="HelpAbout"/>
+    </menu>
+
+  </menubar>
+
+  <toolbar name="ToolBar">
+    <toolitem name="SessionNewButton" action="SessionNew"/>
+    <separator/>
+    <toolitem name="DebuggerStepInButton" action="DebuggerStepIn"/>
+    <toolitem name="DebuggerNextButton" action="DebuggerNext"/>
+    <toolitem name="DebuggerUpFrameButton" action="DebuggerUpFrame"/>
+    <toolitem name="DebuggerContinueButton" action="DebuggerContinue"/>
+    <separator/>
+    <toolitem name="DebuggerBreakButton" action="DebuggerBreak"/>
+    <toolitem name="DebuggerRestartButton" action="DebuggerRestart"/>
+    <separator/>
+    <toolitem name="DebuggerAddBreakButton" action="DebuggerAddBreak"/>
+    <placeholder name="ToolBarPluginPlaceholder" />
+  </toolbar>
+</ui>
