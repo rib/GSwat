@@ -36,27 +36,51 @@ enum {
     PROP_0,
     PROP_STATE,
     PROP_STACK,
+    PROP_LOCALS,
     PROP_BREAKPOINTS,
     PROP_SOURCE_URI,
     PROP_SOURCE_LINE
 };
 
+typedef struct {
+    gboolean in_use;
+    GList *names;
+    gboolean list_arguments_done;
+}LocalsUpdateMachine;
+
 struct _GSwatGdbDebuggerPrivate
 {
     GSwatSession            *session;
-
+    
     GSwatDebuggableState    state;
+    
+    /* The state stamp is incremented whenever the
+     * state of the debuggable changes and a
+     * notification signal is sent so that users
+     * can re-get the state e.g. for display.
+     * FIXME: this should only be visible internally
+     * users can already listen to much more
+     * specific signals. */
     guint                   state_stamp;
-
+    
     GList                   *stack;
     GList                   *breakpoints;
     gchar                   *source_uri;
     gint                    source_line;
-
+    
+    /* A small state machine for tracking the
+     * update of the local variables list which
+     * is done using two asynchronous GDB/MI
+     * requests */
+    LocalsUpdateMachine     locals_machine;
+    /* A list of variable objects for the current
+     * frame's local variables */
     GList                   *locals;
+    /* A snapshot of the state stamp when the
+     * list of local variables was last updated */
     guint                   locals_stamp;
-
-    /* gdb specific */
+    
+    /* Our GDB conection state */
     gboolean        gdb_connected;
     GIOChannel      *gdb_in;
     GIOChannel      *gdb_out;
@@ -64,23 +88,35 @@ struct _GSwatGdbDebuggerPrivate
     GIOChannel      *gdb_err;
     guint           gdb_err_event;
     GPid            gdb_pid;
+    
+    /* Our incrementing source of tokens to
+     * use with GDB MI requests */
     unsigned long   gdb_sequence;
+    
+    /* GDB records are read in one line at a time and
+     * entered into the gdb_pending queue. */
     GQueue          *gdb_pending;
+    
+    /* When we add an entry to gdb_pending we queue
+     * an idle handler for processing the commands
+     * - only if one hasn't already been queued. */
     gboolean        gdb_pending_idle_processor_queued;
-
+    
+    /* The job of starting the process being debugged
+     * is delegated to a seperate "spawner" program
+     * which we currently communicate with via name
+     * fifos */
     int             spawn_read_fifo_fd;
     int             spawn_write_fifo_fd;
     GIOChannel      *spawn_read_fifo;
     GIOChannel      *spawn_write_fifo;
     GPid            spawner_pid;
-
+    
+    /* Currently we only support debugging local processes,
+     * and this is the pod of the process being debugged */
     GPid            target_pid;
-
+    
     GSList          *mi_handlers;
-
-    /* A list of weak references to all variable
-     * objects */
-    GList           *all_variables;
 };
 
 typedef struct {
@@ -89,7 +125,7 @@ typedef struct {
     gpointer data;
 }GSwatGdbMIHandler;
 
-/* FIXME: this should be removed and records should added
+/* FIXME: this should be removed and records should be added
  * to the pending queue using GSwatGdbMIRecord structs.
  */
 typedef struct {
@@ -153,16 +189,23 @@ static void set_location(GSwatGdbDebugger *self,
                          guint line,
                          const gchar *address);
 static gchar *uri_from_filename(const gchar *filename);
-
 static void stack_list_frames_mi_callback(GSwatGdbDebugger *self,
                                           const GSwatGdbMIRecord *record,
                                           void *data);
-static void update_variable_objects(GSwatGdbDebugger *self);
+static void kick_asynchronous_locals_update(GSwatGdbDebugger *self);
 static void
-update_variable_objects_mi_callback(GSwatGdbDebugger *self,
-                                    const GSwatGdbMIRecord *record,
-                                    void *data);
-
+stack_list_arguments_results_mi_callback(GSwatGdbDebugger *self,
+                                         const GSwatGdbMIRecord *record,
+                                         void *data);
+static void
+stack_list_locals_results_mi_callback(GSwatGdbDebugger *self,
+                                      const GSwatGdbMIRecord *record,
+                                      void *data);
+static void
+update_locals_list_from_name_list(GSwatGdbDebugger *self, GList *names);
+static void on_local_variable_object_invalidated(GObject *object,
+                                                 GParamSpec *property,
+                                                 gpointer data);
 static GSwatGdbMIRecord *
 find_pending_result_record_for_token(GSwatGdbDebugger *self,
                                      gulong token);
@@ -172,7 +215,10 @@ static void basic_runner_mi_callback(GSwatGdbDebugger *self,
 static void break_insert_mi_callback(GSwatGdbDebugger *self,
                                      const GSwatGdbMIRecord *record,
                                      void *data);
-
+static void
+restart_running_mi_callback(GSwatGdbDebugger *self,
+                            const GSwatGdbMIRecord *record,
+                            void *data);
 
 /* Variables */
 static GObjectClass *parent_class = NULL;
@@ -292,6 +338,15 @@ gswat_gdb_debugger_class_init(GSwatGdbDebuggerClass *klass) /* Class Initializat
                                      G_PARAM_READABLE);
     g_object_class_install_property(gobject_class,
                                     PROP_STACK,
+                                    new_param
+                                   );
+
+    new_param = g_param_spec_pointer("locals",
+                                     _("Locals"),
+                                     _("The current frames local variables"),
+                                     G_PARAM_READABLE);
+    g_object_class_install_property(gobject_class,
+                                    PROP_LOCALS,
                                     new_param
                                    );
 
@@ -559,6 +614,7 @@ start_spawner_process(GSwatGdbDebugger *self)
 
     g_shell_parse_argv(terminal_command, &argc, &argv, NULL);
     g_message(terminal_command);
+    g_free(terminal_command);
 
 
     /* run gnome-terminal -x argv[0] -magic /path/to/fifo */
@@ -724,37 +780,55 @@ gswat_gdb_debugger_target_disconnect(GSwatDebuggable* object)
     g_return_if_fail(GSWAT_IS_GDB_DEBUGGER(object));
     self = GSWAT_GDB_DEBUGGER(object);
     g_return_if_fail(self->priv->state != GSWAT_DEBUGGABLE_DISCONNECTED);
-
-    stop_spawner_process(self);
-
+    
+    /* As soon as this is set gswat_gdb_debugger_send_mi_command
+     * effectivly becomes a NOP, so gswat_gdb_variable_object_cleanup
+     * should be able to cope with that. 
+     * We don't actually care to cleanly delete the variable objects
+     * gdb side, since we are about to kill gdb anyhow. */
+    self->priv->gdb_connected = FALSE;
+    
+    /* So we don't get lots of call back during 
+     * gswat_gdb_variable_object_cleanup: */
+    for(tmp=self->priv->locals; tmp!=NULL; tmp=tmp->next)
+    {
+        g_object_disconnect(tmp->data,
+                            "any-signal",
+                            G_CALLBACK(on_local_variable_object_invalidated),
+                            self,
+                            NULL);
+        g_object_unref(tmp->data);
+    }
+    g_list_free(self->priv->locals);
+    self->priv->locals=NULL;
+    
+    /* Invalidate all other variable objects */
+    gswat_gdb_variable_object_cleanup(self);
+    
     g_source_remove(self->priv->gdb_out_event);
     g_source_remove(self->priv->gdb_err_event);
 
-
+    if(self->priv->gdb_in) {
+        g_io_channel_unref(self->priv->gdb_in);
+        self->priv->gdb_in = NULL;
+    }
+    
     if(self->priv->gdb_out) {
         g_io_channel_unref(self->priv->gdb_out);
         self->priv->gdb_out = NULL;
     }
-
+    
     if(self->priv->gdb_err) {
         g_io_channel_unref(self->priv->gdb_err);
         self->priv->gdb_err = NULL;
     }
-
-    if(self->priv->gdb_in) {
-        gswat_gdb_debugger_send_mi_command(self,
-                                           "-gdb-exit",
-                                           gswat_gdb_debugger_nop_mi_callback,
-                                           NULL);
-        g_io_channel_unref(self->priv->gdb_in);
-        self->priv->gdb_in = NULL;
-    }
-
+    
+    stop_spawner_process(self);
+    
     while((current_line = g_queue_pop_head(self->priv->gdb_pending)))
     {
         g_string_free(current_line, TRUE);
     }
-
 
     if(self->priv->stack)
     {
@@ -767,23 +841,6 @@ gswat_gdb_debugger_target_disconnect(GSwatDebuggable* object)
         gswat_debuggable_free_breakpoints(self->priv->breakpoints);
         self->priv->breakpoints = NULL;
     }
-
-    if(self->priv->all_variables)
-    {
-        for(tmp=self->priv->all_variables; tmp!=NULL; tmp=tmp->next)
-        {
-            GSwatVariableObject *current_variable_object = 
-                (GSwatVariableObject *)tmp->data;
-            if(current_variable_object != NULL)
-            {
-                _gswat_gdb_debugger_unregister_variable_object(self, current_variable_object);
-            }
-        }
-        g_list_free(self->priv->all_variables);
-        self->priv->all_variables = NULL;
-    }
-
-    self->priv->gdb_connected = FALSE;
 }
 
 void
@@ -792,7 +849,10 @@ gswat_gdb_debugger_nop_mi_callback(GSwatGdbDebugger *self,
                                    void *data)
 {
     g_message("NOP result callback:");
-    gdbmi_value_dump(record->val, 0);
+    if(record->val)
+    {
+        gdbmi_value_dump(record->val, 0);
+    }
 }
 
 
@@ -1069,7 +1129,7 @@ process_gdb_pending(GSwatGdbDebugger *self)
     gint n;
     GQueue *copy;
     GList *tmp;
-    
+
     /* We have to be carefull since processing
      * records can modify the queue: */
     copy = g_queue_copy(self->priv->gdb_pending);
@@ -1154,367 +1214,6 @@ process_gdb_output_record(GSwatGdbDebugger *self, GdbPendingRecord *record)
     }
 
     return;
-
-
-#if 0
-    /* FIXME - delete this junk.... */
-
-    if (command->str[0] == '\032' && command->str[1] == '\032')
-    {
-        g_assert_not_reached();
-#if 0
-        gdb_util_parse_error_line (&(line[2]), &filename, &lineno);
-        if (filename)
-        {
-            debugger_change_location (debugger, filename, lineno, NULL);
-            g_free (filename);
-        }
-#endif
-    }
-    else if (strncasecmp (command->str, "^error", 6) == 0)
-    {
-        g_message(command->str);
-
-#if 0
-        /* GDB reported error */
-        if (debugger->priv->current_cmd.suppress_error == FALSE)
-        {
-            GDBMIValue *val = gdbmi_value_parse (line);
-            if (val)
-            {
-                const GDBMIValue *message;
-                message = gdbmi_value_hash_lookup (val, "msg");
-
-                anjuta_util_dialog_error (debugger->priv->parent_win,
-                                          "%s",
-                                          gdbmi_value_literal_get (message));
-                gdbmi_value_free (val);
-            }
-        }
-#endif
-    }
-    else if (strncasecmp(command->str, "^running", 8) == 0)
-    {
-        self->priv->state = GSWAT_DEBUGGABLE_RUNNING;
-        self->priv->state_stamp++;
-        g_object_notify(G_OBJECT(self), "state");
-#if 0
-        /* Program started running */
-        debugger->priv->prog_is_running = TRUE;
-        debugger->priv->debugger_is_ready = TRUE;
-        debugger->priv->skip_next_prompt = TRUE;
-        g_signal_emit_by_name (debugger, "program-running");
-#endif
-    }
-    else if(strncasecmp(command->str, "*stopped", 8) == 0)
-    {
-        /* FIXME- move this into a seperate function */
-        GDBMIValue *val = gdbmi_value_parse(command->str);
-        if(val)
-        {
-
-            gdbmi_value_free(val);
-        }
-#if 0
-        /* Process has stopped */
-        gboolean program_exited = FALSE;
-
-        GDBMIValue *val = gdbmi_value_parse (line);
-
-        debugger->priv->debugger_is_ready = TRUE;
-
-        /* Check if program has exited */
-        if (val)
-        {
-            const GDBMIValue *reason;
-            const gchar *str = NULL;
-
-            debugger_process_frame (debugger, val);
-
-            reason = gdbmi_value_hash_lookup (val, "reason");
-            if (reason)
-                str = gdbmi_value_literal_get (reason);
-
-            if (str && strcmp (str, "exited-normally") == 0)
-            {
-                program_exited = TRUE;
-                debugger->priv->output_callback (debugger, DEBUGGER_OUTPUT_NORMAL,
-                                                 _("Program exited normally\n"),
-                                                 debugger->priv->output_user_data);
-            }
-            else if (str && strcmp (str, "exited") == 0)
-            {
-                const GDBMIValue *errcode;
-                const gchar *errcode_str;
-                gchar *msg;
-
-                program_exited = TRUE;
-                errcode = gdbmi_value_hash_lookup (val, "exit-code");
-                errcode_str = gdbmi_value_literal_get (errcode);
-                msg = g_strdup_printf (_("Program exited with error code %s\n"),
-                                       errcode_str);
-                debugger->priv->output_callback (debugger, DEBUGGER_OUTPUT_NORMAL,
-                                                 msg, debugger->priv->output_user_data);
-                g_free (msg);
-            }
-            else if (str && strcmp (str, "exited-signalled") == 0)
-            {
-                const GDBMIValue *signal_name, *signal_meaning;
-                const gchar *signal_str, *signal_meaning_str;
-                gchar *msg;
-
-                program_exited = TRUE;
-                signal_name = gdbmi_value_hash_lookup (val, "signal-name");
-                signal_str = gdbmi_value_literal_get (signal_name);
-                signal_meaning = gdbmi_value_hash_lookup (val,
-                                                          "signal-meaning");
-                signal_meaning_str = gdbmi_value_literal_get (signal_meaning);
-                msg = g_strdup_printf (_("Program received signal %s (%s) and exited\n"),
-                                       signal_str, signal_meaning_str);
-                debugger->priv->output_callback (debugger, DEBUGGER_OUTPUT_NORMAL,
-                                                 msg, debugger->priv->output_user_data);
-                g_free (msg);
-            }
-            else if (str && strcmp (str, "signal-received") == 0)
-            {
-                const GDBMIValue *signal_name, *signal_meaning;
-                const gchar *signal_str, *signal_meaning_str;
-                gchar *msg;
-
-                signal_name = gdbmi_value_hash_lookup (val, "signal-name");
-                signal_str = gdbmi_value_literal_get (signal_name);
-                signal_meaning = gdbmi_value_hash_lookup (val,
-                                                          "signal-meaning");
-                signal_meaning_str = gdbmi_value_literal_get (signal_meaning);
-
-                msg = g_strdup_printf (_("Program received signal %s (%s)\n"),
-                                       signal_str, signal_meaning_str);
-                debugger->priv->output_callback (debugger, DEBUGGER_OUTPUT_NORMAL,
-                                                 msg, debugger->priv->output_user_data);
-                g_free (msg);
-            }
-            else if (str && strcmp (str, "breakpoint-hit") == 0)
-            {
-                const GDBMIValue *bkptno;
-                const gchar *bkptno_str;
-                gchar *msg;
-
-                bkptno = gdbmi_value_hash_lookup (val, "bkptno");
-                bkptno_str = gdbmi_value_literal_get (bkptno);
-
-                msg = g_strdup_printf (_("Breakpoint number %s hit\n"),
-                                       bkptno_str);
-                debugger->priv->output_callback (debugger, DEBUGGER_OUTPUT_NORMAL,
-                                                 msg, debugger->priv->output_user_data);
-                g_free (msg);
-            }
-            else if (str && strcmp (str, "function-finished") == 0)
-            {
-                debugger->priv->output_callback (debugger, DEBUGGER_OUTPUT_NORMAL,
-                                                 _("Function finished\n"),
-                                                 debugger->priv->output_user_data);
-            }
-            else if (str && strcmp (str, "end-stepping-range") == 0)
-            {
-                debugger->priv->output_callback (debugger, DEBUGGER_OUTPUT_NORMAL,
-                                                 _("Stepping finished\n"),
-                                                 debugger->priv->output_user_data);
-            }
-            else if (str && strcmp (str, "location-reached") == 0)
-            {
-                debugger->priv->output_callback (debugger, DEBUGGER_OUTPUT_NORMAL,
-                                                 _("Location reached\n"),
-                                                 debugger->priv->output_user_data);
-            }
-        }
-
-        if (program_exited)
-        {
-            debugger->priv->prog_is_running = FALSE;
-            debugger->priv->prog_is_attached = FALSE;
-            debugger->priv->debugger_is_ready = TRUE;
-            debugger_stop_terminal (debugger);
-            g_signal_emit_by_name (debugger, "program-exited", val);
-            debugger_handle_post_execution (debugger);
-        }
-        else
-        {
-            debugger->priv->debugger_is_ready = TRUE;
-            g_signal_emit_by_name (debugger, "program-stopped", val);
-        }
-
-        debugger->priv->stdo_lines = g_list_reverse (debugger->priv->stdo_lines);
-        if (debugger->priv->current_cmd.cmd[0] != '\0' &&
-            debugger->priv->current_cmd.parser != NULL)
-        {
-            debugger->priv->debugger_is_ready = TRUE;
-            debugger->priv->current_cmd.parser (debugger, val,
-                                                debugger->priv->stdo_lines,
-                                                debugger->priv->current_cmd.user_data);
-            debugger->priv->command_output_sent = TRUE;
-            DEBUG_PRINT ("In function: Sending output...");
-        }
-
-        if (val)
-            gdbmi_value_free (val);
-#endif
-    }
-    else if (strncasecmp (command->str, "^done", 5) == 0)
-    {
-        /* GDB command has reported output */
-        GDBMIValue *val = gdbmi_value_parse(command->str);
-        if (val)
-        {
-            GSList *tmp;
-            GDBMIDoneHandler *current_handler;
-
-            gdbmi_value_dump(val, 0);
-
-            for(tmp=self->priv->mi_handlers; tmp!=NULL; tmp=tmp->next)
-            {
-                current_handler = (GDBMIDoneHandler *)tmp->data;
-
-                if(current_handler->token == command_token){
-                    current_handler->callback(self,
-                                              command_token,
-                                              val,
-                                              command,
-                                              current_handler->data);
-
-                    self->priv->mi_handlers = 
-                        g_slist_remove(self->priv->mi_handlers,
-                                       current_handler);
-                    g_free(current_handler);
-
-                    break;                 
-                }
-
-            }
-
-            gdbmi_value_free(val);
-        }
-#if 0
-
-        debugger->priv->debugger_is_ready = TRUE;
-
-        debugger->priv->stdo_lines = g_list_reverse (debugger->priv->stdo_lines);
-        if (debugger->priv->current_cmd.cmd[0] != '\0' &&
-            debugger->priv->current_cmd.parser != NULL)
-        {
-            debugger->priv->current_cmd.parser (debugger, val,
-                                                debugger->priv->stdo_lines,
-                                                debugger->priv->current_cmd.user_data);
-            debugger->priv->command_output_sent = TRUE;
-            DEBUG_PRINT ("In function: Sending output...");
-        }
-        else /* if (val) */
-        {
-            g_signal_emit_by_name (debugger, "results-arrived",
-                                   debugger->priv->current_cmd.cmd, val);
-        }
-
-        if (val)
-        {
-            debugger_process_frame (debugger, val);
-            gdbmi_value_free (val);
-        }
-#endif
-    }
-#if 0
-    else if (strncasecmp (line, GDB_PROMPT, strlen (GDB_PROMPT)) == 0)
-    {
-        if (debugger->priv->skip_next_prompt)
-        {
-            debugger->priv->skip_next_prompt = FALSE;
-        }
-        else
-        {
-            debugger->priv->debugger_is_ready = TRUE;
-            if (debugger->priv->starting)
-            {
-                debugger->priv->starting = FALSE;
-                /* Debugger has just started */
-                debugger->priv->output_callback (debugger, DEBUGGER_OUTPUT_NORMAL,
-                                                 _("Debugger is ready.\n"),
-                                                 debugger->priv->output_user_data);
-            }
-
-            if (strcmp (debugger->priv->current_cmd.cmd, "-exec-run") == 0 &&
-                debugger->priv->prog_is_running == FALSE)
-            {
-                /* Program has failed to run */
-                debugger_stop_terminal (debugger);
-            }
-            debugger->priv->debugger_is_ready = TRUE;
-
-            /* If the parser has not yet been called, call it now. */
-            if (debugger->priv->command_output_sent == FALSE &&
-                debugger->priv->current_cmd.parser)
-            {
-                debugger->priv->current_cmd.parser (debugger, NULL,
-                                                    debugger->priv->stdo_lines,
-                                                    debugger->priv->current_cmd.user_data);
-                debugger->priv->command_output_sent = TRUE;
-            }
-
-            debugger_queue_execute_command (debugger);	/* Next command. Go. */
-            return;
-        }
-    }
-#endif
-
-#if 0
-    else
-    {
-        /* FIXME: change message type */
-        gchar *proper_msg, *full_msg;
-
-        if (line[1] == '\"' && line [len - 1] == '\"')
-        {
-            line[len - 1] = '\0';
-            proper_msg = g_strcompress (line + 2);
-        }
-        else
-        {
-            proper_msg = g_strdup (line);
-        }
-        if (proper_msg[strlen(proper_msg)-1] != '\n')
-        {
-            full_msg = g_strconcat (proper_msg, "\n", NULL);
-        }
-        else
-        {
-            full_msg = g_strdup (proper_msg);
-        }
-
-        if (debugger->priv->current_cmd.parser)
-        {
-            if (line[0] == '~')
-            {
-                /* Save GDB CLI output */
-                /* Remove trailing newline */
-                full_msg[strlen (full_msg) - 1] = '\0';
-                debugger->priv->stdo_lines = g_list_prepend (debugger->priv->stdo_lines,
-                                                             g_strdup (full_msg));
-            }
-        }
-        else if (line[0] != '&')
-        {
-            /* Print the CLI output if there is no parser to receive
-             * the output and it is not command echo
-             */
-            debugger->priv->output_callback (debugger, DEBUGGER_OUTPUT_NORMAL,
-                                             full_msg, debugger->priv->output_user_data);
-        }
-        g_free (proper_msg);
-        g_free (full_msg);
-    }
-
-
-    /* Clear the line buffer */
-    g_string_assign (debugger->priv->stdo_line, "");
-#endif
-#endif
 }
 
 
@@ -1523,18 +1222,24 @@ process_gdb_mi_result_record(GSwatGdbDebugger *self,
                              gulong token,
                              GString *record_str)
 {
-
     GDBMIValue *val;
     GSList *tmp;
-
-    val = gdbmi_value_parse(record_str->str);
-    if(!val)
+    
+    val = NULL;
+	if(strchr(record_str->str, ','))
     {
-        g_warning("process_gdb_mi_result_record: error parsing record");
-        return;
+        val = gdbmi_value_parse(record_str->str);
+        if(val)
+        {
+            gdbmi_value_dump(val, 0);
+        }
+        else
+        {
+            g_warning("process_gdb_mi_result_record: error parsing record");
+            return;
+        }
     }
 
-    gdbmi_value_dump(val, 0);
 
     for(tmp=self->priv->mi_handlers; tmp!=NULL; tmp=tmp->next)
     {
@@ -1564,9 +1269,11 @@ process_gdb_mi_result_record(GSwatGdbDebugger *self,
         }
 
     }
-
-    gdbmi_value_free(val);
-
+    
+    if(val)
+    {
+        gdbmi_value_free(val);
+    }
 }
 
 static GSwatGdbMIRecordType
@@ -1683,6 +1390,10 @@ process_gdb_mi_oob_stopped_record(GSwatGdbDebugger *self,
 
     gdbmi_value_dump(val, 0);
 
+    /* Do this early so anything that happens after can validate
+     * why things are changing */
+    self->priv->state_stamp++;
+
     reason = gdbmi_value_hash_lookup(val, "reason");
     if(reason){
         str = gdbmi_value_literal_get(reason);
@@ -1732,10 +1443,12 @@ process_gdb_mi_oob_stopped_record(GSwatGdbDebugger *self,
     if(self->priv->state == GSWAT_DEBUGGABLE_INTERRUPTED)
     {
         process_frame(self, val);
-        update_variable_objects(self);
+
+        gswat_gdb_variable_object_async_update_all(self);
+
+        kick_asynchronous_locals_update(self);
     }
 
-    self->priv->state_stamp++;
     g_object_notify(G_OBJECT(self), "state");
 
 }
@@ -2046,81 +1759,246 @@ stack_list_frames_mi_callback(GSwatGdbDebugger *self,
 
 
 static void
-update_variable_objects(GSwatGdbDebugger *self)
+kick_asynchronous_locals_update(GSwatGdbDebugger *self)
 {
+    LocalsUpdateMachine *locals_machine;
+
+    locals_machine = &self->priv->locals_machine;
+    if(locals_machine->in_use == TRUE)
+    {
+        return;
+    }
+    memset(locals_machine, 0, sizeof(LocalsUpdateMachine));
+    locals_machine->in_use = TRUE;
+
     gswat_gdb_debugger_send_mi_command(self,
-                                       "-var-update --simple-values *",
-                                       update_variable_objects_mi_callback,
+                                       "-stack-list-arguments 0 0 0",
+                                       stack_list_arguments_results_mi_callback,
+                                       NULL);
+    gswat_gdb_debugger_send_mi_command(self,
+                                       "-stack-list-locals 0",
+                                       stack_list_locals_results_mi_callback,
                                        NULL);
 }
 
 
 static void
-update_variable_objects_mi_callback(GSwatGdbDebugger *self,
-                                    const GSwatGdbMIRecord *record,
-                                    void *data)
+stack_list_arguments_results_mi_callback(GSwatGdbDebugger *self,
+                                         const GSwatGdbMIRecord *record,
+                                         void *data)
 {
-    int i, changed_count;
-    GDBMIValue *val;
-    const GDBMIValue *changelist_val;
+    LocalsUpdateMachine *locals_machine;
+    const GDBMIValue *stack, *frame, *args, *var;
+    guint i;
 
-    if(record->type == GSWAT_GDB_MI_REC_TYPE_RESULT_ERROR)
+    locals_machine = &self->priv->locals_machine;
+    if(locals_machine->in_use == FALSE)
     {
-        g_warning("update_variable_objects_mi_callback: error updating var objects");
+        g_warning("stack_list_arguments_results_mi_callback: called out of order");
+    }
+
+    /* If someone jumped in and did a synchronous update 
+     * already then we can bomb out now. */
+    if(self->priv->locals_stamp == self->priv->state_stamp)
+    {
         return;
     }
 
-    if(record->type != GSWAT_GDB_MI_REC_TYPE_RESULT_DONE)
+    stack = gdbmi_value_hash_lookup(record->val, "stack-args");
+    if(stack)
     {
-        g_warning("update_variable_objects_mi_callback: unexpected result type");
-        return;
-    }
-
-    val = record->val;
-
-    changelist_val = gdbmi_value_hash_lookup(val, "changelist");
-
-    changed_count = gdbmi_value_get_size(changelist_val);
-    for(i=0; i<changed_count; i++)
-    {
-        const GDBMIValue *change_val, *val;
-        const char *variable_gdb_name;
-        GList *tmp;
-
-        change_val = gdbmi_value_list_get_nth(changelist_val, i);
-        val = gdbmi_value_hash_lookup(change_val, "in_scope");
-
-        if(strcmp(gdbmi_value_literal_get(val), "true") != 0)
+        frame = gdbmi_value_list_get_nth(stack, 0);
+        if(frame)
         {
-            continue;
-        }
-
-        val = gdbmi_value_hash_lookup(change_val, "name");
-        variable_gdb_name = gdbmi_value_literal_get(val);
-
-        for(tmp=self->priv->all_variables; tmp!=NULL; tmp=tmp->next)
-        {
-            char *gdb_name;
-
-            gdb_name = gswat_gdb_variable_object_get_name(tmp->data);
-            if(strcmp(gdb_name, variable_gdb_name)==0)
+            args = gdbmi_value_hash_lookup(frame, "args");
+            if(args)
             {
-                val = gdbmi_value_hash_lookup(change_val, "value");
-                if(val)
+                for(i = 0; i < gdbmi_value_get_size(args); i++)
                 {
-                    const char *new_value;
-                    new_value = gdbmi_value_literal_get(val);
-                    _gswat_gdb_variable_object_set_cache_value(tmp->data, new_value);
+                    var = gdbmi_value_list_get_nth(args, i);
+                    if(var)
+                    {
+                        const gchar *name;
+                        name = gdbmi_value_literal_get(var);
+                        locals_machine->names = 
+                            g_list_prepend(locals_machine->names, g_strdup(name));
+                    }
                 }
 
             }
         }
-
     }
 
-    return;
+    locals_machine->list_arguments_done = TRUE;
 }
 
+
+static void
+stack_list_locals_results_mi_callback(GSwatGdbDebugger *self,
+                                      const GSwatGdbMIRecord *record,
+                                      void *data)
+{
+    LocalsUpdateMachine *locals_machine;
+    const GDBMIValue *local, *var;
+    guint i;
+
+    locals_machine = &self->priv->locals_machine;
+    if(locals_machine->list_arguments_done != TRUE)
+    {
+        g_warning("stack_list_locals_results_mi_callback: called out of order");
+    }
+
+    /* If someone jumped in and did a synchronous update 
+     * already then we can bomb out now. */
+    if(self->priv->locals_stamp == self->priv->state_stamp)
+    {
+        return;
+    }
+
+    local = gdbmi_value_hash_lookup(record->val, "locals");
+    if(local)
+    {
+        for(i = 0; i < gdbmi_value_get_size(local); i++)
+        {
+            var = gdbmi_value_list_get_nth(local, i);
+            if(var)
+            {
+                const gchar *name;
+                name = gdbmi_value_literal_get(var);
+                locals_machine->names = 
+                    g_list_prepend(locals_machine->names, g_strdup(name));
+            }
+        }
+    }
+
+    update_locals_list_from_name_list(self, locals_machine->names);
+    g_list_foreach(locals_machine->names, (GFunc)g_free, NULL);
+    g_list_free(locals_machine->names);
+    locals_machine->names = NULL;
+
+    locals_machine->in_use = FALSE;
+}
+
+
+static void
+update_locals_list_from_name_list(GSwatGdbDebugger *self, GList *names)
+{
+    GList *tmp, *tmp2, *locals_copy;
+    gboolean list_changed = FALSE;
+    
+    for(tmp=names; tmp!=NULL; tmp=tmp->next)
+    {
+        gboolean found = FALSE;
+
+        for(tmp2=self->priv->locals; tmp2!=NULL; tmp2=tmp2->next)
+        {
+            GSwatVariableObject *variable_object;
+            char *current_name;
+
+            variable_object = tmp2->data;
+            current_name = 
+                gswat_variable_object_get_expression(variable_object);
+
+            if(strcmp(tmp->data, current_name) == 0)
+            {
+                found = TRUE;
+                g_free(current_name);
+                break;
+            }
+            g_free(current_name);
+        }
+        
+        if(!found)
+        {
+            GSwatVariableObject *variable_object;
+
+            variable_object = 
+                gswat_gdb_variable_object_new(self,
+                                              (char *)tmp->data,
+                                              NULL,
+                                              GSWAT_VARIABLE_OBJECT_ANY_FRAME);
+
+            g_signal_connect(variable_object,
+                             "notify::valid",
+                             G_CALLBACK(on_local_variable_object_invalidated),
+                             self
+                            );
+
+            self->priv->locals = 
+                g_list_prepend(self->priv->locals, variable_object);
+            list_changed = TRUE;
+        }
+    }
+
+    /* prune, extra variable objects from self->priv->locals */
+    locals_copy=g_list_copy(self->priv->locals);
+    for(tmp=locals_copy; tmp!=NULL; tmp=tmp->next)
+    {
+        gboolean found = FALSE;
+        GSwatVariableObject *variable_object;
+        char *current_name;
+
+        variable_object = tmp->data;
+        current_name = 
+            gswat_variable_object_get_expression(variable_object);
+
+        for(tmp2=names; tmp2!=NULL; tmp2=tmp2->next)
+        {
+            if(strcmp(current_name, tmp2->data) == 0)
+            {
+                found = TRUE;
+                break;
+            }
+        }
+        g_free(current_name);
+
+        if(!found)
+        {
+            self->priv->locals = 
+                g_list_remove(self->priv->locals, variable_object);
+            g_object_unref(variable_object);
+            list_changed = TRUE;
+        }
+    }
+    g_list_free(locals_copy);
+
+    if(list_changed)
+    {
+        g_object_notify(G_OBJECT(self), "locals"); 
+    }
+}
+
+static void
+on_local_variable_object_invalidated(GObject *object,
+                                     GParamSpec *property,
+                                     gpointer data)
+{
+    GSwatGdbDebugger *self = GSWAT_GDB_DEBUGGER(data);
+    GSwatGdbVariableObject *variable_object;
+
+    variable_object = GSWAT_GDB_VARIABLE_OBJECT(object);
+
+    /* assert that the locals_state is out of date otherwise
+     * that's a bit weired; how did the variable get deleted? */
+    if(self->priv->locals_stamp == self->priv->state_stamp)
+    {
+        g_warning("on_local_variable_object_invalidated: spurious variable "
+                  "object invalidate!");
+    }
+
+    /* I don't think we want to send a notify::locals signal
+     * here, because the assumption is that when the debugger's
+     * state progresses then an asynchronous update of the
+     * locals list is kicked off which should notice the
+     * change and issue a signal */
+
+    /* Just remove the invalid variable from the list of local
+     * variables and unref it. */
+    self->priv->locals = 
+        g_list_remove(self->priv->locals, variable_object);
+    g_object_unref(variable_object);
+
+}
 
 gulong
 gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* object,
@@ -2136,16 +2014,17 @@ gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* object,
     g_return_val_if_fail(GSWAT_IS_GDB_DEBUGGER(object), 0);
     self = GSWAT_GDB_DEBUGGER(object);
 
+    if(!self->priv->gdb_connected)
+    {
+        return 0;
+    }
+
     handler = g_new0(GSwatGdbMIHandler, 1);
     handler->token = self->priv->gdb_sequence;
     handler->result_callback = result_callback;
-    //handler->oob_callback = oob_callback;
     handler->data = data;
 
-    self->priv->mi_handlers = g_slist_prepend(self->priv->mi_handlers, handler);
-
     complete_command = g_strdup_printf("%ld%s\n", self->priv->gdb_sequence, command);
-
 
     if(g_io_channel_write(self->priv->gdb_in,
                           complete_command,
@@ -2153,32 +2032,19 @@ gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* object,
                           &written) != G_IO_ERROR_NONE)
     {
         g_warning(_("Couldn't send command '%s' to gdb"), command);
+        g_free(handler);
+        g_free(complete_command);
+        return 0;
     }
 
-    g_message("gdb mi command:%s\n",complete_command);
+    self->priv->mi_handlers = g_slist_prepend(self->priv->mi_handlers, handler);
 
+    g_message("gdb mi command:%s\n",complete_command);
     g_free(complete_command);
 
     return self->priv->gdb_sequence++;
 }
 
-/* FIXME
-   void
-   gswat_gdb_debugger_mi_done_connect(GSwatGdbDebugger *self,
-   gulong token,
-   GDBMIDoneCallback callback,
-   gpointer data)
-   {
-   GDBMIDoneHandler *handler;
-
-   handler = g_new0(GDBMIDoneHandler, 1);
-   handler->token = token;
-   handler->callback = callback;
-   handler->data = data;
-
-   self->priv->mi_handlers = g_slist_prepend(self->priv->mi_handlers, handler);
-   }
-   */
 
 void
 gswat_gdb_debugger_send_cli_command(GSwatGdbDebugger* object,
@@ -2306,18 +2172,17 @@ basic_runner_mi_callback(GSwatGdbDebugger *self,
 {
     if(record->type == GSWAT_GDB_MI_REC_TYPE_RESULT_ERROR)
     {
-        g_warning("exec_run_mi_callback: recieved an error");
+        g_warning("basic_runner_mi_callback: recieved an error");
         return;
     }
 
     if(record->type != GSWAT_GDB_MI_REC_TYPE_RESULT_RUNNING)
     {
-        g_warning("exec_run_mi_callback: unexpected result type");
+        g_warning("basic_runner_mi_callback: unexpected result type");
         return;
     }
 
     self->priv->state = GSWAT_DEBUGGABLE_RUNNING;
-    self->priv->state_stamp++;
     g_object_notify(G_OBJECT(self), "state");
 
 }
@@ -2376,7 +2241,7 @@ break_insert_mi_callback(GSwatGdbDebugger *self,
        line = "16",
        },
        },
-       */
+     */
 
     if(record->type == GSWAT_GDB_MI_REC_TYPE_RESULT_ERROR)
     {
@@ -2464,19 +2329,14 @@ void
 gswat_gdb_debugger_continue(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
-    //GString *gdb_command = g_string_new("");
 
     g_return_if_fail(GSWAT_IS_GDB_DEBUGGER(object));
     self = GSWAT_GDB_DEBUGGER(object);
-
-    //g_string_printf(gdb_command, "-exec-continue\n", self->priv->gdb_sequence++);
 
     gswat_gdb_debugger_send_mi_command(self,
                                        "-exec-continue",
                                        basic_runner_mi_callback,
                                        NULL);
-
-    //g_string_free(gdb_command, TRUE);
 }
 
 
@@ -2484,19 +2344,14 @@ void
 gswat_gdb_debugger_finish(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
-    //GString *gdb_command = g_string_new("");
 
     g_return_if_fail(GSWAT_IS_GDB_DEBUGGER(object));
     self = GSWAT_GDB_DEBUGGER(object);
-
-    //g_string_printf(gdb_command, "-exec-continue\n", self->priv->gdb_sequence++);
 
     gswat_gdb_debugger_send_mi_command(self,
                                        "-exec-finish",
                                        basic_runner_mi_callback,
                                        NULL);
-
-    //g_string_free(gdb_command, TRUE);
 }
 
 
@@ -2506,38 +2361,28 @@ void
 gswat_gdb_debugger_step_into(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
-    //GString *gdb_command = g_string_new("");
 
     g_return_if_fail(GSWAT_IS_GDB_DEBUGGER(object));
     self = GSWAT_GDB_DEBUGGER(object);
-
-    //g_string_printf(gdb_command, "-exec-step", self->priv->gdb_sequence++);
 
     gswat_gdb_debugger_send_mi_command(self,
                                        "-exec-step",
                                        basic_runner_mi_callback,
                                        NULL);
-
-    //g_string_free(gdb_command, TRUE);
 }
 
 void
 gswat_gdb_debugger_next(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
-    //GString *gdb_command = g_string_new("");
 
     g_return_if_fail(GSWAT_IS_GDB_DEBUGGER(object));
     self = GSWAT_GDB_DEBUGGER(object);
-
-    //g_string_printf(gdb_command, "%ld -exec-next\n", self->priv->gdb_sequence++);
 
     gswat_gdb_debugger_send_mi_command(self,
                                        "-exec-next",
                                        basic_runner_mi_callback,
                                        NULL);
-
-    //g_string_free(gdb_command, TRUE);
 }
 
 
@@ -2571,15 +2416,35 @@ gswat_gdb_debugger_restart(GSwatDebuggable *object)
     if(self->priv->state == GSWAT_DEBUGGABLE_RUNNING
        || self->priv->state == GSWAT_DEBUGGABLE_INTERRUPTED)
     {
-        //kill(self->priv->target_pid, SIGKILL);
         gswat_gdb_debugger_send_mi_command(self,
                                            "-exec-run",
-                                           basic_runner_mi_callback,
+                                           restart_running_mi_callback,
                                            NULL);
-
-        //spawn_local_process(self);
     }
 }
+
+
+static void
+restart_running_mi_callback(GSwatGdbDebugger *self,
+                            const GSwatGdbMIRecord *record,
+                            void *data)
+{
+    if(record->type == GSWAT_GDB_MI_REC_TYPE_RESULT_ERROR)
+    {
+        g_warning("restart_running_mi_callback: recieved an error");
+        return;
+    }
+
+    if(record->type != GSWAT_GDB_MI_REC_TYPE_RESULT_RUNNING)
+    {
+        g_warning("restart_running_mi_callback: unexpected result type");
+        return;
+    }
+
+    self->priv->state = GSWAT_DEBUGGABLE_RUNNING;
+    g_object_notify(G_OBJECT(self), "state");
+}
+
 
 gchar *
 gswat_gdb_debugger_get_source_uri(GSwatDebuggable *object)
@@ -2701,10 +2566,8 @@ gswat_gdb_debugger_get_locals_list(GSwatDebuggable *object)
     GSwatGdbDebugger *self;
     gulong token;
     GSwatGdbMIRecord *mi_record1, *mi_record2;
-    //GDBMIValue *mi_results1, *mi_results2;
     const GDBMIValue *local, *var, *frame, *args, *stack;
-    const gchar * name;
-    GList *names, *tmp, *tmp2, *locals_copy;
+    GList *names;
     guint i;
 
     g_return_val_if_fail(GSWAT_IS_GDB_DEBUGGER(object), NULL);
@@ -2743,6 +2606,7 @@ gswat_gdb_debugger_get_locals_list(GSwatDebuggable *object)
                     var = gdbmi_value_list_get_nth(args, i);
                     if(var)
                     {
+                        const gchar *name;
                         name = gdbmi_value_literal_get(var);
                         names = g_list_prepend(names, (gchar *)name);
                     }
@@ -2768,129 +2632,22 @@ gswat_gdb_debugger_get_locals_list(GSwatDebuggable *object)
             var = gdbmi_value_list_get_nth(local, i);
             if(var)
             {
+                const gchar *name;
                 name = gdbmi_value_literal_get(var);
                 names = g_list_prepend(names, (gchar *)name);
             }
         }
     }
 
-
-
-    for(tmp=names; tmp!=NULL; tmp=tmp->next)
-    {
-        gboolean found = FALSE;
-
-        for(tmp2=self->priv->locals; tmp2!=NULL; tmp2=tmp2->next)
-        {
-            GSwatVariableObject *variable_object;
-            char *current_name;
-
-            variable_object = tmp2->data;
-            current_name = 
-                gswat_variable_object_get_expression(variable_object);
-
-            if(strcmp(tmp->data, current_name) == 0)
-            {
-                found = TRUE;
-                g_free(current_name);
-                break;
-            }
-            g_free(current_name);
-        }
-
-        if(!found)
-        {
-            GSwatVariableObject *variable_object;
-
-            variable_object = gswat_gdb_variable_object_new(self,
-                                                            (char *)tmp->data,
-                                                            NULL,
-                                                            -1);
-
-            self->priv->locals = 
-                g_list_prepend(self->priv->locals, variable_object);
-
-        }
-    }
-
-    /* prune, extra variable objects from self->priv->locals */
-    locals_copy=g_list_copy(self->priv->locals);
-    for(tmp=locals_copy; tmp!=NULL; tmp=tmp->next)
-    {
-        gboolean found = FALSE;
-        GSwatVariableObject *variable_object;
-        char *current_name;
-
-        variable_object = tmp->data;
-        current_name = 
-            gswat_variable_object_get_expression(variable_object);
-
-        for(tmp2=names; tmp2!=NULL; tmp2=tmp2->next)
-        {
-            if(strcmp(current_name, tmp2->data) == 0)
-            {
-                found = TRUE;
-                break;
-            }
-        }
-        g_free(current_name);
-
-        if(!found)
-        {
-            self->priv->locals = 
-                g_list_remove(self->priv->locals, variable_object);
-            g_object_unref(variable_object);
-        }
-    }
-    g_list_free(locals_copy);
-
+    update_locals_list_from_name_list(self, names);
 
     g_list_free(names);
 
     gswat_gdb_debugger_free_mi_record(mi_record1);
     gswat_gdb_debugger_free_mi_record(mi_record2);
 
-
     g_list_foreach(self->priv->locals, (GFunc)g_object_ref, NULL);
     return g_list_copy(self->priv->locals);
 }
 
-
-void
-_gswat_gdb_debugger_register_variable_object(GSwatGdbDebugger* self,
-                                             GSwatGdbVariableObject *variable_object)
-{
-    GList *item;
-
-    item = g_list_alloc();
-    item->data = variable_object;
-
-    g_object_add_weak_pointer(G_OBJECT(variable_object),
-                              (gpointer)&item->data);
-
-    self->priv->all_variables = 
-        g_list_concat(item, self->priv->all_variables);
-
-    self->priv->all_variables = 
-        g_list_remove_all(self->priv->all_variables, NULL);
-}
-
-void
-_gswat_gdb_debugger_unregister_variable_object(GSwatGdbDebugger* self,
-                                               GSwatGdbVariableObject *variable_object)
-{
-    GList *item;
-
-    item = g_list_find(self->priv->all_variables, variable_object);
-    if(item)
-    {
-        g_object_remove_weak_pointer(G_OBJECT(variable_object),
-                                     (gpointer)&item->data);
-    }
-    self->priv->all_variables = 
-        g_list_remove(self->priv->all_variables, variable_object);
-
-    self->priv->all_variables = 
-        g_list_remove_all(self->priv->all_variables, NULL);
-}
 

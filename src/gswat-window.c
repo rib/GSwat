@@ -64,8 +64,6 @@ static void gswat_window_finalize(GObject *self);
 
 static void construct_widgets(GSwatWindow *self);
 static void destruct_widgets(GSwatWindow *self);
-//static void create_sourceview(GSwatWindow *self);
-//static void destroy_sourceview(GSwatWindow *self);
 static void set_toolbar_state(GSwatWindow *self, guint state);
 static void on_session_new_activate(GtkAction *action,
                                     GSwatWindow *self);
@@ -113,25 +111,42 @@ static void update_line_highlights(GSwatWindow *self);
 static void on_gswat_debuggable_state_notify(GObject *object,
                                              GParamSpec *property,
                                              gpointer data);
-static gboolean update_variable_view(gpointer data);
+static void update_variable_view(gpointer data);
 static
 gboolean search_for_variable_store_entry(GtkTreeStore *variable_store,
                                          GSwatVariableObject *variable_object,
                                          GtkTreeIter *iter);
+static void add_variable_object_to_tree_store(GSwatVariableObject *variable_object,
+                                              GtkTreeStore *variable_store,
+                                              GtkTreeIter *parent);
 static void prune_variable_store(GtkTreeStore *variable_store,
                                  GList *variables);
-static void on_variable_object_updated(GObject *object);
+static void on_variable_object_value_notify(GObject *object,
+                                            GParamSpec *property,
+                                            gpointer data);
+static void on_variable_object_invalidated(GObject *object,
+                                           GParamSpec *property,
+                                           gpointer data);
+static void on_variable_object_child_count_notify(GObject *object,
+                                                  GParamSpec *property,
+                                                  gpointer data);
 static void on_gswat_debuggable_stack_notify(GObject *object,
                                              GParamSpec *property,
                                              gpointer data);
 static void free_current_stack_view_entries(GSwatWindow *self);
-
+static void on_gswat_debuggable_locals_notify(GObject *object,
+                                              GParamSpec *property,
+                                              gpointer data);
 static void
 on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
                                            GtkTreeIter *iter,
                                            GtkTreePath *iter_path,
                                            gpointer    data);
-
+static void
+on_gswat_window_variable_view_row_collapsed(GtkTreeView *view,
+                                            GtkTreeIter *iter,
+                                            GtkTreePath *iter_path,
+                                            gpointer    data);
 static gboolean on_window_delete_event(GtkWidget *win,
                                        GdkEventAny *event,
                                        GSwatWindow *self);
@@ -209,9 +224,6 @@ struct _GSwatWindowPrivate
     GList           *stack;
 
     GtkTreeStore    *variable_store;
-    //GtkTreeStore    *variables_tree_store;
-    //GList           *variables;
-
 };
 
 typedef struct {
@@ -504,7 +516,7 @@ gswat_window_finalize(GObject *object)
     self = GSWAT_WINDOW(object);
 
     clean_up_current_session(self);
-    
+
     destruct_widgets(self);
 
     G_OBJECT_CLASS(parent_class)->finalize(object);
@@ -656,8 +668,13 @@ construct_widgets(GSwatWindow *self)
     gtk_tree_view_append_column(variable_view, column);
 
     g_signal_connect(variable_view,
-                     "row_expanded",
+                     "row-expanded",
                      G_CALLBACK(on_gswat_window_variable_view_row_expanded),
+                     self);
+
+    g_signal_connect(variable_view,
+                     "row-collapsed",
+                     G_CALLBACK(on_gswat_window_variable_view_row_collapsed),
                      self);
 
     variable_store = gtk_tree_store_new(GSWAT_WINDOW_VARIABLES_N_COLS,
@@ -834,6 +851,11 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
                      window);
 
     g_signal_connect(G_OBJECT(window->priv->debuggable),
+                     "notify::locals",
+                     G_CALLBACK(on_gswat_debuggable_locals_notify),
+                     window);
+
+    g_signal_connect(G_OBJECT(window->priv->debuggable),
                      "notify::source-uri",
                      G_CALLBACK(on_gswat_debuggable_source_uri_notify),
                      window);
@@ -847,13 +869,6 @@ on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
                      "notify::breakpoints",
                      G_CALLBACK(on_gswat_debuggable_breakpoints_notify),
                      window);
-
-#if 0
-    g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
-                    update_variable_view,
-                    window,
-                    NULL);
-#endif
 
     gswat_debuggable_target_connect(window->priv->debuggable);
 }
@@ -899,6 +914,7 @@ on_session_quit_activate(GtkAction *action,
                          GSwatWindow *self)
 {
     g_object_unref(self->priv->debuggable);
+    self->priv->debuggable = NULL;
     gtk_main_quit();
 }
 
@@ -1162,6 +1178,7 @@ update_source_view(GSwatWindow *self)
                                     line,
                                     FALSE);
             }
+            g_free(file_uri);
             g_free(uri);
             g_object_unref(gswat_view);
             return;
@@ -1228,6 +1245,8 @@ update_source_view(GSwatWindow *self)
 
     update_line_highlights(self);
 
+    g_free(file_uri);
+
     return;
 
 }
@@ -1256,7 +1275,7 @@ update_line_highlights(GSwatWindow *self)
 
 
     /* FIXME - this is a hugely overweight solution
-     * we shouldnt need to update the list of line
+     * we shouldn't need to update the list of line
      * highlights in every view e.g. just to effectivly
      * update the current line highlight in the current
      * view.
@@ -1341,8 +1360,6 @@ on_gswat_debuggable_state_notify(GObject *object,
     GSwatDebuggable *debuggable = GSWAT_DEBUGGABLE(object);
     guint state;
 
-    update_variable_view(self);
-
     state = gswat_debuggable_get_state(debuggable);
 
     if(state == GSWAT_DEBUGGABLE_DISCONNECTED)
@@ -1355,15 +1372,14 @@ on_gswat_debuggable_state_notify(GObject *object,
 }
 
 
-static gboolean
+static void
 update_variable_view(gpointer data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     GSwatDebuggable *debuggable = self->priv->debuggable;
     GList *variables, *tmp;
     GtkTreeStore *variable_store;
-    GtkTreeRowReference *row_ref;
-    GtkTreePath *path;
+
 
     variables = gswat_debuggable_get_locals_list(debuggable);
     variable_store = self->priv->variable_store;
@@ -1373,11 +1389,8 @@ update_variable_view(gpointer data)
      * If not, then add one. */
     for(tmp=variables; tmp!=NULL; tmp=tmp->next)
     {
-        GSwatVariableObject *variable_object;
-        variable_object = (GSwatVariableObject *)tmp->data;
-        char *expression, *value;
-        GtkTreeIter iter, child;
-        guint child_count;
+        GSwatVariableObject *variable_object = tmp->data;
+        GtkTreeIter iter;
 
         if(search_for_variable_store_entry(variable_store,
                                            variable_object,
@@ -1386,56 +1399,9 @@ update_variable_view(gpointer data)
             continue;
         }
 
-        expression = 
-            gswat_variable_object_get_expression(variable_object);
-        value = gswat_variable_object_get_value(variable_object, NULL);
-
-        gtk_tree_store_append(variable_store, &iter, NULL);
-        gtk_tree_store_set(variable_store, &iter,
-                           GSWAT_WINDOW_VARIABLE_NAME_COL,
-                           expression,
-                           GSWAT_WINDOW_VARIABLE_VALUE_COL,
-                           value,
-                           GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                           G_OBJECT(variable_object),
-                           -1);
-        g_object_set_data(G_OBJECT(variable_object),
-                          "gswat_tree_store",
-                          variable_store);
-
-        path = gtk_tree_model_get_path(GTK_TREE_MODEL(variable_store), &iter);
-        row_ref = gtk_tree_row_reference_new(GTK_TREE_MODEL(variable_store), path);
-        gtk_tree_path_free(path);
-        g_assert(gtk_tree_row_reference_get_path(row_ref)!=NULL);
-        g_object_set_data(G_OBJECT(variable_object),
-                          "gswat_row_reference",
-                          row_ref);
-
-        g_signal_connect(variable_object,
-                         "updated",
-                         G_CALLBACK(on_variable_object_updated),
-                         NULL
-                        );
-
-        child_count = 
-            gswat_variable_object_get_child_count(variable_object);
-
-        if(child_count)
-        {
-            gtk_tree_store_append(variable_store, &child, &iter);
-            gtk_tree_store_set(variable_store, &child,
-                               GSWAT_WINDOW_VARIABLE_NAME_COL,
-                               "Retrieving Children...",
-                               GSWAT_WINDOW_VARIABLE_VALUE_COL,
-                               "",
-                               GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                               NULL,
-                               -1);
-
-        }
-
-        g_free(expression);
-        g_free(value);
+        add_variable_object_to_tree_store(variable_object,
+                                          variable_store,
+                                          NULL);
     }
 
     /* Remove tree store entries that don't exist in
@@ -1449,7 +1415,7 @@ update_variable_view(gpointer data)
     }
     g_list_free(variables);
 
-    return TRUE;
+    return;
 }
 
 
@@ -1482,6 +1448,82 @@ search_for_variable_store_entry(GtkTreeStore *variable_store,
     }while(gtk_tree_model_iter_next(GTK_TREE_MODEL(variable_store), iter));
 
     return FALSE;
+}
+
+
+static void
+add_variable_object_to_tree_store(GSwatVariableObject *variable_object,
+                                  GtkTreeStore *variable_store,
+                                  GtkTreeIter *parent)
+{
+    char *expression, *value;
+    GtkTreeIter iter, child;
+    GtkTreePath *path;
+    GtkTreeRowReference *row_ref;
+    guint child_count;
+
+    expression = 
+        gswat_variable_object_get_expression(variable_object);
+    value = gswat_variable_object_get_value(variable_object, NULL);
+
+    gtk_tree_store_append(variable_store, &iter, parent);
+
+    gtk_tree_store_set(variable_store, &iter,
+                       GSWAT_WINDOW_VARIABLE_NAME_COL,
+                       expression,
+                       GSWAT_WINDOW_VARIABLE_VALUE_COL,
+                       value,
+                       GSWAT_WINDOW_VARIABLE_OBJECT_COL,
+                       G_OBJECT(variable_object),
+                       -1);
+    g_object_set_data(G_OBJECT(variable_object),
+                      "gswat_tree_store",
+                      variable_store);
+
+    path = gtk_tree_model_get_path(GTK_TREE_MODEL(variable_store), &iter);
+    row_ref = gtk_tree_row_reference_new(GTK_TREE_MODEL(variable_store), path);
+    gtk_tree_path_free(path);
+    g_assert(gtk_tree_row_reference_get_path(row_ref)!=NULL);
+    g_object_set_data(G_OBJECT(variable_object),
+                      "gswat_row_reference",
+                      row_ref);
+
+    g_signal_connect(variable_object,
+                     "notify::value",
+                     G_CALLBACK(on_variable_object_value_notify),
+                     NULL
+                    );
+
+    g_signal_connect(variable_object,
+                     "notify::valid",
+                     G_CALLBACK(on_variable_object_invalidated),
+                     NULL
+                    );
+    child_count = 
+        gswat_variable_object_get_child_count(variable_object);
+
+    g_signal_connect(variable_object,
+                     "notify::child-count",
+                     G_CALLBACK(on_variable_object_child_count_notify),
+                     NULL
+                    );
+
+    if(child_count)
+    {
+        gtk_tree_store_append(variable_store, &child, &iter);
+        gtk_tree_store_set(variable_store, &child,
+                           GSWAT_WINDOW_VARIABLE_NAME_COL,
+                           "Retrieving Children...",
+                           GSWAT_WINDOW_VARIABLE_VALUE_COL,
+                           "",
+                           GSWAT_WINDOW_VARIABLE_OBJECT_COL,
+                           NULL,
+                           -1);
+    }
+
+    g_free(expression);
+    g_free(value);
+
 }
 
 
@@ -1552,7 +1594,9 @@ prune_variable_store(GtkTreeStore *variable_store,
 
 
 static void
-on_variable_object_updated(GObject *object)
+on_variable_object_value_notify(GObject *object,
+                                GParamSpec *property,
+                                gpointer data)
 {
     GSwatVariableObject *variable_object;
     GtkTreeStore *store;
@@ -1566,6 +1610,7 @@ on_variable_object_updated(GObject *object)
     store = g_object_get_data(object, "gswat_tree_store");
     if(!store)
     {
+        g_warning("on_variable_object_invalidated: no tree store for variable");
         g_message("on_variable_object_updated 1");
         return;
     }
@@ -1588,6 +1633,128 @@ on_variable_object_updated(GObject *object)
                        value,
                        -1);
     g_free(value);
+}
+
+static void
+on_variable_object_invalidated(GObject *object,
+                               GParamSpec *property,
+                               gpointer data)
+{
+    GSwatVariableObject *variable_object;
+    GtkTreeStore *store;
+    GtkTreeIter iter;
+
+    variable_object = GSWAT_VARIABLE_OBJECT(object);
+    g_message("on_variable_object_invalidated");
+    store = g_object_get_data(object, "gswat_tree_store");
+    if(!store)
+    {
+        g_warning("on_variable_object_invalidated: no tree store for variable");
+        return;
+    }
+
+    if(search_for_variable_store_entry(store,
+                                       variable_object,
+                                       &iter))
+    {
+        GtkTreeRowReference *row_ref;
+
+        row_ref = g_object_get_data(G_OBJECT(variable_object),
+                                    "gswat_row_reference");
+        gtk_tree_row_reference_free(row_ref);
+
+        gtk_tree_store_remove(store, &iter);
+    }
+}
+
+
+static void
+on_variable_object_child_count_notify(GObject *object,
+                                      GParamSpec *property,
+                                      gpointer data)
+{
+    GSwatVariableObject *variable_object;
+    GtkTreeStore *store;
+    GtkTreeIter iter, child;
+    GList *tmp;
+    GList *row_refs;
+    GtkTreeRowReference *row_ref;
+    GtkTreePath *path;
+    guint child_count;
+
+
+    variable_object = GSWAT_VARIABLE_OBJECT(object);
+    g_message("on_variable_object_invalidated");
+    store = g_object_get_data(object, "gswat_tree_store");
+    if(!store)
+    {
+        g_warning("on_variable_object_child_count_notify: no tree store for variable");
+        return;
+    }
+
+    if(!search_for_variable_store_entry(store,
+                                        variable_object,
+                                        &iter))
+    {
+        return;
+    }
+
+    /* Deleting multiple rows in one go is a little tricky. We need to
+     * take row references before they are deleted */
+    row_refs = NULL;
+    if(gtk_tree_model_iter_children(GTK_TREE_MODEL(store), &child, &iter))
+    {
+        /* Get row references */
+        do
+        {
+            path = gtk_tree_model_get_path (GTK_TREE_MODEL (store), &child);
+            row_ref = gtk_tree_row_reference_new (GTK_TREE_MODEL (store), path);
+            row_refs = g_list_prepend (row_refs, row_ref);
+            gtk_tree_path_free (path);
+        }
+        while(gtk_tree_model_iter_next(GTK_TREE_MODEL (store), &child));
+    }
+
+    gtk_tree_model_get(GTK_TREE_MODEL(store),
+                       &iter,
+                       GSWAT_WINDOW_VARIABLE_OBJECT_COL,
+                       &variable_object,
+                       -1);
+    child_count = 
+        gswat_variable_object_get_child_count(variable_object);
+
+    if(child_count)
+    {
+        gtk_tree_store_append(store, &child, &iter);
+        gtk_tree_store_set(store, &child,
+                           GSWAT_WINDOW_VARIABLE_NAME_COL,
+                           "Retrieving Children...",
+                           GSWAT_WINDOW_VARIABLE_VALUE_COL,
+                           "",
+                           GSWAT_WINDOW_VARIABLE_OBJECT_COL,
+                           NULL,
+                           -1);
+    }
+
+
+    /* Delete the referenced rows */
+    for(tmp=row_refs; tmp!=NULL; tmp=tmp->next)
+    {
+        row_ref = tmp->data;
+        path = gtk_tree_row_reference_get_path(row_ref);
+        if(path)
+        {
+            gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &child, path);
+            gtk_tree_store_remove(store, &child);
+            gtk_tree_path_free(path);
+        }
+        gtk_tree_row_reference_free(row_ref);
+    }
+    if(row_refs)
+    {
+        g_list_free(row_refs);
+    }
+
 }
 
 
@@ -1724,6 +1891,14 @@ on_gswat_session_edit_abort(GSwatSession *session)
 }
 #endif
 
+static void
+on_gswat_debuggable_locals_notify(GObject *object,
+                                  GParamSpec *property,
+                                  gpointer data)
+{
+    GSwatWindow *self = GSWAT_WINDOW(data);
+    update_variable_view(self);
+}
 
 static void
 on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
@@ -1733,7 +1908,7 @@ on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
 {
     //GSwatWindow *self = GSWAT_WINDOW(data);
     GtkTreeStore *store;
-    GtkTreeIter expanded, child, child2;
+    GtkTreeIter expanded, child;
     GSwatVariableObject *variable_object, *current_child;
     GList *children, *tmp;
     GList *row_refs;
@@ -1743,11 +1918,10 @@ on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
 
     store = GTK_TREE_STORE(gtk_tree_view_get_model(view));
 
-    /* Deleting multiple rows at one go is little tricky. We need to
-       take row references before they are deleted
-       */
+    /* Deleting multiple rows in one go is a little tricky. We need to
+     * take row references before they are deleted */
     row_refs = NULL;
-    if (gtk_tree_model_iter_children(GTK_TREE_MODEL(store), &child, iter))
+    if(gtk_tree_model_iter_children(GTK_TREE_MODEL(store), &child, iter))
     {
         /* Get row references */
         do
@@ -1757,9 +1931,8 @@ on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
             row_refs = g_list_prepend (row_refs, row_ref);
             gtk_tree_path_free (path);
         }
-        while (gtk_tree_model_iter_next (GTK_TREE_MODEL (store), &child));
+        while(gtk_tree_model_iter_next(GTK_TREE_MODEL (store), &child));
     }
-
 
     gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &expanded, iter_path);
 
@@ -1773,71 +1946,113 @@ on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
     for(tmp=children; tmp!=NULL; tmp=tmp->next)
     {
         current_child = (GSwatVariableObject *)tmp->data;
-        char *expression, *value;
-        //GtkTreeIter iter, child;
-        guint child_count;
 
-        expression = 
-            gswat_variable_object_get_expression(current_child);
-        value = gswat_variable_object_get_value(current_child, NULL);
-
-        gtk_tree_store_append(store, &child, &expanded);
-        gtk_tree_store_set(store, &child,
-                           GSWAT_WINDOW_VARIABLE_NAME_COL,
-                           expression,
-                           GSWAT_WINDOW_VARIABLE_VALUE_COL,
-                           value,
-                           GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                           G_OBJECT(current_child),
-                           -1);
-        g_object_set_data(G_OBJECT(current_child),
-                          "gswat_tree_store",
-                          store);
-
-        path = gtk_tree_model_get_path(GTK_TREE_MODEL(store), &child);
-        row_ref = gtk_tree_row_reference_new (GTK_TREE_MODEL (store), path);
-        gtk_tree_path_free(path);
-        g_object_set_data(G_OBJECT(current_child),
-                          "gswat_row_reference",
-                          row_ref);
-
-        g_signal_connect(current_child,
-                         "updated",
-                         G_CALLBACK(on_variable_object_updated),
-                         NULL
-                        );
-
-        child_count = 
-            gswat_variable_object_get_child_count(current_child);
-
-        if(child_count)
-        {
-            gtk_tree_store_append(store, &child2, &child);
-            gtk_tree_store_set(store, &child2,
-                               GSWAT_WINDOW_VARIABLE_NAME_COL,
-                               "Retrieving Children...",
-                               GSWAT_WINDOW_VARIABLE_VALUE_COL,
-                               "",
-                               GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                               NULL,
-                               -1);
-
-        }
-
-        g_free(expression);
-        g_free(value);
+        add_variable_object_to_tree_store(current_child,
+                                          store,
+                                          &expanded);
+        g_object_unref(G_OBJECT(current_child));
     }
     g_object_unref(G_OBJECT(variable_object));
+
 
     /* Delete the referenced rows */
     for(tmp=row_refs; tmp!=NULL; tmp=tmp->next)
     {
         row_ref = tmp->data;
         path = gtk_tree_row_reference_get_path(row_ref);
-        g_assert (path != NULL);
-        gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &child, path);
-        gtk_tree_store_remove(store, &child);
-        gtk_tree_path_free(path);
+        if(path)
+        {
+            gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &child, path);
+            gtk_tree_store_remove(store, &child);
+            gtk_tree_path_free(path);
+        }
+        gtk_tree_row_reference_free(row_ref);
+    }
+    if(row_refs)
+    {
+        g_list_free(row_refs);
+    }
+
+}
+
+static void
+on_gswat_window_variable_view_row_collapsed(GtkTreeView *view,
+                                            GtkTreeIter *iter,
+                                            GtkTreePath *iter_path,
+                                            gpointer    data)
+{
+    GtkTreeStore *store;
+    GtkTreeIter collapsed, child;
+    GSwatVariableObject *variable_object, *current_child;
+    GList *row_refs;
+    GtkTreeRowReference *row_ref;
+    GtkTreePath *path;
+    guint child_count;
+    GList *tmp;
+
+    store = GTK_TREE_STORE(gtk_tree_view_get_model(view));
+
+
+    /* Deleting multiple rows in one go is a little tricky. We need to
+     * take row references before they are deleted */
+    row_refs = NULL;
+    if(gtk_tree_model_iter_children(GTK_TREE_MODEL(store), &child, iter))
+    {
+        /* Get row references */
+        do
+        {
+            path = gtk_tree_model_get_path (GTK_TREE_MODEL (store), &child);
+            row_ref = gtk_tree_row_reference_new (GTK_TREE_MODEL (store), path);
+            row_refs = g_list_prepend (row_refs, row_ref);
+            gtk_tree_path_free (path);
+        }
+        while(gtk_tree_model_iter_next(GTK_TREE_MODEL (store), &child));
+    }
+
+    gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &collapsed, iter_path);
+
+    gtk_tree_model_get(GTK_TREE_MODEL(store),
+                       &collapsed,
+                       GSWAT_WINDOW_VARIABLE_OBJECT_COL,
+                       &variable_object,
+                       -1);
+    child_count = 
+        gswat_variable_object_get_child_count(variable_object);
+
+    if(child_count)
+    {
+        gtk_tree_store_append(store, &child, &collapsed);
+        gtk_tree_store_set(store, &child,
+                           GSWAT_WINDOW_VARIABLE_NAME_COL,
+                           "Retrieving Children...",
+                           GSWAT_WINDOW_VARIABLE_VALUE_COL,
+                           "",
+                           GSWAT_WINDOW_VARIABLE_OBJECT_COL,
+                           NULL,
+                           -1);
+    }
+
+
+    /* Delete the referenced rows */
+    for(tmp=row_refs; tmp!=NULL; tmp=tmp->next)
+    {
+        row_ref = tmp->data;
+        path = gtk_tree_row_reference_get_path(row_ref);
+        if(path)
+        {
+            gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &child, path);
+            
+            /* FIXME - debug remove me */
+            gtk_tree_model_get(GTK_TREE_MODEL(store),
+                               &child,
+                               GSWAT_WINDOW_VARIABLE_OBJECT_COL,
+                               &variable_object,
+                               -1);
+            g_object_unref(variable_object);
+
+            gtk_tree_store_remove(store, &child);
+            gtk_tree_path_free(path);
+        }
         gtk_tree_row_reference_free(row_ref);
     }
     if(row_refs)
@@ -1845,7 +2060,6 @@ on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
         g_list_free(row_refs);
     }
 }
-
 
 void
 on_gswat_window_preferences_activate(GtkMenuItem     *menuitem,

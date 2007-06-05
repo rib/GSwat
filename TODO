@@ -14,21 +14,28 @@ misusing this, so we shouldn't copy them!
 - improve the menus
    - edit preferences is currently broken
    - implement help->about
-- make sure the terminal always closes when gswat closes!
 - Perhaps add mouse over variable bubbles to display their value
  - also allow highlighting expressions
  - Consider not using bubbles though since they get in the way
    of code.
-- test and fix the break/restart button and make sure we
-  can use the new button at any time without things
-  getting tangled.
+- test the interrupt button
 - support clicking on frame entries within the stack view
   so that the source view gets updated appropriatly.
 - try and seperate/abstract things so that the variable
   view and stack view work somewhat like mini plugins.
 - implement socket based connections to a gswat-spwaner
-- The variable view is currently only allowing you to expand
-  complex variables by one level
+- If I use the restart button while within main() then the local
+  variables arn't being reset
+- Ctrl-Q doesn't quit
+- implement a text command based interface
+  - commands should have long descriptive names
+  - allow customisable aliases
+    - by default provide aliases intuative to a gdb user
+- the source view tab should not have a close button
+  - currently the source view doesn't need a tab at all
+- There are currently lots of io channel errors on exit where
+  we try and delete variable objects after closing the gdb
+  connection
 
 
 1.0

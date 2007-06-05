@@ -69,24 +69,59 @@ static void
 gswat_debuggable_base_init(gpointer g_class)
 {
     gswat_debuggable_base_init_count++;
+    GParamSpec *new_param;
 
     if(gswat_debuggable_base_init_count == 1) {
 
         /* register signals */
-#if 0
-        gswat_debuggable_signals[SIGNAL_NAME] =
+#if 0 /* template code */
+        interface->signal_member = signal_default_handler;
+        gswat_tabable_signals[SIGNAL_NAME] =
             g_signal_new("signal_name", /* name */
-                         GSWAT_TYPE_DEBUGGABLE, /* interface GType */
+                         G_TYPE_FROM_INTERFACE(interface), /* interface GType */
                          G_SIGNAL_RUN_LAST, /* signal flags */
-                         G_STRUCT_OFFSET(GSwatDebuggableIface, signal_member),
+                         G_STRUCT_OFFSET(GSwatTabableIface, signal_member),
                          NULL, /* accumulator */
                          NULL, /* accumulator data */
                          g_cclosure_marshal_VOID__VOID, /* c marshaller */
                          G_TYPE_NONE, /* return type */
-                         0, /* number of parameters */
+                         0 /* number of parameters */
                          /* vararg, list of param types */
                         );
 #endif
+           
+        /* register properties */
+#if 0
+        //new_param = g_param_spec_int("name", /* name */
+        //new_param = g_param_spec_uint("name", /* name */
+        //new_param = g_param_spec_boolean("name", /* name */
+        //new_param = g_param_spec_object("name", /* name */
+        new_param = g_param_spec_pointer("name", /* name */
+                                         "Name", /* nick name */
+                                         "Name", /* description */
+#if INT/UINT/CHAR/LONG/FLOAT...
+                                         10, /* minimum */
+                                         100, /* maximum */
+                                         0, /* default */
+#elif BOOLEAN
+                                         FALSE, /* default */
+#elif STRING
+                                         NULL, /* default */
+#elif OBJECT
+                                         MY_TYPE_PARAM_OBJ, /* GType */
+#elif POINTER
+                                         /* nothing extra */
+#endif
+                                         GSWAT_PARAM_READABLE /* flags */
+                                         GSWAT_PARAM_WRITABLE /* flags */
+                                         GSWAT_PARAM_READWRITE /* flags */
+                                         | G_PARAM_CONSTRUCT
+                                         | G_PARAM_CONSTRUCT_ONLY
+                                         );
+        g_object_interface_install_property(interface, new_param);
+#endif
+        
+
     }
 }
 

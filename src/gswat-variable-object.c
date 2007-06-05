@@ -1,3 +1,4 @@
+#include "gswat-utils.h"
 
 #include "gswat-variable-object.h"
 
@@ -45,6 +46,7 @@ static void
 gswat_variable_object_base_init(GSwatVariableObjectIface *interface)
 {
     gswat_variable_object_base_init_count++;
+    GParamSpec *new_param;
 
     if(gswat_variable_object_base_init_count == 1) {
 
@@ -63,6 +65,9 @@ gswat_variable_object_base_init(GSwatVariableObjectIface *interface)
                          /* vararg, list of param types */
                         );
 #endif
+        /* FIXME this should be removed in-place of
+         * properties
+         */
         interface->updated = NULL;
         gswat_variable_object_signals[SIG_UPDATED] =
             g_signal_new("updated", /* name */
@@ -76,7 +81,80 @@ gswat_variable_object_base_init(GSwatVariableObjectIface *interface)
                          0 /* number of parameters */
                          /* vararg, list of param types */
                         );
+        
+        /* register properties */
+#if 0
+        //new_param = g_param_spec_int("name", /* name */
+        //new_param = g_param_spec_uint("name", /* name */
+        //new_param = g_param_spec_boolean("name", /* name */
+        //new_param = g_param_spec_object("name", /* name */
+        new_param = g_param_spec_pointer("name", /* name */
+                                         "Name", /* nick name */
+                                         "Name", /* description */
+#if INT/UINT/CHAR/LONG/FLOAT...
+                                         10, /* minimum */
+                                         100, /* maximum */
+                                         0, /* default */
+#elif BOOLEAN
+                                         FALSE, /* default */
+#elif STRING
+                                         NULL, /* default */
+#elif OBJECT
+                                         MY_TYPE_PARAM_OBJ, /* GType */
+#elif POINTER
+                                         /* nothing extra */
+#endif
+                                         GSWAT_PARAM_READABLE /* flags */
+                                         GSWAT_PARAM_WRITABLE /* flags */
+                                         GSWAT_PARAM_READWRITE /* flags */
+                                         | G_PARAM_CONSTRUCT
+                                         | G_PARAM_CONSTRUCT_ONLY
+                                         );
+        g_object_interface_install_property(interface, new_param);
+#endif
+        new_param = g_param_spec_boolean("valid", /* name */
+                                         "Valid", /* nick name */
+                                         "Does this object still exist according to the backend debuggable", /* description */
+                                         TRUE, /* default */
+                                         GSWAT_PARAM_READABLE /* flags */
+                                         );
+        g_object_interface_install_property(interface, new_param);
+        
 
+        new_param = g_param_spec_string("expression", /* name */
+                                         "Expression", /* nick name */
+                                         "The underlying expression whos value this object tracks", /* description */
+                                         NULL, /* default */
+                                         GSWAT_PARAM_READABLE /* flags */
+                                         );
+        g_object_interface_install_property(interface, new_param);
+        
+
+        new_param = g_param_spec_string("value", /* name */
+                                        "Value", /* nick name */
+                                        "The value of this objects expression", /* description */
+                                         NULL, /* default */
+                                         GSWAT_PARAM_READABLE /* flags */
+                                         );
+        g_object_interface_install_property(interface, new_param);
+        
+        new_param = g_param_spec_uint("child-count", /* name */
+                                      "Child Count", /* nick name */
+                                      "The number of children this varaible object has", /* description */
+                                       0, /* minimum */
+                                       G_MAXUINT, /* maximum */
+                                       0, /* default */
+                                       GSWAT_PARAM_READABLE /* flags */
+                                       );
+        g_object_interface_install_property(interface, new_param);
+
+        new_param = g_param_spec_pointer("children", /* name */
+                                         "Children", /* nick name */
+                                         "A List of this variable objects children", /* description */
+                                         GSWAT_PARAM_READABLE /* flags */
+                                         );
+        g_object_interface_install_property(interface, new_param);
+        
     }
 }
 

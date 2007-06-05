@@ -56,9 +56,9 @@ GSwatGdbVariableObject *gswat_gdb_variable_object_new(GSwatGdbDebugger *debugger
                                                       int frame);
 char *gswat_gdb_variable_object_get_name(GSwatGdbVariableObject *self);
 
-/* internal, but shared with gswat-gdb-debugger.c */
-void _gswat_gdb_variable_object_set_cache_value(GSwatGdbVariableObject *self,
-                                                const char *value);
+/* These should probably only be used by gswat-gdb-debugger.c */
+void gswat_gdb_variable_object_async_update_all(GSwatGdbDebugger *self);
+void gswat_gdb_variable_object_cleanup(GSwatGdbDebugger *gdb_debugger);
 
 G_END_DECLS
 

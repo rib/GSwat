@@ -15,6 +15,11 @@ enum {
     GSWAT_VARIABLE_OBJECT_ERROR_GET_VALUE_FAILED
 };
 
+enum {
+    GSWAT_VARIABLE_OBJECT_CURRENT_NOW_FRAME = -1,
+    GSWAT_VARIABLE_OBJECT_ANY_FRAME = -2
+};
+
 typedef struct _GSwatVariableObjectIface GSwatVariableObjectIface;
 typedef void GSwatVariableObject; /* dummy typedef */
 

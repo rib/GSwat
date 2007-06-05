@@ -122,6 +122,10 @@ main(int argc, char **argv)
 
     /* Normal case: display GUI */
     main_window = gswat_window_new(session);
+    if(session)
+    {
+        g_object_unref(session);
+    }
     
     if (remaining_args != NULL) {
    		g_strfreev (remaining_args);
@@ -130,11 +134,6 @@ main(int argc, char **argv)
 
 
     gtk_main();
-
-    if(session)
-    {
-        g_object_unref(session);
-    }
 
     g_object_unref(main_window);
 
