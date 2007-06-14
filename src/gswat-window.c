@@ -880,11 +880,6 @@ clean_up_current_session(GSwatWindow *self)
     GList *tabs, *tmp;
     GSwatNotebook *notebook;
 
-    if(self->priv->debuggable)
-    {
-        g_object_unref(self->priv->debuggable);
-        self->priv->debuggable = NULL;
-    }
 
     notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_MAIN];
     tabs = gtk_container_get_children(GTK_CONTAINER(notebook));
@@ -903,6 +898,12 @@ clean_up_current_session(GSwatWindow *self)
     g_list_free(tabs);
 
     free_current_stack_view_entries(self);
+
+    if(self->priv->debuggable)
+    {
+        g_object_unref(self->priv->debuggable);
+        self->priv->debuggable = NULL;
+    }
 
     /* FIXME - clear all other per session data */
 
@@ -1111,6 +1112,7 @@ update_source_view(GSwatWindow *self)
     GSwatSrcViewTab *src_view_tab;
 
     debuggable = self->priv->debuggable;
+    
 
     file_uri = gswat_debuggable_get_source_uri(debuggable);
     if(!file_uri)
@@ -1272,8 +1274,7 @@ update_line_highlights(GSwatWindow *self)
     GSwatViewLineHighlight *highlight;
     gchar *current_doc_uri;
     GdkColor breakpoint_color;
-
-
+    
     /* FIXME - this is a hugely overweight solution
      * we shouldn't need to update the list of line
      * highlights in every view e.g. just to effectivly
@@ -1379,7 +1380,7 @@ update_variable_view(gpointer data)
     GSwatDebuggable *debuggable = self->priv->debuggable;
     GList *variables, *tmp;
     GtkTreeStore *variable_store;
-
+    
 
     variables = gswat_debuggable_get_locals_list(debuggable);
     variable_store = self->priv->variable_store;
@@ -1407,7 +1408,6 @@ update_variable_view(gpointer data)
     /* Remove tree store entries that don't exist in
      * the current list of variables */
     prune_variable_store(variable_store, variables);
-
 
     for(tmp=variables; tmp!=NULL; tmp=tmp->next)
     {
@@ -1462,6 +1462,14 @@ add_variable_object_to_tree_store(GSwatVariableObject *variable_object,
     GtkTreeRowReference *row_ref;
     guint child_count;
 
+    if(g_object_get_data(G_OBJECT(variable_object), "gswat_tree_store")!=NULL)
+    {
+        /* FIXME - Do we really need to object to this? */
+        g_warning("add_variable_object_to_tree_store: BUG: variable "
+                  "object is already in a tree store!");
+        return;
+    }
+
     expression = 
         gswat_variable_object_get_expression(variable_object);
     value = gswat_variable_object_get_value(variable_object, NULL);
@@ -1487,7 +1495,7 @@ add_variable_object_to_tree_store(GSwatVariableObject *variable_object,
     g_object_set_data(G_OBJECT(variable_object),
                       "gswat_row_reference",
                       row_ref);
-
+    
     g_signal_connect(variable_object,
                      "notify::value",
                      G_CALLBACK(on_variable_object_value_notify),
@@ -1499,6 +1507,7 @@ add_variable_object_to_tree_store(GSwatVariableObject *variable_object,
                      G_CALLBACK(on_variable_object_invalidated),
                      NULL
                     );
+    
     child_count = 
         gswat_variable_object_get_child_count(variable_object);
 
@@ -1507,7 +1516,6 @@ add_variable_object_to_tree_store(GSwatVariableObject *variable_object,
                      G_CALLBACK(on_variable_object_child_count_notify),
                      NULL
                     );
-
     if(child_count)
     {
         gtk_tree_store_append(variable_store, &child, &iter);
@@ -2042,13 +2050,16 @@ on_gswat_window_variable_view_row_collapsed(GtkTreeView *view,
         {
             gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &child, path);
             
-            /* FIXME - debug remove me */
+#if 0
+            /* DEBUG: so you can inspect the iterated variables
+             * in a debugger */
             gtk_tree_model_get(GTK_TREE_MODEL(store),
                                &child,
                                GSWAT_WINDOW_VARIABLE_OBJECT_COL,
                                &variable_object,
                                -1);
             g_object_unref(variable_object);
+#endif
 
             gtk_tree_store_remove(store, &child);
             gtk_tree_path_free(path);

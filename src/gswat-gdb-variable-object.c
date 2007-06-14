@@ -613,6 +613,7 @@ delete_gdb_variable_object_1(GSwatGdbVariableObject *self,
     }
     g_list_free(self->priv->children);
     self->priv->children=NULL;
+
     self->priv->child_count = -1;
     self->priv->children_consistent = FALSE;
 
@@ -635,9 +636,10 @@ delete_gdb_variable_object_1(GSwatGdbVariableObject *self,
          * child then remove the parents reference to it,
          * and mark the parents list of children as
          * in-consistent */
-        if(self->priv->parent)
+        if(self->priv->parent && self->priv->parent->priv->children)
         {
             GList *siblings;
+
             siblings = self->priv->parent->priv->children;
             siblings = g_list_remove(siblings, self);
             self->priv->parent->priv->children = siblings;
@@ -647,14 +649,14 @@ delete_gdb_variable_object_1(GSwatGdbVariableObject *self,
     
     g_free(self->priv->cached_value);
     self->priv->cached_value=NULL;
-
+    
     all_variables = g_object_get_data(G_OBJECT(self->priv->debugger),
                                       "all-gswat-gdb-variable-objects");
     all_variables = g_list_remove(all_variables, self);
     g_object_set_data(G_OBJECT(self->priv->debugger),
                       "all-gswat-gdb-variable-objects",
                       all_variables);
-
+    
     g_free(self->priv->gdb_name);
     self->priv->gdb_name=NULL;
 
@@ -1236,9 +1238,11 @@ gswat_gdb_variable_object_cleanup(GSwatGdbDebugger *gdb_debugger)
     }
     g_list_foreach(all_variables_copy, (GFunc)g_object_unref, NULL);
     g_list_free(all_variables_copy);
+    
 
+    all_variables = g_object_get_data(G_OBJECT(gdb_debugger),
+                                      "all-gswat-gdb-variable-objects");
     g_list_free(all_variables);
-
     g_object_set_data(G_OBJECT(gdb_debugger),
                       "all-gswat-gdb-variable-objects",
                       NULL);

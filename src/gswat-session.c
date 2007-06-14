@@ -244,10 +244,10 @@ gswat_session_class_init(GSwatSessionClass *klass) /* Class Initialization */
                                     PROP_NAME,
                                     new_param);
 
-    new_param = g_param_spec_string("target-type",
-                                    _("Target Type"),
-                                    _("The type of target you want to debug"),
-                                    "Local Command",
+    new_param = g_param_spec_string("target",
+                                    _("Target Address"),
+                                    _("The address of target you want to debug on"),
+                                    "localhost",
                                     G_PARAM_READABLE | G_PARAM_WRITABLE);
     g_object_class_install_property(gobject_class,
                                     PROP_TARGET,
@@ -602,7 +602,9 @@ gswat_session_edit(GSwatSession *session)
     name_align = glade_xml_get_widget(xml, "gswat_session_name_align");
     serial_align = glade_xml_get_widget(xml, "gswat_session_serial_align");
     command_entry = glade_xml_get_widget(xml, "gswat_session_command_entry");
+    session->priv->editor->command_entry = command_entry;
     workdir_entry = glade_xml_get_widget(xml, "gswat_session_workdir_entry");
+    session->priv->editor->workdir_entry = workdir_entry;
     ok_button = glade_xml_get_widget(xml, "gswat_session_ok_button");
     cancel_button = glade_xml_get_widget(xml, "gswat_session_cancel_button");
 
@@ -689,9 +691,7 @@ gswat_session_edit(GSwatSession *session)
     }
     gtk_combo_box_set_active(GTK_COMBO_BOX(name_combo), 0);
 
-    session->priv->editor->command_entry = command_entry;
 
-    session->priv->editor->workdir_entry = workdir_entry;
 
     set_session_dialog_defaults(session, NULL);
 
@@ -1192,16 +1192,12 @@ gswat_session_abort_edit(GSwatSession *session)
     xml = session->priv->editor->dialog_xml;
 
     dialog = glade_xml_get_widget(xml, "gswat_new_session_dialog");
-    //gtk_widget_hide(dialog);
     gtk_widget_destroy(dialog);
 
     g_object_unref(xml);
-    g_object_unref(session->priv->editor->name_combo);
-    //g_object_unref(session->priv->editor->name_list_store);
-    g_object_unref(session->priv->editor->serial_combo);
+
     g_free(session->priv->editor);
     session->priv->editor = NULL;
-
 
     g_signal_emit_by_name(session, "edit-abort");
 }

@@ -157,6 +157,7 @@ static gboolean gdb_stdout_watcher(GIOChannel* io,
                                    GIOCondition cond,
                                    gpointer data);
 static void queue_idle_process_gdb_pending(GSwatGdbDebugger *self);
+static void de_queue_idle_process_gdb_pending(GSwatGdbDebugger *self);
 static gboolean gdb_stderr_watcher(GIOChannel* io,
                                    GIOCondition cond,
                                    gpointer data);
@@ -779,7 +780,11 @@ gswat_gdb_debugger_target_disconnect(GSwatDebuggable* object)
 
     g_return_if_fail(GSWAT_IS_GDB_DEBUGGER(object));
     self = GSWAT_GDB_DEBUGGER(object);
-    g_return_if_fail(self->priv->state != GSWAT_DEBUGGABLE_DISCONNECTED);
+
+    if(self->priv->state == GSWAT_DEBUGGABLE_DISCONNECTED)
+    {
+        return;
+    }
     
     /* As soon as this is set gswat_gdb_debugger_send_mi_command
      * effectivly becomes a NOP, so gswat_gdb_variable_object_cleanup
@@ -841,6 +846,11 @@ gswat_gdb_debugger_target_disconnect(GSwatDebuggable* object)
         gswat_debuggable_free_breakpoints(self->priv->breakpoints);
         self->priv->breakpoints = NULL;
     }
+
+    de_queue_idle_process_gdb_pending(self);
+
+    self->priv->state = GSWAT_DEBUGGABLE_DISCONNECTED;
+    g_object_notify(G_OBJECT(self), "state");
 }
 
 void
@@ -1009,6 +1019,17 @@ queue_idle_process_gdb_pending(GSwatGdbDebugger *self)
     }
 }
 
+static void
+de_queue_idle_process_gdb_pending(GSwatGdbDebugger *self)
+{
+    if(self->priv->gdb_pending_idle_processor_queued)
+    {
+        g_idle_remove_by_data(self);
+        self->priv->gdb_pending_idle_processor_queued = FALSE;
+    }
+}
+
+
 
 static gboolean
 gdb_stderr_watcher(GIOChannel* io, GIOCondition cond, gpointer data)
@@ -1115,8 +1136,10 @@ idle_process_gdb_pending(gpointer data)
     GSwatGdbDebugger *self = GSWAT_GDB_DEBUGGER(data);
 
     self->priv->gdb_pending_idle_processor_queued = FALSE;
-
+    
+    g_object_ref(G_OBJECT(self));
     process_gdb_pending(self);
+    g_object_unref(G_OBJECT(self));
 
     return FALSE;
 }
@@ -1407,17 +1430,14 @@ process_gdb_mi_oob_stopped_record(GSwatGdbDebugger *self,
     else if (strcmp(str, "exited-normally") == 0)
     {
         gswat_gdb_debugger_target_disconnect(GSWAT_DEBUGGABLE(self));
-        self->priv->state = GSWAT_DEBUGGABLE_DISCONNECTED;
     }
     else if(strcmp(str, "exited") == 0)
     {
         gswat_gdb_debugger_target_disconnect(GSWAT_DEBUGGABLE(self));
-        self->priv->state = GSWAT_DEBUGGABLE_DISCONNECTED;
     }
     else if(strcmp(str, "exited-signalled") == 0)
     {
         gswat_gdb_debugger_target_disconnect(GSWAT_DEBUGGABLE(self));
-        self->priv->state = GSWAT_DEBUGGABLE_DISCONNECTED;
     }
     else if(strcmp(str, "signal-received") == 0)
     {
@@ -1447,9 +1467,9 @@ process_gdb_mi_oob_stopped_record(GSwatGdbDebugger *self,
         gswat_gdb_variable_object_async_update_all(self);
 
         kick_asynchronous_locals_update(self);
-    }
 
-    g_object_notify(G_OBJECT(self), "state");
+        g_object_notify(G_OBJECT(self), "state");
+    }
 
 }
 
@@ -1591,7 +1611,6 @@ uri_from_filename(const gchar *filename)
 
     local_path = g_string_new("");
 
-
     if(filename[0] != '/')
     {
         cwd = g_get_current_dir();
@@ -1605,7 +1624,6 @@ uri_from_filename(const gchar *filename)
      * path
      */
     local_path = g_string_append(local_path, filename);
-
 
     uri = gnome_vfs_get_uri_from_local_path(local_path->str);
 
