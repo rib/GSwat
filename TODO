@@ -1,10 +1,10 @@
 todo
 ----
 
-- remove sexyicon code - I remember someone complaining that gedit was 
-misusing this, so we shouldn't copy them!
+Active development:
 
-  
+- remove sexyicon code - I remember someone complaining that gedit was 
+misusing this, so we shouldn't copy them!  
 - Perhaps find a work around for the gtk sensitivity bug.
   (Ref: http://bugzilla.gnome.org/show_bug.cgi?id=56070)
   - Ideally I'd like to implement my original idea which is that buttons
@@ -18,31 +18,47 @@ misusing this, so we shouldn't copy them!
  - also allow highlighting expressions
  - Consider not using bubbles though since they get in the way
    of code.
-- test the interrupt button
-- support clicking on frame entries within the stack view
-  so that the source view gets updated appropriatly.
+- test the interrupt button.
+  - related: ensure that there is user feedback when the debugger
+    is busy in the "running" state.
+- Support clicking on frame entries within the stack view
+  - So that the source view gets updated appropriatly.
+  - So that local variables get updated appropriatly. (done)
 - try and seperate/abstract things so that the variable
   view and stack view work somewhat like mini plugins.
-- implement socket based connections to a gswat-spwaner
-- If I use the restart button while within main() then the local
-  variables arn't being reset
+- implement socket based connections to a gswat-spawner
 - Ctrl-Q doesn't quit
 - implement a text command based interface
   - commands should have long descriptive names
   - allow customisable aliases
     - by default provide aliases intuative to a gdb user
-- the source view tab should not have a close button
-  - currently the source view doesn't need a tab at all
-- There are currently lots of io channel errors on exit where
-  we try and delete variable objects after closing the gdb
-  connection
+- The debuggable interface currently exposes a "state"
+  property that increments to represent _any_ changes to
+  the debuggables internal state. This is far too general
+  and should be replaced with more focused property
+  notifications.
+
+--------------------------------------------------------------------
+
+summary of blockers for early preview release:
+- Ability to switch between stack frames
+- Help->About, with homepage and bugtracker links
+- Fix Edit->Preferences to _some_ degree.
 
 
-1.0
+Preliminary Roadmap for 1.0 release:
+- Socket based spawner process connections
+- KGDB support
+- Textual command interface
+ - Note this project is _NOT_ about providing yet another GDB
+   frontend. That means exposing the GDB command line interface
+   is not appropriate!
+- Plugin API
+- Python Plugin API bindings
 
-graphical variable display
-textual command interface
-python bindings
-
-2.0
-
+Possible 2.0 Roadmap:
+- Seamless GDB->KGDB integration!
+ - e.g. stepping into ioctls, straight through to some driver
+   specific handler.
+- Support at least one other _non GDB_ backend, e.g. a python
+  debugger or perhaps a bash debugger.

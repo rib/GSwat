@@ -41,6 +41,8 @@ struct _GSwatDebuggableIface
     GList *(*get_stack)(GSwatDebuggable* object);
     GList *(*get_breakpoints)(GSwatDebuggable* object);
     GList *(*get_locals_list)(GSwatDebuggable* object);
+    guint (*get_frame)(GSwatDebuggable* object);
+    void (*set_frame)(GSwatDebuggable* object, guint frame);
 };
 
 typedef enum {
@@ -90,6 +92,8 @@ void gswat_debuggable_free_stack(GList *stack);
 GList *gswat_debuggable_get_breakpoints(GSwatDebuggable* object);
 void gswat_debuggable_free_breakpoints(GList *breakpoints);
 GList *gswat_debuggable_get_locals_list(GSwatDebuggable* object);
+guint gswat_debuggable_get_frame(GSwatDebuggable* object);
+void gswat_debuggable_set_frame(GSwatDebuggable* object, guint frame);
 
 G_END_DECLS
 

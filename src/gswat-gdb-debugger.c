@@ -39,7 +39,8 @@ enum {
     PROP_LOCALS,
     PROP_BREAKPOINTS,
     PROP_SOURCE_URI,
-    PROP_SOURCE_LINE
+    PROP_SOURCE_LINE,
+    PROP_FRAME
 };
 
 typedef struct {
@@ -79,7 +80,9 @@ struct _GSwatGdbDebuggerPrivate
     /* A snapshot of the state stamp when the
      * list of local variables was last updated */
     guint                   locals_stamp;
-    
+
+    guint           frame;
+
     /* Our GDB conection state */
     gboolean        gdb_connected;
     GIOChannel      *gdb_in;
@@ -220,6 +223,14 @@ static void
 restart_running_mi_callback(GSwatGdbDebugger *self,
                             const GSwatGdbMIRecord *record,
                             void *data);
+static void synchronous_update_locals_list(GSwatGdbDebugger *self);
+static guint gdb_debugger_get_frame(GSwatDebuggable* object);
+static void gdb_debugger_set_frame(GSwatDebuggable* object, guint frame);
+static void
+gdb_debugger_set_frame_done_callback(GSwatGdbDebugger *self,
+                                     const GSwatGdbMIRecord *record,
+                                     void *data);
+
 
 /* Variables */
 static GObjectClass *parent_class = NULL;
@@ -276,7 +287,7 @@ static void
 gswat_gdb_debugger_class_init(GSwatGdbDebuggerClass *klass) /* Class Initialization */
 {   
     GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-    GParamSpec *new_param;
+    //GParamSpec *new_param;
 
     parent_class = g_type_class_peek_parent(klass);
 
@@ -318,69 +329,27 @@ gswat_gdb_debugger_class_init(GSwatGdbDebuggerClass *klass) /* Class Initializat
                                     new_param);
 #endif
 
-    //FIXME move most of these up into the debuggable interface
-
-    new_param = g_param_spec_uint("state",
-                                  _("The Running State"),
-                                  _("The State of the debugger"
-                                    " (whether or not it is currently running)"),
-                                  0,
-                                  G_MAXUINT,
-                                  GSWAT_DEBUGGABLE_DISCONNECTED,
-                                  G_PARAM_READABLE);
-    g_object_class_install_property(gobject_class,
-                                    PROP_STATE,
-                                    new_param
-                                   );
-
-    new_param = g_param_spec_pointer("stack",
-                                     _("Stack"),
-                                     _("The Stack of called functions"),
-                                     G_PARAM_READABLE);
-    g_object_class_install_property(gobject_class,
-                                    PROP_STACK,
-                                    new_param
-                                   );
-
-    new_param = g_param_spec_pointer("locals",
-                                     _("Locals"),
-                                     _("The current frames local variables"),
-                                     G_PARAM_READABLE);
-    g_object_class_install_property(gobject_class,
-                                    PROP_LOCALS,
-                                    new_param
-                                   );
-
-    new_param = g_param_spec_pointer("breakpoints",
-                                     _("Breakpoints"),
-                                     _("The list of user defined breakpoints"),
-                                     G_PARAM_READABLE);
-    g_object_class_install_property(gobject_class,
-                                    PROP_STACK,
-                                    new_param
-                                   );
-
-    new_param = g_param_spec_string("source-uri",
-                                    _("Source URI"),
-                                    _("The location for the source file currently being debuggged"),
-                                    NULL,//"file:///home/rob/src/ggdb/src/gswat-debugger.c",
-                                    G_PARAM_READABLE);
-    g_object_class_install_property(gobject_class,
-                                    PROP_SOURCE_URI,
-                                    new_param
-                                   );
-
-    new_param = g_param_spec_ulong("source-line",
-                                   _("Source Line"),
-                                   _("The line of your source file currently being debuggged"),
-                                   0,
-                                   G_MAXULONG,
-                                   0,
-                                   G_PARAM_READABLE);
-    g_object_class_install_property(gobject_class,
-                                    PROP_SOURCE_LINE,
-                                    new_param
-                                   );
+    g_object_class_override_property(gobject_class,
+                                     PROP_STATE,
+                                     "state");
+    g_object_class_override_property(gobject_class,
+                                     PROP_STACK,
+                                     "stack");
+    g_object_class_override_property(gobject_class,
+                                     PROP_LOCALS,
+                                     "locals");
+    g_object_class_override_property(gobject_class,
+                                     PROP_BREAKPOINTS,
+                                     "breakpoints");
+    g_object_class_override_property(gobject_class,
+                                     PROP_SOURCE_URI,
+                                     "source-uri");
+    g_object_class_override_property(gobject_class,
+                                     PROP_SOURCE_LINE,
+                                     "source-line");
+    g_object_class_override_property(gobject_class,
+                                     PROP_FRAME,
+                                     "frame");
 
 
     /* set up signals */
@@ -413,7 +382,6 @@ gswat_gdb_debugger_get_property(GObject *object,
 {
     GSwatGdbDebugger* self = GSWAT_GDB_DEBUGGER(object);
     GSwatDebuggable* self_debuggable = GSWAT_DEBUGGABLE(object);
-    char *tmp;
 
     switch(id) {
 #if 0 /* template code */
@@ -435,21 +403,24 @@ gswat_gdb_debugger_get_property(GObject *object,
                                 gswat_gdb_debugger_get_stack(self_debuggable)
                                );
             break;
+        case PROP_LOCALS:
+            g_value_set_pointer(value,
+                                gswat_gdb_debugger_get_locals_list(self_debuggable)
+                                );
+            break;
         case PROP_BREAKPOINTS:
             g_value_set_pointer(value,
                                 gswat_gdb_debugger_get_breakpoints(self_debuggable)
                                );
             break;
         case PROP_SOURCE_URI:
-            tmp = gswat_gdb_debugger_get_source_uri(self_debuggable);
             g_value_set_string(value, self->priv->source_uri);
-            g_free(tmp);
             break;
         case PROP_SOURCE_LINE:
-            g_value_set_ulong(value,
-                              gswat_gdb_debugger_get_source_line(self_debuggable)
-                             );
+            g_value_set_ulong(value, self->priv->source_line);
             break;
+        case PROP_FRAME:
+            g_value_set_uint(value, self->priv->frame);
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
             break;
@@ -462,6 +433,9 @@ gswat_gdb_debugger_set_property(GObject *object,
                                 const GValue *value,
                                 GParamSpec *pspec)
 {   
+    //GSwatGdbDebugger* self = GSWAT_GDB_DEBUGGER(object);
+    GSwatDebuggable* self_debuggable = GSWAT_DEBUGGABLE(object);
+
     switch(property_id)
     {
 #if 0 /* template code */
@@ -478,6 +452,9 @@ gswat_gdb_debugger_set_property(GObject *object,
             self->priv->property = g_value_get_pointer(value);
             break;
 #endif
+        case PROP_FRAME:
+            gdb_debugger_set_frame(self_debuggable, g_value_get_uint(value));
+            break;
         default:
             g_warning("gswat_gdb_debugger_set_property on unknown property");
             return;
@@ -512,6 +489,8 @@ gswat_gdb_debugger_debuggable_interface_init(gpointer interface,
     debuggable->get_stack = gswat_gdb_debugger_get_stack;
     debuggable->get_breakpoints = gswat_gdb_debugger_get_breakpoints;
     debuggable->get_locals_list = gswat_gdb_debugger_get_locals_list;
+    debuggable->get_frame = gdb_debugger_get_frame;
+    debuggable->set_frame = gdb_debugger_set_frame;
 
 }
 
@@ -1919,6 +1898,20 @@ update_locals_list_from_name_list(GSwatGdbDebugger *self, GList *names)
 
             if(strcmp(tmp->data, current_name) == 0)
             {
+                gchar *tmp_value;
+                
+                /* We retrieve the value here, to make sure the
+                 * variable object state is is in synch with the
+                 * current debugger state */
+                /* Alternativly; perhaps we could have the variable
+                 * object code set up a callback for our state
+                 * updates, so this is done automatically. The
+                 * problem with that is, here, we want the update
+                 * to be synchronous. */
+                tmp_value =
+                    gswat_variable_object_get_value(variable_object, NULL);
+                g_free(tmp_value);
+
                 found = TRUE;
                 g_free(current_name);
                 break;
@@ -1995,14 +1988,6 @@ on_local_variable_object_invalidated(GObject *object,
     GSwatGdbVariableObject *variable_object;
 
     variable_object = GSWAT_GDB_VARIABLE_OBJECT(object);
-
-    /* assert that the locals_state is out of date otherwise
-     * that's a bit weired; how did the variable get deleted? */
-    if(self->priv->locals_stamp == self->priv->state_stamp)
-    {
-        g_warning("on_local_variable_object_invalidated: spurious variable "
-                  "object invalidate!");
-    }
 
     /* I don't think we want to send a notify::locals signal
      * here, because the assumption is that when the debugger's
@@ -2582,32 +2567,49 @@ GList *
 gswat_gdb_debugger_get_locals_list(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
+    
+    g_return_val_if_fail(GSWAT_IS_GDB_DEBUGGER(object), NULL);
+    self = GSWAT_GDB_DEBUGGER(object);
+
+    synchronous_update_locals_list(self);
+
+    g_list_foreach(self->priv->locals, (GFunc)g_object_ref, NULL);
+    return g_list_copy(self->priv->locals);
+}
+
+
+static void
+synchronous_update_locals_list(GSwatGdbDebugger *self)
+{
+    gchar *gdb_command;
     gulong token;
     GSwatGdbMIRecord *mi_record1, *mi_record2;
     const GDBMIValue *local, *var, *frame, *args, *stack;
     GList *names;
     guint i;
-
-    g_return_val_if_fail(GSWAT_IS_GDB_DEBUGGER(object), NULL);
-    self = GSWAT_GDB_DEBUGGER(object);
-
-
+    
     if( (self->priv->state & GSWAT_DEBUGGABLE_RUNNING)
         || (self->priv->locals_stamp == self->priv->state_stamp)
       )
     {
-        g_list_foreach(self->priv->locals, (GFunc)g_object_ref, NULL);
-        return g_list_copy(self->priv->locals);
+        return;
     }
-
+    
+    /* Update this immediatly so that if we send a "locals"
+     * notification and some listener decides to call
+     * gswat_debuggable_get_locals_list, we wont go recursive
+     */
     self->priv->locals_stamp = self->priv->state_stamp;
-
+    gdb_command = g_strdup_printf("-stack-list-arguments 0 %d %d",
+                                  self->priv->frame,
+                                  self->priv->frame);
     token = gswat_gdb_debugger_send_mi_command(self,
-                                               "-stack-list-arguments 0 0 0",
+                                               gdb_command,
                                                NULL,
                                                NULL);
+    g_free(gdb_command);
     mi_record1 = gswat_gdb_debugger_get_mi_result_record(self, token);
-
+    
     names = NULL;
     /* Add arguments */
     stack = gdbmi_value_hash_lookup(mi_record1->val, "stack-args");
@@ -2633,14 +2635,14 @@ gswat_gdb_debugger_get_locals_list(GSwatDebuggable *object)
             }
         }
     }
-
-
+    
+    
     token = gswat_gdb_debugger_send_mi_command(self,
                                                "-stack-list-locals 0",
                                                NULL,
                                                NULL);
     mi_record2 = gswat_gdb_debugger_get_mi_result_record(self, token);
-
+    
     /* List local variables */	
     local = gdbmi_value_hash_lookup(mi_record2->val, "locals");
     if(local)
@@ -2656,16 +2658,77 @@ gswat_gdb_debugger_get_locals_list(GSwatDebuggable *object)
             }
         }
     }
-
+    
     update_locals_list_from_name_list(self, names);
-
+    
     g_list_free(names);
-
+    
     gswat_gdb_debugger_free_mi_record(mi_record1);
     gswat_gdb_debugger_free_mi_record(mi_record2);
-
-    g_list_foreach(self->priv->locals, (GFunc)g_object_ref, NULL);
-    return g_list_copy(self->priv->locals);
 }
 
+
+static guint
+gdb_debugger_get_frame(GSwatDebuggable* object)
+{
+    GSwatGdbDebugger *self;
+    
+    g_return_val_if_fail(GSWAT_IS_GDB_DEBUGGER(object), 0);
+    self = GSWAT_GDB_DEBUGGER(object);
+    
+    return self->priv->frame;
+}
+
+
+static void
+gdb_debugger_set_frame(GSwatDebuggable* object, guint frame)
+{
+    GSwatGdbDebugger *self;
+    gchar *gdb_command;
+
+    g_return_if_fail(GSWAT_IS_GDB_DEBUGGER(object));
+    self = GSWAT_GDB_DEBUGGER(object);
+    
+    if(frame == self->priv->frame)
+    {
+        return;
+    }
+
+    gdb_command=g_strdup_printf("-stack-select-frame %d", frame);
+    gswat_gdb_debugger_send_mi_command(self,
+                                       gdb_command,
+                                       gdb_debugger_set_frame_done_callback,
+                                       GUINT_TO_POINTER(frame));
+    g_free(gdb_command);
+}
+
+
+static void
+gdb_debugger_set_frame_done_callback(GSwatGdbDebugger *self,
+                                     const GSwatGdbMIRecord *record,
+                                     void *data)
+{
+    guint frame = GPOINTER_TO_UINT(data);
+
+    if(record->type != GSWAT_GDB_MI_REC_TYPE_RESULT_DONE)
+    {
+        g_warning("gswat_gdb_debugger_set_frame_done_callback: failed to set frame");
+        return;
+    }
+    
+    self->priv->frame = frame;
+    
+    /* Notably, we inc the state stamp before updating the
+     * local variables so that the update process will
+     * notice that the variables state is not in synch
+     * with the debugger. */
+    self->priv->state_stamp++;
+    /* FIXME: I still think this shouldn't be part of the
+     * interface. */
+    g_object_notify(G_OBJECT(self), "state");
+    
+    g_object_notify(G_OBJECT(self), "frame");
+
+    synchronous_update_locals_list(self);
+}
 

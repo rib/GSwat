@@ -591,11 +591,15 @@ on_gswat_tabbable_state_flags_update(GObject *object,
     GtkWidget *label = GTK_WIDGET(data);
     GtkWidget *spinner;
     GtkImage *icon;
+    GtkWidget *close_button;
     gulong flags;
 
     spinner = GTK_WIDGET(g_object_get_data(G_OBJECT(label),
                                            "spinner"));
     icon = GTK_IMAGE(g_object_get_data(G_OBJECT(label), "icon"));
+
+    close_button = g_object_get_data(G_OBJECT(label),
+                                     "close-button");
 
     flags = gswat_tabable_get_state_flags(tabable);
     if(flags & GSWAT_TABABLE_BUSY)
@@ -611,6 +615,14 @@ on_gswat_tabbable_state_flags_update(GObject *object,
         gedit_spinner_stop(GEDIT_SPINNER(spinner));
 
         gtk_widget_show(GTK_WIDGET (icon));
+    }
+    if(flags & GSWAT_TABABLE_CLOSEABLE)
+    {
+        gtk_widget_show(close_button);
+    }
+    else
+    {
+        gtk_widget_hide(close_button);
     }
 }
 

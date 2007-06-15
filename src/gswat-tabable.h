@@ -51,7 +51,8 @@ struct _GSwatTabableIface
 };
 
 /* state flags */
-#define GSWAT_TABABLE_BUSY  (1UL<<0)
+#define GSWAT_TABABLE_BUSY          (1UL<<0)
+#define GSWAT_TABABLE_CLOSEABLE     (1UL<<1)
 
 
 GType gswat_tabable_get_type(void);

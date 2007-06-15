@@ -141,12 +141,17 @@ static void
 on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
                                            GtkTreeIter *iter,
                                            GtkTreePath *iter_path,
-                                           gpointer    data);
+                                           gpointer data);
 static void
 on_gswat_window_variable_view_row_collapsed(GtkTreeView *view,
                                             GtkTreeIter *iter,
                                             GtkTreePath *iter_path,
-                                            gpointer    data);
+                                            gpointer data);
+static void
+on_gswat_window_stack_frame_activated(GtkTreeView *tree_view,
+                                      GtkTreePath *path,
+                                      GtkTreeViewColumn *column,
+                                      gpointer data);
 static gboolean on_window_delete_event(GtkWidget *win,
                                        GdkEventAny *event,
                                        GSwatWindow *self);
@@ -702,6 +707,10 @@ construct_widgets(GSwatWindow *self)
                                                       GSWAT_WINDOW_STACK_FUNC_COL,
                                                       NULL);
     gtk_tree_view_append_column(stack_view, column);
+    g_signal_connect(G_OBJECT(stack_view),
+                     "row-activated",
+                     G_CALLBACK(on_gswat_window_stack_frame_activated),
+                     self);
 
 
     /* Put the bottom drawing area in place */
@@ -1912,7 +1921,7 @@ static void
 on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
                                            GtkTreeIter *iter,
                                            GtkTreePath *iter_path,
-                                           gpointer    data)
+                                           gpointer data)
 {
     //GSwatWindow *self = GSWAT_WINDOW(data);
     GtkTreeStore *store;
@@ -1987,11 +1996,11 @@ static void
 on_gswat_window_variable_view_row_collapsed(GtkTreeView *view,
                                             GtkTreeIter *iter,
                                             GtkTreePath *iter_path,
-                                            gpointer    data)
+                                            gpointer data)
 {
     GtkTreeStore *store;
     GtkTreeIter collapsed, child;
-    GSwatVariableObject *variable_object, *current_child;
+    GSwatVariableObject *variable_object;
     GList *row_refs;
     GtkTreeRowReference *row_ref;
     GtkTreePath *path;
@@ -2070,6 +2079,25 @@ on_gswat_window_variable_view_row_collapsed(GtkTreeView *view,
     {
         g_list_free(row_refs);
     }
+}
+
+
+static void
+on_gswat_window_stack_frame_activated(GtkTreeView *tree_view,
+                                      GtkTreePath *path,
+                                      GtkTreeViewColumn *column,
+                                      gpointer data)
+{
+    gint path_depth;
+    gint *indices;
+    GSwatWindow *self = GSWAT_WINDOW(data);
+    
+    path_depth = gtk_tree_path_get_depth(path);
+    g_return_if_fail(path_depth == 1);
+
+    indices = gtk_tree_path_get_indices(path);
+    gswat_debuggable_set_frame(GSWAT_DEBUGGABLE(self->priv->debuggable),
+                                                indices[0]);
 }
 
 void

@@ -22,10 +22,13 @@
  * 
  */
 
+#include <glib/gi18n.h>
+
+#include "gswat-utils.h"
 #include "gswat-debuggable.h"
 
 /* Function definitions */
-static void gswat_debuggable_base_init(gpointer g_class);
+static void gswat_debuggable_base_init(GSwatDebuggableIface *interface);
 
 /* Macros and defines */
 
@@ -50,7 +53,7 @@ gswat_debuggable_get_type(void)
     if (!self_type) {
         static const GTypeInfo interface_info = {
             sizeof (GSwatDebuggableIface),
-            gswat_debuggable_base_init,
+            (GBaseInitFunc)gswat_debuggable_base_init,
             NULL,//gswat_debuggable_base_finalize
         };
 
@@ -66,7 +69,7 @@ gswat_debuggable_get_type(void)
 }
 
 static void
-gswat_debuggable_base_init(gpointer g_class)
+gswat_debuggable_base_init(GSwatDebuggableIface *interface)
 {
     gswat_debuggable_base_init_count++;
     GParamSpec *new_param;
@@ -120,7 +123,59 @@ gswat_debuggable_base_init(gpointer g_class)
                                          );
         g_object_interface_install_property(interface, new_param);
 #endif
+
+        new_param = g_param_spec_uint("state",
+                                      _("The Running State"),
+                                      _("The State of the debuggable"
+                                        " (whether or not it is currently running)"),
+                                      0,
+                                      G_MAXUINT,
+                                      GSWAT_DEBUGGABLE_DISCONNECTED,
+                                      GSWAT_PARAM_READABLE);
+        g_object_interface_install_property(interface, new_param);
+
+        new_param = g_param_spec_pointer("stack",
+                                         _("Stack"),
+                                         _("The Stack of called functions"),
+                                         GSWAT_PARAM_READABLE);
+        g_object_interface_install_property(interface, new_param);
+
+        new_param = g_param_spec_pointer("locals",
+                                         _("Locals"),
+                                         _("The current frames local variables"),
+                                         GSWAT_PARAM_READABLE);
+        g_object_interface_install_property(interface, new_param);
+
+        new_param = g_param_spec_pointer("breakpoints",
+                                         _("Breakpoints"),
+                                         _("The list of user defined breakpoints"),
+                                         GSWAT_PARAM_READABLE);
+        g_object_interface_install_property(interface, new_param);
+
+        new_param = g_param_spec_string("source-uri",
+                                        _("Source URI"),
+                                        _("The location for the source file currently being debuggged"),
+                                        NULL,
+                                        GSWAT_PARAM_READABLE);
+        g_object_interface_install_property(interface, new_param);
         
+        new_param = g_param_spec_ulong("source-line",
+                                       _("Source Line"),
+                                       _("The line of your source file currently being debuggged"),
+                                       0,
+                                       G_MAXULONG,
+                                       0,
+                                       GSWAT_PARAM_READABLE);
+        g_object_interface_install_property(interface, new_param);
+        
+        new_param = g_param_spec_uint("frame",
+                                      _("Active Frame"),
+                                      _("The debuggable's currently active stack frame"),
+                                      0,
+                                      G_MAXUINT,
+                                      0,
+                                      GSWAT_PARAM_READWRITE);
+        g_object_interface_install_property(interface, new_param);
 
     }
 }
@@ -507,3 +562,43 @@ gswat_debuggable_get_locals_list(GSwatDebuggable* object)
     return ret;
 }
 
+
+guint
+gswat_debuggable_get_frame(GSwatDebuggable* object)
+{
+    GSwatDebuggableIface *debuggable;
+    guint ret;
+
+    g_return_val_if_fail(GSWAT_IS_DEBUGGABLE(object), 0);
+    debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
+
+    g_object_ref(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        ret = debuggable->get_frame(object);
+    }
+    else
+    {
+        ret = 0;
+    }
+    g_object_unref(object);
+    
+    return ret;
+}
+
+
+void
+gswat_debuggable_set_frame(GSwatDebuggable* object, guint frame)
+{
+    GSwatDebuggableIface *debuggable;
+
+    g_return_if_fail(GSWAT_IS_DEBUGGABLE(object));
+    debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
+
+    g_object_ref(object);
+    if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
+    {
+        debuggable->set_frame(object, frame);
+    }
+    g_object_unref(object);
+}
