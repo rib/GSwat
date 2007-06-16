@@ -37,22 +37,69 @@ misusing this, so we shouldn't copy them!
   the debuggables internal state. This is far too general
   and should be replaced with more focused property
   notifications.
+- I'd like to make the breakpoint/current line highlights a bit more
+  pretty using some cairo magic.
+- The ordering of variables is in-consistent; especially the ordering
+  of struct members can change which is confusing to the user.
+- Improve our implementation of the "session" paradigm:
+  - support specification of a sessions environment variables
+  - The New Session dialog should consistently list previous sessions
+    indexed by date. - currenly the order changes each time the dialog
+    is opened.
+  - So much more should be associated with sessions.
+   - e.g. The ordering of local variables - associated with a particular
+     stack frame layout
+   - The format of variables
+   - Default breakpoints
+   - list of source directories
+  - Note, some effort really needs to go into making sure that session
+    state is always consistent on disc, so we cope with crashes while
+    writting out new session state. E.g. a more formal "write new 
+    data to tmp file, then atomic replace old with new", type process.
+- updating the local variables can be done either synchronously or
+  asynchronously, but currently the two cases arn't sharing code
+  properly. The synchronous versions should be re-using the callbacks
+  of the async paths.
+- Gracefully handle file not found problems, with clear user feedback
+  and give an opertunity to extend the list of source directories.
+
 
 --------------------------------------------------------------------
 
 summary of blockers for early preview release:
-- Ability to switch between stack frames
 - Help->About, with homepage and bugtracker links
 - Fix Edit->Preferences to _some_ degree.
 
 
 Preliminary Roadmap for 1.0 release:
+- Improved source navigation facilities
+ - Support "Source Browser" tabs, and when selected:
+  - The variable/stack views will be replaced by 2 full height
+    tabs:
+     - A file browser tree view.
+     - A symbol listing for the current file.
+  - The control flow buttons such as "Step In" and "Next" will
+    be replace with source navigation buttons; e.g. "Go To"
+  - Support generation/updating of a ctag/global symbol index
+   - Note: indexing needs to be lazy/user prompted since the amount
+     of IO is liable to make your machine crawl for a while, esp
+     with huge code-bases.
+   - Need to support indexing of multiple repositories.
+  - Support either the VIM style stack metaphor for traversing
+    symbols, or the web-browser metaphor
+  - Support creation of breakpoints 
 - Socket based spawner process connections
 - KGDB support
-- Textual command interface
+- Textual command interface, embedded in the GUI.
  - Note this project is _NOT_ about providing yet another GDB
    frontend. That means exposing the GDB command line interface
    is not appropriate!
+ - The design must be re-usable by other non gdb backends.
+ - The intention is to also make this interface the basis for
+   regression testing, by implementing a minimal command line
+   (in the vt100 sense) debugger that can read commands
+   from standard in, and put a simple framwork in place for
+   validating the output.
 - Plugin API
 - Python Plugin API bindings
 
@@ -62,3 +109,14 @@ Possible 2.0 Roadmap:
    specific handler.
 - Support at least one other _non GDB_ backend, e.g. a python
   debugger or perhaps a bash debugger.
+- Distro integration:
+  - E.g. if a desktop app segfaults, then I'd like to see a
+    dialog box asking; Do you want to debug the crash?, and
+    if the app doesn't already have debug symbols I'd like
+    to e.g. be asked; Do you want to install a debug version of
+    this application? Implementing this is going to be distro
+    specific though. 1st you need to associate the crashed
+    app to a distro package, then if it's a binary distro you
+    need to either find the devel/debug equivalent, or source
+    based you need to enable debug flags for re-compilation.
+- 

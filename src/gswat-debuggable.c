@@ -482,6 +482,7 @@ gswat_debuggable_free_stack(GList *stack)
             (GSwatDebuggableFrame *)tmp->data;
         
         g_free(current_frame->function);
+        g_free(current_frame->source_uri);
         
         for(tmp2=current_frame->arguments; tmp2!=NULL; tmp2=tmp2->next)
         {

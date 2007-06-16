@@ -49,6 +49,12 @@ typedef struct {
     gboolean list_arguments_done;
 }LocalsUpdateMachine;
 
+typedef struct {
+    gboolean in_use;
+    GList *new_stack;
+    gboolean list_frames_done;
+}StackUpdateMachine;
+
 struct _GSwatGdbDebuggerPrivate
 {
     GSwatSession            *session;
@@ -64,11 +70,27 @@ struct _GSwatGdbDebuggerPrivate
      * specific signals. */
     guint                   state_stamp;
     
+
+    /* A small state machine for tracking the
+     * update of the stack frames list which
+     * is done using multiple asynchronous GDB/MI
+     * requests */
+    StackUpdateMachine      stack_machine;
+    /* A list of GSwatDebuggableFrames representing
+     * the current stack */
     GList                   *stack;
+    /* A snapshot of the state stamp when the list
+     * of frames was last updated */
+    guint                   stack_stamp;
+    /* The currently active frame number */
+    guint                   frame;
+    
+
     GList                   *breakpoints;
     gchar                   *source_uri;
     gint                    source_line;
     
+
     /* A small state machine for tracking the
      * update of the local variables list which
      * is done using two asynchronous GDB/MI
@@ -81,7 +103,6 @@ struct _GSwatGdbDebuggerPrivate
      * list of local variables was last updated */
     guint                   locals_stamp;
 
-    guint           frame;
 
     /* Our GDB conection state */
     gboolean        gdb_connected;
@@ -100,6 +121,8 @@ struct _GSwatGdbDebuggerPrivate
      * entered into the gdb_pending queue. */
     GQueue          *gdb_pending;
     
+    GSList          *mi_handlers;
+
     /* When we add an entry to gdb_pending we queue
      * an idle handler for processing the commands
      * - only if one hasn't already been queued. */
@@ -107,7 +130,7 @@ struct _GSwatGdbDebuggerPrivate
     
     /* The job of starting the process being debugged
      * is delegated to a seperate "spawner" program
-     * which we currently communicate with via name
+     * which we currently communicate with via named
      * fifos */
     int             spawn_read_fifo_fd;
     int             spawn_write_fifo_fd;
@@ -116,10 +139,8 @@ struct _GSwatGdbDebuggerPrivate
     GPid            spawner_pid;
     
     /* Currently we only support debugging local processes,
-     * and this is the pod of the process being debugged */
-    GPid            target_pid;
-    
-    GSList          *mi_handlers;
+     * and this is the pid of the process being debugged */
+    GPid            target_pid; 
 };
 
 typedef struct {
@@ -188,25 +209,27 @@ static void process_gdb_mi_stream_record(GSwatGdbDebugger *self,
                                          gulong token,
                                          GString *record_str);
 static void process_frame(GSwatGdbDebugger *self, GDBMIValue *val);
-static void set_location(GSwatGdbDebugger *self,
-                         const gchar *filename,
-                         guint line,
-                         const gchar *address);
+static void set_current_location(GSwatGdbDebugger *self,
+                                 const gchar *source_uri,
+                                 guint line);
 static gchar *uri_from_filename(const gchar *filename);
-static void stack_list_frames_mi_callback(GSwatGdbDebugger *self,
-                                          const GSwatGdbMIRecord *record,
-                                          void *data);
+static void synchronous_update_stack(GSwatGdbDebugger *self);
 static void kick_asynchronous_locals_update(GSwatGdbDebugger *self);
 static void
-stack_list_arguments_results_mi_callback(GSwatGdbDebugger *self,
+async_locals_update_list_args_mi_callback(GSwatGdbDebugger *self,
+                                          const GSwatGdbMIRecord *record,
+                                          void *data);
+static void async_locals_update_list_locals_mi_callback(GSwatGdbDebugger *self,
+                                            const GSwatGdbMIRecord *record,
+                                            void *data);
+static void update_locals_list_from_name_list(GSwatGdbDebugger *self, GList *names);
+static void kick_asynchronous_stack_update(GSwatGdbDebugger *self);
+static void async_stack_update_list_frames_mi_callback(GSwatGdbDebugger *self,
+                                           const GSwatGdbMIRecord *record,
+                                           void *data);
+static void async_stack_update_list_args_mi_callback(GSwatGdbDebugger *self,
                                          const GSwatGdbMIRecord *record,
                                          void *data);
-static void
-stack_list_locals_results_mi_callback(GSwatGdbDebugger *self,
-                                      const GSwatGdbMIRecord *record,
-                                      void *data);
-static void
-update_locals_list_from_name_list(GSwatGdbDebugger *self, GList *names);
 static void on_local_variable_object_invalidated(GObject *object,
                                                  GParamSpec *property,
                                                  gpointer data);
@@ -1446,6 +1469,8 @@ process_gdb_mi_oob_stopped_record(GSwatGdbDebugger *self,
         gswat_gdb_variable_object_async_update_all(self);
 
         kick_asynchronous_locals_update(self);
+        
+        kick_asynchronous_stack_update(self);
 
         g_object_notify(G_OBJECT(self), "state");
     }
@@ -1492,8 +1517,13 @@ process_frame(GSwatGdbDebugger *self, GDBMIValue *val)
 
         if (file_str && line_str)
         {
-            set_location(self, file_str,
-                         (guint)atoi(line_str), addr_str);
+            gchar *source_uri = uri_from_filename(file_str);
+            if(source_uri)
+            {
+                set_current_location(self, source_uri,
+                                    (guint)atoi(line_str));
+                g_free(source_uri);
+            }
         }
     }
     else if(frame)
@@ -1505,17 +1535,22 @@ process_frame(GSwatGdbDebugger *self, GDBMIValue *val)
         }
         line = gdbmi_value_hash_lookup(frame, "line");
 
-        if (addr)
+        if(addr)
             addr_str = gdbmi_value_literal_get(addr);
 
-        if (file && line)
+        if(file && line)
         {
             file_str = gdbmi_value_literal_get(file);
             line_str = gdbmi_value_literal_get(line);
-            if (file_str && line_str)
+            if(file_str && line_str)
             {
-                set_location(self, file_str,
-                             (guint)atoi(line_str), addr_str);
+                gchar *source_uri = uri_from_filename(file_str);
+                if(source_uri)
+                {
+                    set_current_location(self, source_uri,
+                                        (guint)atoi(line_str));
+                    g_free(source_uri);
+                }
             }
         }
     } 
@@ -1523,37 +1558,26 @@ process_frame(GSwatGdbDebugger *self, GDBMIValue *val)
 
 
 static void
-set_location(GSwatGdbDebugger *self,
-             const gchar *filename,
-             guint line,
-             const gchar *address)
+set_current_location(GSwatGdbDebugger *self,
+                     const gchar *source_uri,
+                     guint line)
 {
     gboolean new_uri=FALSE;
     gboolean new_line=FALSE;
-    gchar *tmp_uri;
-
-    tmp_uri = uri_from_filename(filename);
-    if(tmp_uri == NULL)
-    {
-        g_critical("Could not create uri for file=\"%s\"", filename);
-        return;
-    }
+    
+    g_return_if_fail(source_uri != NULL);
 
     if(self->priv->source_uri == NULL ||
-       strcmp(tmp_uri, self->priv->source_uri)!=0)
+       strcmp(source_uri, self->priv->source_uri)!=0)
     {
         new_uri = TRUE;
         if(self->priv->source_uri != NULL)
         {
             g_free(self->priv->source_uri);
         }
-        self->priv->source_uri = tmp_uri;
+        self->priv->source_uri = g_strdup(source_uri);
     }
-    else
-    {
-        g_free(tmp_uri);
-    }
-
+    
     if(self->priv->source_line != line){
         new_line=TRUE;
         self->priv->source_line = line;
@@ -1566,13 +1590,6 @@ set_location(GSwatGdbDebugger *self,
     else if(new_line)
     {
         g_object_notify(G_OBJECT(self), "source-line");
-    }
-
-    if(new_uri || new_line){
-        gswat_gdb_debugger_send_mi_command(self,
-                                           "-stack-list-frames",
-                                           stack_list_frames_mi_callback,
-                                           NULL);
     }
 }
 
@@ -1607,151 +1624,13 @@ uri_from_filename(const gchar *filename)
     uri = gnome_vfs_get_uri_from_local_path(local_path->str);
 
     g_string_free(local_path, TRUE);
+    
+    if(!uri)
+    {
+        g_warning("Could not create uri for file=\"%s\"", filename);
+    }
 
     return uri;
-}
-
-
-static void
-stack_list_frames_mi_callback(GSwatGdbDebugger *self,
-                              const GSwatGdbMIRecord *record,
-                              void *data)
-{
-    GList *tmp, *tmp2;
-    GSwatDebuggableFrame *frame=NULL, *current_frame=NULL;
-    GSwatGdbMIRecord *stackargs_result;
-    const GDBMIValue *stack_val, *frame_val;
-    const GDBMIValue *stackargs_val, *args_val, *arg_val, *literal_val;
-    GString *gdbmi_command=g_string_new("");
-    GSwatDebuggableFrameArgument *arg;
-    gulong tok;
-    int n;
-
-    if(record->type == GSWAT_GDB_MI_REC_TYPE_RESULT_ERROR)
-    {
-        g_warning("stack_list_frames_mi_callback: error listing frames");
-        return;
-    }
-
-    if(record->type != GSWAT_GDB_MI_REC_TYPE_RESULT_DONE)
-    {
-        g_warning("stack_list_frames_mi_callback: unexpected result type");
-        return;
-    }
-
-    gdbmi_value_dump(record->val, 0);
-
-    /* Free the current stack */
-    for(tmp=self->priv->stack; tmp!=NULL; tmp=tmp->next)
-    {
-        current_frame = (GSwatDebuggableFrame *)tmp->data;
-        g_free(current_frame->function);
-        for(tmp2 = current_frame->arguments; tmp2!=NULL; tmp2=tmp2->next)
-        {
-            arg = (GSwatDebuggableFrameArgument *)tmp2->data;
-            g_free(arg->name);
-            g_free(arg->value);
-            g_free(arg);
-        }
-        g_list_free(current_frame->arguments);
-        g_free(current_frame);
-    }
-    g_list_free(self->priv->stack);
-    self->priv->stack = NULL;
-
-
-    stack_val = gdbmi_value_hash_lookup(record->val, "stack");
-
-    n=0;
-    while(1){
-        g_message("gdbmi_value_list_get_nth 0 - %d", n);
-        frame_val = gdbmi_value_list_get_nth(stack_val, n);
-        if(frame_val)
-        {
-            const gchar *literal;
-
-            frame = g_new0(GSwatDebuggableFrame,1);
-            frame->level = n;
-
-            literal_val = gdbmi_value_hash_lookup(frame_val, "addr");
-            literal = gdbmi_value_literal_get(literal_val);
-            frame->address = strtol(literal, NULL, 10);
-
-            literal_val = gdbmi_value_hash_lookup(frame_val, "func");
-            literal = gdbmi_value_literal_get(literal_val);
-            frame->function = g_strdup(literal);
-
-            self->priv->stack = g_list_prepend(self->priv->stack, frame);
-
-        }else{
-            break;
-        }
-
-        n++;
-    }
-
-    g_string_printf(gdbmi_command, "-stack-list-arguments 1 0 %d", n);
-    tok = gswat_gdb_debugger_send_mi_command(self,
-                                             gdbmi_command->str,
-                                             NULL,
-                                             NULL);
-    g_string_free(gdbmi_command, TRUE);
-
-    stackargs_result = 
-        gswat_gdb_debugger_get_mi_result_record(self, tok);
-    if(!stackargs_result && n>0)
-    {
-        g_object_notify(G_OBJECT(self), "stack");
-        return;
-    }
-
-    gdbmi_value_dump(stackargs_result->val, 0);
-
-    stackargs_val = gdbmi_value_hash_lookup(stackargs_result->val,
-                                            "stack-args");
-
-    n--;
-    for(tmp=self->priv->stack; tmp!=NULL; tmp=tmp->next)
-    {
-        guint a;
-        current_frame = (GSwatDebuggableFrame *)tmp->data;
-
-        g_message("gdbmi_value_list_get_nth 1 - %d", n);
-        frame_val = gdbmi_value_list_get_nth(stackargs_val, n);
-        args_val = gdbmi_value_hash_lookup(frame_val, "args");
-
-        a=0;
-        while(TRUE)
-        {
-            g_message("gdbmi_value_list_get_nth 2");
-            arg_val = gdbmi_value_list_get_nth(args_val, a);
-            if(!arg_val)
-            {
-                break;
-            }
-
-            arg = g_new0(GSwatDebuggableFrameArgument, 1);
-
-            literal_val = gdbmi_value_hash_lookup(arg_val, "name");
-            arg->name = g_strdup(gdbmi_value_literal_get(literal_val));
-
-            literal_val = gdbmi_value_hash_lookup(arg_val, "value");
-            arg->value = g_strdup(gdbmi_value_literal_get(literal_val));
-
-            current_frame->arguments = 
-                g_list_prepend(current_frame->arguments, arg);
-
-            a++;
-        }
-
-        n--;
-    }
-
-    gswat_gdb_debugger_free_mi_record(stackargs_result);
-
-    g_object_notify(G_OBJECT(self), "stack");
-
-    return;
 }
 
 
@@ -1759,7 +1638,14 @@ static void
 kick_asynchronous_locals_update(GSwatGdbDebugger *self)
 {
     LocalsUpdateMachine *locals_machine;
-
+    
+    if( (self->priv->state & GSWAT_DEBUGGABLE_RUNNING)
+        || (self->priv->locals_stamp == self->priv->state_stamp)
+      )
+    {
+        return;
+    }
+    
     locals_machine = &self->priv->locals_machine;
     if(locals_machine->in_use == TRUE)
     {
@@ -1770,17 +1656,17 @@ kick_asynchronous_locals_update(GSwatGdbDebugger *self)
 
     gswat_gdb_debugger_send_mi_command(self,
                                        "-stack-list-arguments 0 0 0",
-                                       stack_list_arguments_results_mi_callback,
-                                       NULL);
+                                       async_locals_update_list_args_mi_callback,
+                                       &self->priv->locals_machine);
     gswat_gdb_debugger_send_mi_command(self,
                                        "-stack-list-locals 0",
-                                       stack_list_locals_results_mi_callback,
-                                       NULL);
+                                       async_locals_update_list_locals_mi_callback,
+                                       &self->priv->locals_machine);
 }
 
 
 static void
-stack_list_arguments_results_mi_callback(GSwatGdbDebugger *self,
+async_locals_update_list_args_mi_callback(GSwatGdbDebugger *self,
                                          const GSwatGdbMIRecord *record,
                                          void *data)
 {
@@ -1788,10 +1674,10 @@ stack_list_arguments_results_mi_callback(GSwatGdbDebugger *self,
     const GDBMIValue *stack, *frame, *args, *var;
     guint i;
 
-    locals_machine = &self->priv->locals_machine;
+    locals_machine = (LocalsUpdateMachine *)data;
     if(locals_machine->in_use == FALSE)
     {
-        g_warning("stack_list_arguments_results_mi_callback: called out of order");
+        g_warning("%s: called out of order", __FUNCTION__);
     }
 
     /* If someone jumped in and did a synchronous update 
@@ -1831,24 +1717,28 @@ stack_list_arguments_results_mi_callback(GSwatGdbDebugger *self,
 
 
 static void
-stack_list_locals_results_mi_callback(GSwatGdbDebugger *self,
-                                      const GSwatGdbMIRecord *record,
-                                      void *data)
+async_locals_update_list_locals_mi_callback(GSwatGdbDebugger *self,
+                                            const GSwatGdbMIRecord *record,
+                                            void *data)
 {
     LocalsUpdateMachine *locals_machine;
     const GDBMIValue *local, *var;
     guint i;
 
-    locals_machine = &self->priv->locals_machine;
+    locals_machine = (LocalsUpdateMachine *)data;
     if(locals_machine->list_arguments_done != TRUE)
     {
-        g_warning("stack_list_locals_results_mi_callback: called out of order");
+        g_warning("%s: called out of order", __FUNCTION__);
     }
 
     /* If someone jumped in and did a synchronous update 
      * already then we can bomb out now. */
     if(self->priv->locals_stamp == self->priv->state_stamp)
     {
+        g_list_foreach(locals_machine->names, (GFunc)g_free, NULL);
+        g_list_free(locals_machine->names);
+        locals_machine->names = NULL;
+        locals_machine->in_use = FALSE;
         return;
     }
 
@@ -1972,12 +1862,225 @@ update_locals_list_from_name_list(GSwatGdbDebugger *self, GList *names)
         }
     }
     g_list_free(locals_copy);
-
+    
+    /* Update this before notification so that if a listener
+     * decides to call gswat_debuggable_get_locals_list, we
+     * wont go recursive */
+    self->priv->locals_stamp = self->priv->state_stamp;
     if(list_changed)
     {
         g_object_notify(G_OBJECT(self), "locals"); 
     }
 }
+
+static void
+kick_asynchronous_stack_update(GSwatGdbDebugger *self)
+{
+    StackUpdateMachine *stack_machine;
+
+    if( (self->priv->state & GSWAT_DEBUGGABLE_RUNNING)
+        || (self->priv->stack_stamp == self->priv->state_stamp)
+      )
+    {
+        return;
+    }
+
+    stack_machine = &self->priv->stack_machine;
+    if(stack_machine->in_use == TRUE)
+    {
+        return;
+    }
+    memset(stack_machine, 0, sizeof(StackUpdateMachine));
+    stack_machine->in_use = TRUE;
+
+    gswat_debuggable_free_stack(self->priv->stack);
+    self->priv->stack = NULL;
+
+    gswat_gdb_debugger_send_mi_command(self,
+                                       "-stack-list-frames",
+                                       async_stack_update_list_frames_mi_callback,
+                                       &self->priv->stack_machine);
+    gswat_gdb_debugger_send_mi_command(self,
+                                       "-stack-list-arguments 1",
+                                       async_stack_update_list_args_mi_callback,
+                                       &self->priv->stack_machine);
+}
+
+static void
+async_stack_update_list_frames_mi_callback(GSwatGdbDebugger *self,
+                                           const GSwatGdbMIRecord *record,
+                                           void *data)
+{
+    StackUpdateMachine *stack_machine;
+    GSwatDebuggableFrame *frame=NULL;
+    const GDBMIValue *stack_val, *frame_val;
+    const GDBMIValue *literal_val;
+    int n;
+   
+    stack_machine = (StackUpdateMachine *)data;
+    if(stack_machine->in_use == FALSE)
+    {
+        g_warning("%s: called out of order", __FUNCTION__);
+        return;
+    }
+
+    /* If someone jumped in and did a synchronous update 
+     * already then we can bomb out now. */
+    if(self->priv->stack_stamp == self->priv->state_stamp)
+    {
+        stack_machine->in_use = FALSE;
+        return;
+    }
+
+    if(record->type == GSWAT_GDB_MI_REC_TYPE_RESULT_ERROR)
+    {
+        g_warning("%s: error listing frames", __FUNCTION__);
+        stack_machine->in_use = FALSE;
+        return;
+    }
+    
+    if(record->type != GSWAT_GDB_MI_REC_TYPE_RESULT_DONE)
+    {
+        g_warning("%s: unexpected result type", __FUNCTION__);
+        stack_machine->in_use = FALSE;
+        return;
+    }
+    
+    stack_val = gdbmi_value_hash_lookup(record->val, "stack");
+    
+    n=0;
+    while(1)
+    {
+        const gchar *literal;
+
+        frame_val = gdbmi_value_list_get_nth(stack_val, n);
+        if(!frame_val)
+        {
+            break;
+        }
+        
+        frame = g_new0(GSwatDebuggableFrame,1);
+        frame->number = n;
+
+        literal_val = gdbmi_value_hash_lookup(frame_val, "addr");
+        literal = gdbmi_value_literal_get(literal_val);
+        frame->address = strtol(literal, NULL, 16);
+        
+        literal_val = gdbmi_value_hash_lookup(frame_val, "func");
+        literal = gdbmi_value_literal_get(literal_val);
+        frame->function = g_strdup(literal);
+        
+        literal_val = gdbmi_value_hash_lookup(frame_val, "fullname");
+        literal = gdbmi_value_literal_get(literal_val);
+        frame->source_uri = uri_from_filename(literal);
+        
+        literal_val = gdbmi_value_hash_lookup(frame_val, "line");
+        literal = gdbmi_value_literal_get(literal_val);
+        frame->line = strtol(literal, NULL, 10);
+        
+        stack_machine->new_stack = g_list_prepend(stack_machine->new_stack, frame);
+        
+        n++;
+    }
+
+    /*  Note, at this point the stack is listed in reverse
+     *  so the current frame is last in the list. This
+     *  will be reversed during copying within
+     *  gswat_gdb_debugger_get_stack()
+     */
+    stack_machine->new_stack = stack_machine->new_stack;
+    stack_machine->list_frames_done = TRUE;
+}
+
+static void
+async_stack_update_list_args_mi_callback(GSwatGdbDebugger *self,
+                                         const GSwatGdbMIRecord *record,
+                                         void *data)
+{
+    StackUpdateMachine *stack_machine;
+    GList *tmp;
+    GSwatDebuggableFrame *current_frame=NULL;
+    const GDBMIValue *frame_val;
+    const GDBMIValue *stackargs_val, *args_val, *arg_val, *literal_val;
+    GSwatDebuggableFrameArgument *arg;
+
+    stack_machine = (StackUpdateMachine *)data;
+    if(stack_machine->list_frames_done != TRUE)
+    {
+        g_warning("%s: called out of order", __FUNCTION__);
+        gswat_debuggable_free_stack(stack_machine->new_stack);
+        stack_machine->in_use = FALSE;
+        return;
+    }
+    
+    /* If someone jumped in and did a synchronous update 
+     * already then we can bomb out now. */
+    if(self->priv->stack_stamp == self->priv->state_stamp)
+    {
+        gswat_debuggable_free_stack(stack_machine->new_stack);
+        stack_machine->in_use = FALSE;
+        return;
+    }
+
+    if(record->type == GSWAT_GDB_MI_REC_TYPE_RESULT_ERROR)
+    {
+        g_warning("%s: error listing frames", __FUNCTION__);
+        gswat_debuggable_free_stack(stack_machine->new_stack);
+        stack_machine->in_use = FALSE;
+        return;
+    }
+    
+    if(record->type != GSWAT_GDB_MI_REC_TYPE_RESULT_DONE)
+    {
+        g_warning("%s: unexpected result type", __FUNCTION__);
+        gswat_debuggable_free_stack(stack_machine->new_stack);
+        stack_machine->in_use = FALSE;
+        return;
+    }
+
+    stackargs_val = gdbmi_value_hash_lookup(record->val,
+                                            "stack-args");
+    
+    for(tmp=stack_machine->new_stack; tmp!=NULL; tmp=tmp->next)
+    {
+        guint a;
+        current_frame = (GSwatDebuggableFrame *)tmp->data;
+        
+        frame_val = gdbmi_value_list_get_nth(stackargs_val,
+                                             current_frame->number);
+        args_val = gdbmi_value_hash_lookup(frame_val, "args");
+        
+        a=0;
+        while(TRUE)
+        {
+            arg_val = gdbmi_value_list_get_nth(args_val, a);
+            if(!arg_val)
+            {
+                break;
+            }
+
+            arg = g_new0(GSwatDebuggableFrameArgument, 1);
+
+            literal_val = gdbmi_value_hash_lookup(arg_val, "name");
+            arg->name = g_strdup(gdbmi_value_literal_get(literal_val));
+
+            literal_val = gdbmi_value_hash_lookup(arg_val, "value");
+            arg->value = g_strdup(gdbmi_value_literal_get(literal_val));
+
+            current_frame->arguments = 
+                g_list_prepend(current_frame->arguments, arg);
+
+            a++;
+        }
+    }
+    
+    self->priv->stack = stack_machine->new_stack;
+    self->priv->stack_stamp = self->priv->state_stamp;
+    stack_machine->in_use = FALSE;
+    
+    g_object_notify(G_OBJECT(self), "stack");
+}
+
 
 static void
 on_local_variable_object_invalidated(GObject *object,
@@ -2504,20 +2607,30 @@ gswat_gdb_debugger_get_stack(GSwatDebuggable *object)
     GSwatDebuggableFrame *current_frame, *new_frame;
     GList *tmp, *tmp2, *new_stack=NULL;
     GSwatDebuggableFrameArgument *current_arg, *new_arg;
-
+    
     g_return_val_if_fail(GSWAT_IS_GDB_DEBUGGER(object), NULL);
-
+    
     self = GSWAT_GDB_DEBUGGER(object);
-
+    
+    synchronous_update_stack(self);
+    
+    /* FIXME: the frames should probably be represented as
+     * GObjects, contained in a parent stack object, then 
+     * this can be reduced to a single ref of the stack
+     * object.
+     */
+    
     /* copy the stack list */
     for(tmp=self->priv->stack; tmp!=NULL; tmp=tmp->next)
     {
         current_frame = (GSwatDebuggableFrame *)tmp->data;
 
         new_frame = g_new(GSwatDebuggableFrame, 1);
-        new_frame->level = current_frame->level;
+        new_frame->number = current_frame->number;
         new_frame->address = current_frame->address;
         new_frame->function = g_strdup(current_frame->function);
+        new_frame->source_uri = g_strdup(current_frame->source_uri);
+        new_frame->line = current_frame->line;
 
         /* deep copy the arguments */
         new_frame->arguments = NULL;
@@ -2534,7 +2647,7 @@ gswat_gdb_debugger_get_stack(GSwatDebuggable *object)
 
         new_stack = g_list_prepend(new_stack, new_frame);
     }
-
+    
     return new_stack;
 }
 
@@ -2595,11 +2708,6 @@ synchronous_update_locals_list(GSwatGdbDebugger *self)
         return;
     }
     
-    /* Update this immediatly so that if we send a "locals"
-     * notification and some listener decides to call
-     * gswat_debuggable_get_locals_list, we wont go recursive
-     */
-    self->priv->locals_stamp = self->priv->state_stamp;
     gdb_command = g_strdup_printf("-stack-list-arguments 0 %d %d",
                                   self->priv->frame,
                                   self->priv->frame);
@@ -2668,6 +2776,48 @@ synchronous_update_locals_list(GSwatGdbDebugger *self)
 }
 
 
+static void
+synchronous_update_stack(GSwatGdbDebugger *self)
+{
+    StackUpdateMachine *stack_machine;
+    gulong token;
+    GSwatGdbMIRecord *record;
+
+    if( (self->priv->state & GSWAT_DEBUGGABLE_RUNNING)
+        || (self->priv->stack_stamp == self->priv->state_stamp)
+      )
+    {
+        return;
+    }
+    
+    stack_machine = g_new0(StackUpdateMachine, 1);
+    stack_machine->in_use = TRUE;
+
+    gswat_debuggable_free_stack(self->priv->stack);
+    self->priv->stack = NULL;
+    
+    token = 
+        gswat_gdb_debugger_send_mi_command(self,
+                                           "-stack-list-frames",
+                                           NULL,
+                                           NULL);
+    record = gswat_gdb_debugger_get_mi_result_record(self, token);
+    async_stack_update_list_frames_mi_callback(self,
+                                               record,
+                                               stack_machine);
+    token =
+        gswat_gdb_debugger_send_mi_command(self,
+                                           "-stack-list-arguments 1",
+                                           NULL,
+                                           NULL);
+    record = gswat_gdb_debugger_get_mi_result_record(self, token);
+    async_stack_update_list_args_mi_callback(self,
+                                             record,
+                                             stack_machine);
+    g_free(stack_machine);
+}
+
+
 static guint
 gdb_debugger_get_frame(GSwatDebuggable* object)
 {
@@ -2708,7 +2858,8 @@ gdb_debugger_set_frame_done_callback(GSwatGdbDebugger *self,
                                      const GSwatGdbMIRecord *record,
                                      void *data)
 {
-    guint frame = GPOINTER_TO_UINT(data);
+    guint frame_number = GPOINTER_TO_UINT(data);
+    GList *tmp;
 
     if(record->type != GSWAT_GDB_MI_REC_TYPE_RESULT_DONE)
     {
@@ -2716,11 +2867,11 @@ gdb_debugger_set_frame_done_callback(GSwatGdbDebugger *self,
         return;
     }
     
-    self->priv->frame = frame;
+    self->priv->frame = frame_number;
     
     /* Notably, we inc the state stamp before updating the
      * local variables so that the update process will
-     * notice that the variables state is not in synch
+     * notice that the variables state is not in sync
      * with the debugger. */
     self->priv->state_stamp++;
     /* FIXME: I still think this shouldn't be part of the
@@ -2730,5 +2881,17 @@ gdb_debugger_set_frame_done_callback(GSwatGdbDebugger *self,
     g_object_notify(G_OBJECT(self), "frame");
 
     synchronous_update_locals_list(self);
+    synchronous_update_stack(self);
+    
+    for(tmp=self->priv->stack; tmp!=NULL; tmp=tmp->next)
+    {
+        GSwatDebuggableFrame *frame = tmp->data;
+        if(frame->number == frame_number)
+        {
+            set_current_location(self,
+                                 frame->source_uri,
+                                 frame->line);
+        }
+    }
 }
 

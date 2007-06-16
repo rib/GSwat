@@ -225,8 +225,9 @@ struct _GSwatWindowPrivate
      * session */
     GSwatNotebook   *notebook[GSWAT_WINDOW_CONTAINER_COUNT];
 
+    GList           *debuggable_stack;
     GtkListStore    *stack_list_store;
-    GList           *stack;
+    GList           *display_stack;
 
     GtkTreeStore    *variable_store;
 };
@@ -1782,24 +1783,25 @@ on_gswat_debuggable_stack_notify(GObject *object,
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     GSwatDebuggable *debuggable = GSWAT_DEBUGGABLE(object);
-    GList *stack, *tmp, *tmp2;
+    GList *tmp, *tmp2;
     GSwatDebuggableFrameArgument *arg;
     GtkTreeView *stack_widget=NULL;
     GtkListStore *list_store;
     GtkTreeIter iter;
     GList *disp_stack = NULL;
-
-    stack = gswat_debuggable_get_stack(debuggable);
-
+    
+    gswat_debuggable_free_stack(self->priv->debuggable_stack);
+    self->priv->debuggable_stack = gswat_debuggable_get_stack(debuggable);
+    
     /* create new display strings for the stack */
-    for(tmp=stack; tmp!=NULL; tmp=tmp->next)
+    for(tmp=self->priv->debuggable_stack; tmp!=NULL; tmp=tmp->next)
     {
         GSwatDebuggableFrame *frame;
         GSwatWindowFrame *display_frame = g_new0(GSwatWindowFrame, 1);
         GString *display = g_string_new("");
-
+        
         frame = (GSwatDebuggableFrame *)tmp->data;
-
+        
         /* note: at this point the list is in reverse,
          * so the last in the list is our current frame
          */
@@ -1811,37 +1813,33 @@ on_gswat_debuggable_stack_notify(GObject *object,
         }else{
             display = g_string_append(display, frame->function);
         }
-
+        
         display = g_string_append(display, "(");
-
+        
         for(tmp2 = frame->arguments; tmp2!=NULL; tmp2=tmp2->next)
         {
             arg = (GSwatDebuggableFrameArgument *)tmp2->data;
-
-
+            
             display = g_string_append(display, arg->name);
             display = g_string_append(display, "=<b>");
             display = g_string_append(display, arg->value);
             display = g_string_append(display, "</b>, ");
         }
-
+        
         if(display->str[display->len-2] == ',')
         {
             display = g_string_truncate(display, display->len-2);
         }
-
+        
         display = g_string_append(display, ")");
-
+        
         display_frame->display = display;
-
+        
         disp_stack = g_list_prepend(disp_stack, display_frame);
     }
     disp_stack = g_list_reverse(disp_stack);
-
-    gswat_debuggable_free_stack(stack);
-    stack = NULL;
-
-
+    
+    
     /* start displaying the new stack frames */
     stack_widget = GTK_TREE_VIEW(self->priv->stack_view);
 
@@ -1869,7 +1867,7 @@ on_gswat_debuggable_stack_notify(GObject *object,
     free_current_stack_view_entries(self);
 
     self->priv->stack_list_store = list_store;
-    self->priv->stack=disp_stack;
+    self->priv->display_stack=disp_stack;
 
 }
 
@@ -1887,7 +1885,7 @@ free_current_stack_view_entries(GSwatWindow *self)
     self->priv->stack_list_store = NULL;
 
     /* free the previously displayed stack frames */
-    for(tmp=self->priv->stack; tmp!=NULL; tmp=tmp->next)
+    for(tmp=self->priv->display_stack; tmp!=NULL; tmp=tmp->next)
     {
         GSwatWindowFrame *display_frame 
             = (GSwatWindowFrame *)tmp->data;
@@ -1896,8 +1894,8 @@ free_current_stack_view_entries(GSwatWindow *self)
 
         g_free(display_frame);
     }
-    g_list_free(self->priv->stack);
-    self->priv->stack = NULL;
+    g_list_free(self->priv->display_stack);
+    self->priv->display_stack = NULL;
 }
 
 #if 0
@@ -2091,13 +2089,19 @@ on_gswat_window_stack_frame_activated(GtkTreeView *tree_view,
     gint path_depth;
     gint *indices;
     GSwatWindow *self = GSWAT_WINDOW(data);
+    GSwatDebuggableFrame *frame;
     
     path_depth = gtk_tree_path_get_depth(path);
     g_return_if_fail(path_depth == 1);
 
     indices = gtk_tree_path_get_indices(path);
+    frame = g_list_nth_data(self->priv->debuggable_stack, indices[0]);
+    g_return_if_fail(frame != NULL);
+    g_return_if_fail(frame->number == indices[0]);
+
     gswat_debuggable_set_frame(GSWAT_DEBUGGABLE(self->priv->debuggable),
-                                                indices[0]);
+                                                frame->number);
+    
 }
 
 void

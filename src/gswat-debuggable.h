@@ -56,11 +56,14 @@ typedef struct {
     gchar *value;
 }GSwatDebuggableFrameArgument;
 
+/* TODO: promote this into a fully fledged g_object */
 typedef struct {
-    int level;
+    guint number;
     unsigned long address;
     gchar *function;
     GList *arguments;
+    gchar *source_uri;
+    gint line;
 }GSwatDebuggableFrame;
 
 typedef struct {
