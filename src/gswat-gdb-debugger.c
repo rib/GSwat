@@ -1971,12 +1971,27 @@ async_stack_update_list_frames_mi_callback(GSwatGdbDebugger *self,
         frame->function = g_strdup(literal);
         
         literal_val = gdbmi_value_hash_lookup(frame_val, "fullname");
-        literal = gdbmi_value_literal_get(literal_val);
-        frame->source_uri = uri_from_filename(literal);
+        if(literal_val)
+        {
+            literal = gdbmi_value_literal_get(literal_val);
+            frame->source_uri = uri_from_filename(literal);
+        }
+        else
+        {
+            literal_val = gdbmi_value_hash_lookup(frame_val, "file");
+            if(literal_val)
+            {
+                literal = gdbmi_value_literal_get(literal_val);
+                frame->source_uri = uri_from_filename(literal);
+            }
+        }
         
         literal_val = gdbmi_value_hash_lookup(frame_val, "line");
-        literal = gdbmi_value_literal_get(literal_val);
-        frame->line = strtol(literal, NULL, 10);
+        if(literal_val)
+        {
+            literal = gdbmi_value_literal_get(literal_val);
+            frame->line = strtol(literal, NULL, 10);
+        }
         
         stack_machine->new_stack = g_list_prepend(stack_machine->new_stack, frame);
         
@@ -2694,12 +2709,9 @@ gswat_gdb_debugger_get_locals_list(GSwatDebuggable *object)
 static void
 synchronous_update_locals_list(GSwatGdbDebugger *self)
 {
-    gchar *gdb_command;
+    LocalsUpdateMachine *locals_machine;
     gulong token;
-    GSwatGdbMIRecord *mi_record1, *mi_record2;
-    const GDBMIValue *local, *var, *frame, *args, *stack;
-    GList *names;
-    guint i;
+    GSwatGdbMIRecord *record;
     
     if( (self->priv->state & GSWAT_DEBUGGABLE_RUNNING)
         || (self->priv->locals_stamp == self->priv->state_stamp)
@@ -2708,71 +2720,28 @@ synchronous_update_locals_list(GSwatGdbDebugger *self)
         return;
     }
     
-    gdb_command = g_strdup_printf("-stack-list-arguments 0 %d %d",
-                                  self->priv->frame,
-                                  self->priv->frame);
-    token = gswat_gdb_debugger_send_mi_command(self,
-                                               gdb_command,
-                                               NULL,
-                                               NULL);
-    g_free(gdb_command);
-    mi_record1 = gswat_gdb_debugger_get_mi_result_record(self, token);
+    locals_machine = g_new0(LocalsUpdateMachine, 1);;
+    locals_machine->in_use = TRUE;
     
-    names = NULL;
-    /* Add arguments */
-    stack = gdbmi_value_hash_lookup(mi_record1->val, "stack-args");
-    if(stack)
-    {
-        frame = gdbmi_value_list_get_nth(stack, 0);
-        if(frame)
-        {
-            args = gdbmi_value_hash_lookup(frame, "args");
-            if(args)
-            {
-                for(i = 0; i < gdbmi_value_get_size(args); i++)
-                {
-                    var = gdbmi_value_list_get_nth(args, i);
-                    if(var)
-                    {
-                        const gchar *name;
-                        name = gdbmi_value_literal_get(var);
-                        names = g_list_prepend(names, (gchar *)name);
-                    }
-                }
-
-            }
-        }
-    }
+    token = 
+        gswat_gdb_debugger_send_mi_command(self,
+                                           "-stack-list-arguments 0 0 0",
+                                           NULL,
+                                           NULL);
+    record = gswat_gdb_debugger_get_mi_result_record(self, token);
+    async_locals_update_list_args_mi_callback(self, record, locals_machine);
+    gswat_gdb_debugger_free_mi_record(record);
     
+    token = 
+        gswat_gdb_debugger_send_mi_command(self,
+                                           "-stack-list-locals 0",
+                                           NULL,
+                                           NULL);
+    record = gswat_gdb_debugger_get_mi_result_record(self, token);
+    async_locals_update_list_locals_mi_callback(self, record, locals_machine);
+    gswat_gdb_debugger_free_mi_record(record);
     
-    token = gswat_gdb_debugger_send_mi_command(self,
-                                               "-stack-list-locals 0",
-                                               NULL,
-                                               NULL);
-    mi_record2 = gswat_gdb_debugger_get_mi_result_record(self, token);
-    
-    /* List local variables */	
-    local = gdbmi_value_hash_lookup(mi_record2->val, "locals");
-    if(local)
-    {
-        for(i = 0; i < gdbmi_value_get_size(local); i++)
-        {
-            var = gdbmi_value_list_get_nth(local, i);
-            if(var)
-            {
-                const gchar *name;
-                name = gdbmi_value_literal_get(var);
-                names = g_list_prepend(names, (gchar *)name);
-            }
-        }
-    }
-    
-    update_locals_list_from_name_list(self, names);
-    
-    g_list_free(names);
-    
-    gswat_gdb_debugger_free_mi_record(mi_record1);
-    gswat_gdb_debugger_free_mi_record(mi_record2);
+    g_free(locals_machine);
 }
 
 
@@ -2805,6 +2774,8 @@ synchronous_update_stack(GSwatGdbDebugger *self)
     async_stack_update_list_frames_mi_callback(self,
                                                record,
                                                stack_machine);
+    gswat_gdb_debugger_free_mi_record(record);
+
     token =
         gswat_gdb_debugger_send_mi_command(self,
                                            "-stack-list-arguments 1",
@@ -2814,6 +2785,7 @@ synchronous_update_stack(GSwatGdbDebugger *self)
     async_stack_update_list_args_mi_callback(self,
                                              record,
                                              stack_machine);
+    gswat_gdb_debugger_free_mi_record(record);
     g_free(stack_machine);
 }
 
@@ -2874,9 +2846,6 @@ gdb_debugger_set_frame_done_callback(GSwatGdbDebugger *self,
      * notice that the variables state is not in sync
      * with the debugger. */
     self->priv->state_stamp++;
-    /* FIXME: I still think this shouldn't be part of the
-     * interface. */
-    g_object_notify(G_OBJECT(self), "state");
     
     g_object_notify(G_OBJECT(self), "frame");
 

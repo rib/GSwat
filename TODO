@@ -12,18 +12,14 @@ misusing this, so we shouldn't copy them!
     (special care taken e.g. for the "next" button so that we don't
      re-layout for every click)
 - improve the menus
-   - edit preferences is currently broken
+   - edit preferences needs some attention:
+     - changes should take effect immediatly
    - implement help->about
-- Perhaps add mouse over variable bubbles to display their value
- - also allow highlighting expressions
- - Consider not using bubbles though since they get in the way
-   of code.
+- Support adding of custom expressions to the variables window, e.g.
+  by highlighting them within the source view and dragging them accross.
 - test the interrupt button.
   - related: ensure that there is user feedback when the debugger
     is busy in the "running" state.
-- Support clicking on frame entries within the stack view
-  - So that the source view gets updated appropriatly.
-  - So that local variables get updated appropriatly. (done)
 - try and seperate/abstract things so that the variable
   view and stack view work somewhat like mini plugins.
 - implement socket based connections to a gswat-spawner
@@ -32,11 +28,6 @@ misusing this, so we shouldn't copy them!
   - commands should have long descriptive names
   - allow customisable aliases
     - by default provide aliases intuative to a gdb user
-- The debuggable interface currently exposes a "state"
-  property that increments to represent _any_ changes to
-  the debuggables internal state. This is far too general
-  and should be replaced with more focused property
-  notifications.
 - I'd like to make the breakpoint/current line highlights a bit more
   pretty using some cairo magic.
 - The ordering of variables is in-consistent; especially the ordering
@@ -56,12 +47,9 @@ misusing this, so we shouldn't copy them!
     state is always consistent on disc, so we cope with crashes while
     writting out new session state. E.g. a more formal "write new 
     data to tmp file, then atomic replace old with new", type process.
-- updating the local variables can be done either synchronously or
-  asynchronously, but currently the two cases arn't sharing code
-  properly. The synchronous versions should be re-using the callbacks
-  of the async paths.
 - Gracefully handle file not found problems, with clear user feedback
   and give an opertunity to extend the list of source directories.
+
 
 
 --------------------------------------------------------------------

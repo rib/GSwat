@@ -933,7 +933,7 @@ static void
 on_edit_preferences_activate(GtkAction *action,
                              GSwatWindow *self)
 {
-
+    gedit_show_preferences_dialog();
 }
 
 static void
@@ -2102,29 +2102,6 @@ on_gswat_window_stack_frame_activated(GtkTreeView *tree_view,
     gswat_debuggable_set_frame(GSWAT_DEBUGGABLE(self->priv->debuggable),
                                                 frame->number);
     
-}
-
-void
-on_gswat_window_preferences_activate(GtkMenuItem     *menuitem,
-                                     gpointer         data)
-{
-    gedit_show_preferences_dialog();
-}
-
-
-void
-on_gswat_window_about_activate(GtkMenuItem     *menuitem,
-                               gpointer         user_data)
-{
-
-}
-
-
-void
-on_gswat_window_quit_activate(GtkMenuItem     *menuitem,
-                              gpointer         data)
-{
-    gtk_main_quit();
 }
 
 static gboolean
