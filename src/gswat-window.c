@@ -91,8 +91,6 @@ static void on_debugger_restart_activate(GtkAction *action,
 static void on_debugger_add_break_activate(GtkAction *action,
                                            GSwatWindow *self);
 static GSwatView *get_current_view(GSwatWindow *self);
-static void on_gswat_window_debug_button_clicked(GtkToolButton *toolbutton,
-                                                 gpointer data);
 static void on_gswat_debuggable_source_uri_notify(GObject *debuggable,
                                                   GParamSpec *property,
                                                   gpointer data);
@@ -1062,16 +1060,6 @@ get_current_view(GSwatWindow *self)
     {
         return NULL;
     }
-}
-
-
-static void
-on_gswat_window_debug_button_clicked(GtkToolButton   *toolbutton,
-                                     gpointer         data)
-{
-#if 0
-    GSwatWindow *self = GSWAT_WINDOW(data);
-#endif
 }
 
 

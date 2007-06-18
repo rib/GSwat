@@ -498,6 +498,6 @@ on_gedit_document_loaded(GeditDocument *doc,
 
     g_free(self->priv->tab_label_text);
     self->priv->tab_label_text = g_strdup(label_text);
-    g_object_notify(self, "tab-label-text");
+    g_object_notify(G_OBJECT(self), "tab-label-text");
 }
 
