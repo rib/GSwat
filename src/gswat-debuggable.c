@@ -432,27 +432,12 @@ gswat_debuggable_get_state(GSwatDebuggable* object)
     return ret;
 }
 
-guint
-gswat_debuggable_get_state_stamp(GSwatDebuggable* object)
-{
-    GSwatDebuggableIface *debuggable;
-    guint ret;
 
-    g_return_val_if_fail(GSWAT_IS_DEBUGGABLE(object), 0);
-    debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
-
-    g_object_ref(object);
-    ret = debuggable->get_state_stamp(object);
-    g_object_unref(object);
-
-    return ret;
-}
-
-GList *
+GQueue *
 gswat_debuggable_get_stack(GSwatDebuggable* object)
 {
     GSwatDebuggableIface *debuggable;
-    GList *ret;
+    GQueue *ret;
 
     g_return_val_if_fail(GSWAT_IS_DEBUGGABLE(object), NULL);
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
@@ -472,33 +457,42 @@ gswat_debuggable_get_stack(GSwatDebuggable* object)
 }
 
 void
-gswat_debuggable_free_stack(GList *stack)
+gswat_debuggable_frame_free(GSwatDebuggableFrame *frame)
 {
-    GList *tmp, *tmp2;
-
-    for(tmp=stack; tmp!=NULL; tmp=tmp->next)
-    {
-        GSwatDebuggableFrame *current_frame = 
-            (GSwatDebuggableFrame *)tmp->data;
-        
-        g_free(current_frame->function);
-        g_free(current_frame->source_uri);
-        
-        for(tmp2=current_frame->arguments; tmp2!=NULL; tmp2=tmp2->next)
-        {
-            GSwatDebuggableFrameArgument *current_arg = 
-                (GSwatDebuggableFrameArgument *)tmp2->data;
-            
-            g_free(current_arg->name);
-            g_free(current_arg->value);
-            g_free(current_arg);
-        }
-        g_list_free(current_frame->arguments);
-
-        g_free(current_frame);
-    }
-    g_list_free(stack);
+    GList *tmp;
     
+    g_free(frame->function);
+    g_free(frame->source_uri);
+    
+    for(tmp=frame->arguments; tmp!=NULL; tmp=tmp->next)
+    {
+        GSwatDebuggableFrameArgument *arg = 
+            (GSwatDebuggableFrameArgument *)tmp->data;
+        
+        g_free(arg->name);
+        g_free(arg->value);
+        g_free(arg);
+    }
+    g_list_free(frame->arguments);
+    
+    g_free(frame);
+}
+
+void
+gswat_debuggable_stack_free(GQueue *stack)
+{
+    GList *tmp;
+    
+    if(!stack)
+    {
+        return;
+    }
+
+    for(tmp=stack->head; tmp!=NULL; tmp=tmp->next)
+    {
+        gswat_debuggable_frame_free(tmp->data);
+    }
+    g_queue_free(stack);
 }
 
 

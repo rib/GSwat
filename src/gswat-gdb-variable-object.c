@@ -112,10 +112,13 @@ enum {
 struct _GSwatGdbVariableObjectPrivate
 {
     GSwatGdbDebugger        *debugger;
-    guint                   debugger_state_stamp;
 
-    GSwatGdbVariableObject  *parent;
-
+    /* This is a snapshot of the GdbDebuggers
+     * interrupt counter. When it doesn't match
+     * the debuggers count, then the variable
+     * objects cached state must be updated */
+    guint                   gdb_interrupt_count;
+    
     /* cache of next value to return */
     gchar                   *cached_value;
 
@@ -143,6 +146,8 @@ struct _GSwatGdbVariableObjectPrivate
      * option.
      */
     int                     frame;
+
+    GSwatGdbVariableObject  *parent;
 
     guint                   child_count;
     /* This list of children is "consistent" if it
@@ -428,8 +433,8 @@ gswat_gdb_variable_object_new(GSwatGdbDebugger *debugger,
         variable_object->priv->cached_value = NULL;
     }
     variable_object->priv->frame = frame;
-    variable_object->priv->debugger_state_stamp = 
-        gswat_debuggable_get_state_stamp(GSWAT_DEBUGGABLE(debugger));
+    variable_object->priv->gdb_interrupt_count =
+        gswat_gdb_debugger_get_interrupt_count(debugger);
 
     create_gdb_variable_object(variable_object);
 
@@ -558,8 +563,8 @@ wrap_child_gdb_variable_object(GSwatGdbDebugger *debugger,
     variable_object->priv->frame = frame;
     variable_object->priv->gdb_name = g_strdup(gdb_name);
     variable_object->priv->child_count = child_count;
-    variable_object->priv->debugger_state_stamp = 
-        gswat_debuggable_get_state_stamp(GSWAT_DEBUGGABLE(debugger));
+    variable_object->priv->gdb_interrupt_count =
+        gswat_gdb_debugger_get_interrupt_count(debugger);
 
     siblings = parent->priv->children;
     for(tmp=siblings; tmp!=NULL; tmp=tmp->next)
@@ -714,7 +719,6 @@ gswat_gdb_variable_object_get_value(GSwatVariableObject *object,
                                     GError **error)
 {
     GSwatGdbVariableObject *self;
-    guint debugger_state_stamp;
 
     g_return_val_if_fail(GSWAT_IS_GDB_VARIABLE_OBJECT(object), NULL);
     self = GSWAT_GDB_VARIABLE_OBJECT(object);
@@ -723,24 +727,18 @@ gswat_gdb_variable_object_get_value(GSwatVariableObject *object,
     {
         return NULL;
     }
-
-    g_assert(self->priv->gdb_name);
-
-    debugger_state_stamp = 
-        gswat_debuggable_get_state_stamp(GSWAT_DEBUGGABLE(self->priv->debugger));
-    if(self->priv->cached_value
-       && self->priv->debugger_state_stamp == debugger_state_stamp)
-    {
-        return g_strdup(self->priv->cached_value);
-    }
+    
+    /* Note, that after validate_variable_object, the object
+     * may still have a NULL cached_value.
+     */
 
     if(self->priv->cached_value)
     {
-        g_free(self->priv->cached_value);
+        return g_strdup(self->priv->cached_value);
     }
+    
     self->priv->cached_value = 
         evaluate_gdb_variable_object_expression(self, error);
-    self->priv->debugger_state_stamp = debugger_state_stamp;
 
     return g_strdup(self->priv->cached_value);
 }
@@ -750,7 +748,7 @@ static gboolean
 validate_variable_object(GSwatGdbVariableObject *self)
 {
     GSwatGdbDebugger *gdb_debugger;
-    guint current_stamp;
+    guint interrupt_count;
 
     if(!self->priv->valid)
     {
@@ -760,9 +758,9 @@ validate_variable_object(GSwatGdbVariableObject *self)
     g_object_ref(self);
 
     gdb_debugger = self->priv->debugger;
-    current_stamp 
-        = gswat_debuggable_get_state_stamp(GSWAT_DEBUGGABLE(gdb_debugger));
-    if(self->priv->debugger_state_stamp < current_stamp)
+    interrupt_count
+        = gswat_gdb_debugger_get_interrupt_count(gdb_debugger);
+    if(self->priv->gdb_interrupt_count < interrupt_count)
     {
         synchronous_update_all(gdb_debugger);
 
@@ -773,7 +771,7 @@ validate_variable_object(GSwatGdbVariableObject *self)
         }
     }
 
-    g_assert(self->priv->debugger_state_stamp == current_stamp);
+    g_assert(self->priv->gdb_interrupt_count == interrupt_count);
 
     g_object_unref(self);
     return TRUE;
@@ -1206,8 +1204,8 @@ handle_changelist(GSwatGdbDebugger *gdb_debugger,
     {
         GSwatGdbVariableObject *variable_object;
         variable_object = tmp->data;
-        variable_object->priv->debugger_state_stamp = 
-            gswat_debuggable_get_state_stamp(GSWAT_DEBUGGABLE(variable_object->priv->debugger));
+        variable_object->priv->gdb_interrupt_count =
+            gswat_gdb_debugger_get_interrupt_count(GSWAT_DEBUGGABLE(variable_object->priv->debugger));
         g_object_unref(variable_object);
     }
 

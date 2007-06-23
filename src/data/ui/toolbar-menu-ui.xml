@@ -11,6 +11,11 @@
       <menuitem name="EditPreferencesItem" action="EditPreferences"/>
     </menu>
 
+    <menu name="ContextMenu" action="Context">
+      <menuitem name="ControlFlowDebugContextItem" action="ControlFlowDebugContext"/>
+      <menuitem name="BrowseSourceContextItem" action="BrowseSourceContext"/>
+    </menu>
+
     <menu name="HelpMenu" action="Help">
       <menuitem name="HelpAboutItem" action="HelpAbout"/>
     </menu>

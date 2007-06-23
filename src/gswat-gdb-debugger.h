@@ -107,8 +107,8 @@ void gswat_gdb_debugger_restart(GSwatDebuggable* object);
 gchar *gswat_gdb_debugger_get_source_uri(GSwatDebuggable* object);
 gint gswat_gdb_debugger_get_source_line(GSwatDebuggable* object);
 guint gswat_gdb_debugger_get_state(GSwatDebuggable* object);
-guint gswat_gdb_debugger_get_state_stamp(GSwatDebuggable* object);
-GList *gswat_gdb_debugger_get_stack(GSwatDebuggable* object);
+guint gswat_gdb_debugger_get_interrupt_count(GSwatGdbDebugger *self);
+GQueue *gswat_gdb_debugger_get_stack(GSwatDebuggable* object);
 GList *gswat_gdb_debugger_get_breakpoints(GSwatDebuggable* object);
 GList *gswat_gdb_debugger_get_locals_list(GSwatDebuggable* object);
 

@@ -76,6 +76,10 @@ static void on_edit_preferences_activate(GtkAction *action,
                                          GSwatWindow *self);
 static void on_help_about_activate(GtkAction *action,
                                    GSwatWindow *self);
+static void on_control_flow_debug_context_activate(GtkAction *action,
+                                                   GSwatWindow *self);
+static void on_browse_source_context_activate(GtkAction *action,
+                                              GSwatWindow *self);
 static void on_debugger_step_activate(GtkAction *action,
                                       GSwatWindow *self);
 static void on_debugger_next_activate(GtkAction *action,
@@ -223,7 +227,7 @@ struct _GSwatWindowPrivate
      * session */
     GSwatNotebook   *notebook[GSWAT_WINDOW_CONTAINER_COUNT];
 
-    GList           *debuggable_stack;
+    GQueue          *debuggable_stack;
     GtkListStore    *stack_list_store;
     GList           *display_stack;
 
@@ -248,6 +252,7 @@ static GtkActionEntry gswat_window_actions [] =
 {
     { "Session", NULL, N_("_Session") },
     { "Edit", NULL, N_("_Edit") },
+    { "Context", NULL, N_("_Context") },
     { "Help", NULL, N_("_Help") },
 
     { "SessionNew", GTK_STOCK_FILE, N_("_New Session..."), NULL,
@@ -260,6 +265,13 @@ static GtkActionEntry gswat_window_actions [] =
     { "EditPreferences", GTK_STOCK_PREFERENCES, N_("Prefere_nces..."), NULL,
         N_("Edit debugger preferences"),
         G_CALLBACK(on_edit_preferences_activate) },
+
+    { "ControlFlowDebugContext", NULL, N_("_Control Flow Debug"), NULL,
+        N_("Switch to the control flow debugging context"),
+        G_CALLBACK(on_control_flow_debug_context_activate) },
+    { "BrowseSourceContext", NULL, N_("_Browse Source Code"), NULL,
+        N_("Switch to to the source browsing context"),
+        G_CALLBACK(on_browse_source_context_activate) },
 
     { "HelpAbout", GTK_STOCK_ABOUT, N_("_About"), NULL,
         N_("Show information about the debugger"),
@@ -937,6 +949,20 @@ on_edit_preferences_activate(GtkAction *action,
 static void
 on_help_about_activate(GtkAction *action,
                        GSwatWindow *self)
+{
+
+}
+
+static void
+on_control_flow_debug_context_activate(GtkAction *action,
+                                       GSwatWindow *self)
+{
+
+}
+
+static void
+on_browse_source_context_activate(GtkAction *action,
+                                  GSwatWindow *self)
 {
 
 }
@@ -1778,11 +1804,11 @@ on_gswat_debuggable_stack_notify(GObject *object,
     GtkTreeIter iter;
     GList *disp_stack = NULL;
     
-    gswat_debuggable_free_stack(self->priv->debuggable_stack);
+    gswat_debuggable_stack_free(self->priv->debuggable_stack);
     self->priv->debuggable_stack = gswat_debuggable_get_stack(debuggable);
     
     /* create new display strings for the stack */
-    for(tmp=self->priv->debuggable_stack; tmp!=NULL; tmp=tmp->next)
+    for(tmp=self->priv->debuggable_stack->head; tmp!=NULL; tmp=tmp->next)
     {
         GSwatDebuggableFrame *frame;
         GSwatWindowFrame *display_frame = g_new0(GSwatWindowFrame, 1);
@@ -2083,12 +2109,12 @@ on_gswat_window_stack_frame_activated(GtkTreeView *tree_view,
     g_return_if_fail(path_depth == 1);
 
     indices = gtk_tree_path_get_indices(path);
-    frame = g_list_nth_data(self->priv->debuggable_stack, indices[0]);
+    frame = g_queue_peek_nth(self->priv->debuggable_stack, indices[0]);
     g_return_if_fail(frame != NULL);
-    g_return_if_fail(frame->number == indices[0]);
+    g_return_if_fail(frame->level == indices[0]);
 
     gswat_debuggable_set_frame(GSWAT_DEBUGGABLE(self->priv->debuggable),
-                                                frame->number);
+                                                frame->level);
     
 }
 

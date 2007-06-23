@@ -37,8 +37,7 @@ struct _GSwatDebuggableIface
     void (*interrupt)(GSwatDebuggable* object);
     void (*restart)(GSwatDebuggable* object);
     guint (*get_state)(GSwatDebuggable* object);
-    guint (*get_state_stamp)(GSwatDebuggable* object);
-    GList *(*get_stack)(GSwatDebuggable* object);
+    GQueue *(*get_stack)(GSwatDebuggable* object);
     GList *(*get_breakpoints)(GSwatDebuggable* object);
     GList *(*get_locals_list)(GSwatDebuggable* object);
     guint (*get_frame)(GSwatDebuggable* object);
@@ -58,7 +57,7 @@ typedef struct {
 
 /* TODO: promote this into a fully fledged g_object */
 typedef struct {
-    guint number;
+    guint level;
     unsigned long address;
     gchar *function;
     GList *arguments;
@@ -89,9 +88,9 @@ void gswat_debuggable_next(GSwatDebuggable* object);
 void gswat_debuggable_step_into(GSwatDebuggable* object);
 void gswat_debuggable_interrupt(GSwatDebuggable* object);
 void gswat_debuggable_restart(GSwatDebuggable* object);
-guint gswat_debuggable_get_state_stamp(GSwatDebuggable* object);
-GList *gswat_debuggable_get_stack(GSwatDebuggable* object);
-void gswat_debuggable_free_stack(GList *stack);
+GQueue *gswat_debuggable_get_stack(GSwatDebuggable* object);
+void gswat_debuggable_stack_free(GQueue *stack);
+void gswat_debuggable_frame_free(GSwatDebuggableFrame *frame);
 GList *gswat_debuggable_get_breakpoints(GSwatDebuggable* object);
 void gswat_debuggable_free_breakpoints(GList *breakpoints);
 GList *gswat_debuggable_get_locals_list(GSwatDebuggable* object);
