@@ -1547,6 +1547,10 @@ process_frame(const GDBMIValue *val, GSwatDebuggableFrame *frame)
         source_uri = uri_from_filename(file_str);
         frame->source_uri = source_uri;
     }
+    else
+    {
+        frame->source_uri=NULL;
+    }
     
     
     line_val = gdbmi_value_hash_lookup(frame_val, "line");
