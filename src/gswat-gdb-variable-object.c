@@ -1205,7 +1205,7 @@ handle_changelist(GSwatGdbDebugger *gdb_debugger,
         GSwatGdbVariableObject *variable_object;
         variable_object = tmp->data;
         variable_object->priv->gdb_interrupt_count =
-            gswat_gdb_debugger_get_interrupt_count(GSWAT_DEBUGGABLE(variable_object->priv->debugger));
+            gswat_gdb_debugger_get_interrupt_count(variable_object->priv->debugger);
         g_object_unref(variable_object);
     }
 
