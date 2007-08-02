@@ -74,14 +74,14 @@ cp g-interface.c ${FILESTEM}.c
 sed -i "s/my-doable.h/${FILESTEM}.h/g" ${FILESTEM}.c
 sed -i "s/my_doable/${LC_PREFIX}_${LC_CLASS_NAME}/g" ${FILESTEM}.c
 sed -i "s/MY_DOABLE/${UC_PREFIX}_${UC_CLASS_NAME}/g" ${FILESTEM}.c
-sed -i "s/MY_TYPE_DOABLW/${UC_PREFIX}_TYPE_${UC_CLASS_NAME}/g" ${FILESTEM}.c
+sed -i "s/MY_TYPE_DOABLE/${UC_PREFIX}_TYPE_${UC_CLASS_NAME}/g" ${FILESTEM}.c
 sed -i "s/MY_IS_DOABLE/${UC_PREFIX}_IS_${UC_CLASS_NAME}/g" ${FILESTEM}.c
 sed -i "s/MyDoable/${CC_PREFIX}${CC_CLASS_NAME}/g" ${FILESTEM}.c
 
 cp g-interface.h ${FILESTEM}.h
 sed -i "s/my_doable/${LC_PREFIX}_${LC_CLASS_NAME}/g" ${FILESTEM}.h
 sed -i "s/MY_DOABLE/${UC_PREFIX}_${UC_CLASS_NAME}/g" ${FILESTEM}.h
-sed -i "s/MY_TYPE_DOABLW/${UC_PREFIX}_TYPE_${UC_CLASS_NAME}/g" ${FILESTEM}.h
+sed -i "s/MY_TYPE_DOABLE/${UC_PREFIX}_TYPE_${UC_CLASS_NAME}/g" ${FILESTEM}.h
 sed -i "s/MY_IS_DOABLE/${UC_PREFIX}_IS_${UC_CLASS_NAME}/g" ${FILESTEM}.h
 sed -i "s/MyDoable/${CC_PREFIX}${CC_CLASS_NAME}/g" ${FILESTEM}.h
 

@@ -2725,7 +2725,8 @@ gswat_gdb_debugger_get_breakpoints(GSwatDebuggable *object)
         current_breakpoint = (GSwatDebuggableBreakpoint *)tmp->data;
 
         new_breakpoint = g_new(GSwatDebuggableBreakpoint, 1);
-        memcpy(new_breakpoint, current_breakpoint, sizeof(GSwatDebuggableBreakpoint));
+        new_breakpoint->line = current_breakpoint->line;
+        new_breakpoint->source_uri = g_strdup(current_breakpoint->source_uri);
 
         new_breakpoints = g_list_prepend(new_breakpoints, new_breakpoint);
     }

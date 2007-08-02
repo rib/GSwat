@@ -1,0 +1,34 @@
+# List of source files which contain translatable strings.
+[encoding: UTF-8]
+src/gswat-debuggable.c
+src/gswat-gdb-debugger.c
+src/gswat-notebook.c
+src/gswat-session.c
+src/gswat-window.c
+src/gedit/gedit-convert.c
+src/gedit/gedit-debug.c
+src/gedit/gedit-document.c
+src/gedit/gedit-encodings.c
+src/gedit/gedit-encodings-option-menu.c
+src/gedit/gedit-help.c
+src/gedit/gedit-io-error-message-area.c
+src/gedit/gedit-notebook.c
+src/gedit/gedit-prefs-manager.c
+src/gedit/gedit-print.c
+src/gedit/gedit-print-job-preview.c
+src/gedit/gedit-tab.c
+src/gedit/gedit-utils.c
+src/gedit/gedit-view.c
+src/dialogs/gedit-close-confirmation-dialog.c
+src/dialogs/gedit-encodings-dialog.c
+src/dialogs/gedit-open-location-dialog.c
+src/dialogs/gedit-page-setup-dialog.c
+src/dialogs/gedit-preferences-dialog.c
+src/dialogs/gedit-search-dialog.c
+src/dialogs/gedit-encodings-dialog.glade
+src/dialogs/gedit-open-location-dialog.glade
+src/dialogs/gedit-page-setup-dialog.glade
+src/dialogs/gedit-preferences-dialog.glade
+src/dialogs/gedit-search-dialog.glade
+src/data/glade/gswat.glade
+src/data/gswat.desktop.in

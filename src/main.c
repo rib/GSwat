@@ -76,12 +76,17 @@ main(int argc, char **argv)
 	 * GETTEXT_PACKAGE here instead of NULL
 	 */
 	g_option_context_add_main_entries(option_context, option_entries, NULL);
+    
 
 	program = gnome_program_init(PACKAGE, VERSION,
 	                            LIBGNOMEUI_MODULE, argc, argv,
 	                            GNOME_PARAM_GOPTION_CONTEXT, option_context,
 	                            GNOME_PARAM_NONE);
     
+    bindtextdomain(GETTEXT_PACKAGE, GSWAT_LOCALEDIR);
+    bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
+    textdomain(GETTEXT_PACKAGE);
+
     if(!gedit_prefs_manager_init())
     {
         g_critical("gedit_prefs_manager_init failed\n");

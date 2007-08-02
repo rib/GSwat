@@ -13,8 +13,13 @@ GSWAT_SOURCES = main.c \
 		gswat-notebook.c \
 		gswat-src-view-tab.c \
 		gswat-view.c \
+		gswat-context.c \
+		gswat-control-flow-debugging-context.c \
+		gswat-source-browsing-context.c \
+		gswat-in-limbo-context.c \
 		sexy-icon-entry.c \
 		gswat-gdbmi.c
+
 
 BUILT_SOURCES = gedit/gedit-marshal.c \
                gedit/gedit-marshal.h
@@ -73,7 +78,8 @@ gswat_CPPFLAGS = -DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"	\
 	   	 		 -DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
 				 -DGNOME_ICONDIR=\""$(datadir)/pixmaps"\" 		\
 				 -DSHARE_DIR=\"$(pkgdatadir)\"                  \
-				 -DGSWAT_BIN_DIR=\""$(bindir)"\"					\
+				 -DGSWAT_LOCALEDIR=\""$(gswatlocaledir)"\"		\
+				 -DGSWAT_BIN_DIR=\""$(bindir)"\"	\
 		 		 -I$(top_srcdir)								\
 		 		 -I$(top_srcdir)/src							\
 		 		 -I$(top_srcdir)/src/gedit						\
@@ -87,12 +93,23 @@ gswat_spawner_CPPFLAGS = @EXTRA_CPPFLAGS@
 
 
 GSWAT_EXTRA_DIST = \
-		gswat-debugger.h \
+		gswat-context.h \
+		gswat-control-flow-debugging-context.h \
+		gswat-debuggable.h \
+		gswat-gdb-debugger.h \
 		gswat-gdbmi.h \
-		gswat-main-window.h \
+		gswat-gdb-variable-object.h \
+		gswat-notebook.h \
 		gswat-session.h \
+		gswat-source-browsing-context.h \
 		gswat-spawn.h \
+		gswat-src-view-tab.h \
+		gswat-tabable.h \
+		gswat-utils.h \
+		gswat-variable-object.h \
 		gswat-view.h \
+		gswat-window.h \
+		gswat-in-limbo-context.h \
 		sexy-icon-entry.h \
 		gswat-variable-object.h \
 		templates/g-object-class.c \
@@ -100,35 +117,36 @@ GSWAT_EXTRA_DIST = \
 		templates/new_g_object_class.sh \
 		templates/g-interface.c \
 		templates/g-interface.h \
-		templates/new_interface.sh
+		templates/new_g_interface.sh
 
 GEDIT_EXTRA_DIST = \
-		gedit-marshal.list \
-		gedit-convert.h \
-		gedit-debug.h \
-		gedit-document.h \
-		gedit-document-loader.h \
-		gedit-encodings.h \
-		gedit-encodings-option-menu.h \
-		gedit-help.h \
-		gedit-io-error-message-area.h \
-		gedit-languages-manager.h \
-		gedit-marshal.h \
-		gedit-message-area.h \
-		gedit-metadata-manager.h \
-		gedit-panel.h \
-		gedit-prefs-manager-app.h \
-		gedit-prefs-manager.h \
-		gedit-prefs-manager-private.h \
-		gedit-print.h \
-		gedit-print-job-preview.h \
-		gedit-progress-message-area.h \
-		gedit-spinner.h \
-		gedit-text-region.h \
-		gedit-tooltips.h \
-		gedit-utils.h \
-		gedit-view.h \
-		gedit-window.h
+		gedit/gedit-marshal.list \
+		gedit/gedit-convert.h \
+		gedit/gedit-debug.h \
+		gedit/gedit-document.h \
+		gedit/gedit-document-loader.h \
+		gedit/gedit-encodings.h \
+		gedit/gedit-encodings-option-menu.h \
+		gedit/gedit-help.h \
+		gedit/gedit-io-error-message-area.h \
+		gedit/gedit-languages-manager.h \
+		gedit/gedit-marshal.h \
+		gedit/gedit-message-area.h \
+		gedit/gedit-metadata-manager.h \
+		gedit/gedit-panel.h \
+		gedit/gedit-prefs-manager-app.h \
+		gedit/gedit-prefs-manager.h \
+		gedit/gedit-prefs-manager-private.h \
+		gedit/gedit-print.h \
+		gedit/gedit-print-job-preview.h \
+		gedit/gedit-progress-message-area.h \
+		gedit/gedit-spinner.h \
+		gedit/gedit-tab.h  \
+		gedit/gedit-text-region.h \
+		gedit/gedit-tooltips.h \
+		gedit/gedit-utils.h \
+		gedit/gedit-view.h \
+		gedit/gedit-window.h
 
 gladedir = $(datadir)/gswat/glade/
 
@@ -142,14 +160,18 @@ glade_DATA = \
 
 uidir = $(datadir)/gswat/ui/
 
-ui_DATA = \
-	data/ui/toolbar-menu-ui.xml
+ui_DATA = data/ui/toolbar-menu-ui.xml
+
+gnomemenudir = $(datadir)/applications
+gnomemenu_in_files = data/gswat.desktop.in
+gnomemenu_DATA = $(gnomemenu_premerge_files:.desktop.in=.desktop)
 
 EXTRA_DIST = \
 	$(GSWAT_EXTRA_DIST) \
 	$(GEDIT_EXTRA_DIST) \
 	$(glade_DATA) \
-	$(ui_DATA)
+	$(ui_DATA) \
+	$(gnomemenu_DATA)
 
 
 gedit/gedit-marshal.h: gedit/gedit-marshal.list $(GLIB_GENMARSHAL)
@@ -159,9 +181,12 @@ gedit/gedit-marshal.c: gedit/gedit-marshal.list $(GLIB_GENMARSHAL)
 	echo "#include \"gedit-marshal.h\"" > $@ && \
 	$(GLIB_GENMARSHAL) $< --body --prefix=gedit_marshal >> $@
 
+@INTLTOOL_DESKTOP_RULE@
 
 
+CLEANFILES = \
+	$(gnomemenu_DATA)
 
-
-
+DISTCLEANFILES = \
+	$(DISTCLEANFILES)
 

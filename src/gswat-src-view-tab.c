@@ -391,8 +391,12 @@ gswat_src_view_tab_new(gchar *file_uri, gint line)
                     );
 
     g_object_unref(view);
-    encoding = gedit_document_get_encoding(doc);
-    gedit_document_load(doc, file_uri, encoding, line, FALSE);
+
+    if(file_uri)
+    {
+        encoding = gedit_document_get_encoding(doc);
+        gedit_document_load(doc, file_uri, encoding, line, FALSE);
+    }
 
     return self;
 }

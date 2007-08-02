@@ -27,8 +27,11 @@
 
 #include <glib.h>
 #include <glib-object.h>
+#include <gtk/gtk.h>
 
 #include "gswat-session.h"
+#include "gswat-debuggable.h"
+#include "gswat-tabable.h"
 
 G_BEGIN_DECLS
 
@@ -63,10 +66,65 @@ struct _GSwatWindowClass
     //void (* signal) (GSwatWindow *object);
 };
 
+typedef enum {
+    GSWAT_WINDOW_CONTAINER_MAIN,
+    GSWAT_WINDOW_CONTAINER_RIGHT0,
+    GSWAT_WINDOW_CONTAINER_RIGHT1,
+    GSWAT_WINDOW_CONTAINER_BOTTOM,
+    GSWAT_WINDOW_CONTAINER_COUNT
+}GSwatWindowContainerID;
+
+/* Contexts represent the task that a user is
+ * activly focused on.
+ */
+typedef enum {
+    /* When started without a session, the intention is
+     * that this limbo context will display your most
+     * recent sessions for fast access */
+    GSWAT_WINDOW_IN_LIMBO_CONTEXT,
+    /* Only valid while connected to a debuggable target;
+     * this context is active while you are literally
+     * stepping through and debugging code. */
+    GSWAT_WINDOW_CONTROL_FLOW_DEBUGGING_CONTEXT,
+    /* Valid when you have a session; this context
+     * can be activated at any time to browse through
+     * source code (e.g. for setting breakpoints)*/
+    GSWAT_WINDOW_SOURCE_BROWSING_CONTEXT,
+    
+    /* TODO: Use somthing like GEGL to provide a no-fuss note
+     * taking pad. It would e.g. be nice if it supported
+     * graphics tablets for doodling diagramatic notes
+     * too. Plugins could be used for exporting data structures
+     * from a debuggable as nice graphics (i.e. pictures
+     * worth 100 words) */
+    /* GSWAT_WINDOW_NOTE_TAKING_CONTEXT, */
+    
+    /* TODO: we may want to be able to dynamically create
+     * new contexts for some complex plugins in the
+     * future. 
+     * We could also use a tree structure and allow
+     * sub-contexts if necissary. */
+    GSWAT_WINDOW_CONTEXT_COUNT
+
+}GSwatWindowContextID;
+
+
 GType gswat_window_get_type(void);
 
 /* add additional methods here */
 GSwatWindow *gswat_window_new(GSwatSession *session);
+
+GSwatDebuggable *gswat_window_get_debuggable(GSwatWindow *self);
+GtkContainer *gswat_window_get_container(GSwatWindow *self,
+                                         GSwatWindowContainerID container_id);
+GSwatWindowContextID gswat_window_get_context_id(GSwatWindow *self);
+gboolean gswat_window_set_context(GSwatWindow *self, GSwatWindowContainerID context_id);
+void gswat_window_insert_widget(GSwatWindow *self,
+                                GtkWidget *widget,
+                                GSwatWindowContainerID container_id);
+void gswat_window_insert_tabable(GSwatWindow *self,
+                                 GSwatTabable *tabable,
+                                 GSwatWindowContainerID container_id);
 
 G_END_DECLS
 

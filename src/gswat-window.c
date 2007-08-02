@@ -34,8 +34,6 @@
 
 #include "dialogs/gedit-preferences-dialog.h"
 #include "gedit-prefs-manager.h"
-#include "gedit-document.h"
-#include "gedit-view.h"
 
 #include "gswat-utils.h"
 #include "gswat-notebook.h"
@@ -44,30 +42,37 @@
 #include "gswat-session.h"
 #include "gswat-debuggable.h"
 #include "gswat-gdb-debugger.h"
-#include "gswat-variable-object.h"
+#include "gswat-context.h"
+#include "gswat-in-limbo-context.h"
+#include "gswat-control-flow-debugging-context.h"
+#include "gswat-source-browsing-context.h"
+
 #include "gswat-window.h"
 
 /* Function definitions */
 static void gswat_window_class_init(GSwatWindowClass *klass);
 static void gswat_window_get_property(GObject *object,
-                                   guint id,
-                                   GValue *value,
-                                   GParamSpec *pspec);
+                                      guint id,
+                                      GValue *value,
+                                      GParamSpec *pspec);
 static void gswat_window_set_property(GObject *object,
-                                   guint property_id,
-                                   const GValue *value,
-                                   GParamSpec *pspec);
+                                      guint property_id,
+                                      const GValue *value,
+                                      GParamSpec *pspec);
 //static void gswat_window_mydoable_interface_init(gpointer interface,
 //                                             gpointer data);
 static void gswat_window_init(GSwatWindow *self);
 static void gswat_window_finalize(GObject *self);
 
-static void construct_widgets(GSwatWindow *self);
-static void destruct_widgets(GSwatWindow *self);
+static void construct_layout_widgets(GSwatWindow *self);
+static void destruct_layout_widgets(GSwatWindow *self);
 static void set_toolbar_state(GSwatWindow *self, guint state);
 static void on_session_new_activate(GtkAction *action,
                                     GSwatWindow *self);
 static void clean_up_current_session(GSwatWindow *self);
+static void on_gswat_debuggable_state_notify(GObject *object,
+                                             GParamSpec *property,
+                                             gpointer data);
 static void on_gswat_session_edit_done(GSwatSession *session,
                                        GSwatWindow *window);
 static void on_session_quit_activate(GtkAction *action,
@@ -89,71 +94,12 @@ static void on_debugger_up_frame_activate(GtkAction *action,
 static void on_debugger_continue_activate(GtkAction *action,
                                           GSwatWindow *self);
 static void on_debugger_interrupt_activate(GtkAction *action,
-                                       GSwatWindow *self);
+                                           GSwatWindow *self);
 static void on_debugger_restart_activate(GtkAction *action,
                                          GSwatWindow *self);
 static void on_debugger_add_break_activate(GtkAction *action,
                                            GSwatWindow *self);
 static GSwatView *get_current_view(GSwatWindow *self);
-static void on_gswat_debuggable_source_uri_notify(GObject *debuggable,
-                                                  GParamSpec *property,
-                                                  gpointer data);
-static void on_gswat_debuggable_source_line_notify(GObject *debuggable,
-                                                   GParamSpec *property,
-                                                   gpointer data);
-static void on_gswat_debuggable_breakpoints_notify(GObject *debuggable,
-                                                  GParamSpec *property,
-                                                  gpointer data);
-
-static void update_source_view(GSwatWindow *self);
-static void on_gedit_document_loaded(GeditDocument *doc,
-                                     const GError *error,
-                                     void *data);
-static void update_line_highlights(GSwatWindow *self);
-static void on_gswat_debuggable_state_notify(GObject *object,
-                                             GParamSpec *property,
-                                             gpointer data);
-static void update_variable_view(gpointer data);
-static
-gboolean search_for_variable_store_entry(GtkTreeStore *variable_store,
-                                         GSwatVariableObject *variable_object,
-                                         GtkTreeIter *iter);
-static void add_variable_object_to_tree_store(GSwatVariableObject *variable_object,
-                                              GtkTreeStore *variable_store,
-                                              GtkTreeIter *parent);
-static void prune_variable_store(GtkTreeStore *variable_store,
-                                 GList *variables);
-static void on_variable_object_value_notify(GObject *object,
-                                            GParamSpec *property,
-                                            gpointer data);
-static void on_variable_object_invalidated(GObject *object,
-                                           GParamSpec *property,
-                                           gpointer data);
-static void on_variable_object_child_count_notify(GObject *object,
-                                                  GParamSpec *property,
-                                                  gpointer data);
-static void on_gswat_debuggable_stack_notify(GObject *object,
-                                             GParamSpec *property,
-                                             gpointer data);
-static void free_current_stack_view_entries(GSwatWindow *self);
-static void on_gswat_debuggable_locals_notify(GObject *object,
-                                              GParamSpec *property,
-                                              gpointer data);
-static void
-on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
-                                           GtkTreeIter *iter,
-                                           GtkTreePath *iter_path,
-                                           gpointer data);
-static void
-on_gswat_window_variable_view_row_collapsed(GtkTreeView *view,
-                                            GtkTreeIter *iter,
-                                            GtkTreePath *iter_path,
-                                            gpointer data);
-static void
-on_gswat_window_stack_frame_activated(GtkTreeView *tree_view,
-                                      GtkTreePath *path,
-                                      GtkTreeViewColumn *column,
-                                      gpointer data);
 static gboolean on_window_delete_event(GtkWidget *win,
                                        GdkEventAny *event,
                                        GSwatWindow *self);
@@ -169,80 +115,38 @@ enum {
 };
 #endif
 
-#if 0
 enum {
     PROP_0,
-    PROP_NAME,
-};
-#endif
-
-enum {
-    GSWAT_WINDOW_STACK_FUNC_COL,
-    GSWAT_WINDOW_STACK_N_COLS
+    PROP_SESSION,
+    PROP_DEBUGGABLE,
+    PROP_CONTEXT_ID
 };
 
-enum {
-    GSWAT_WINDOW_VARIABLE_NAME_COL,
-    GSWAT_WINDOW_VARIABLE_VALUE_COL,
-    GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-    GSWAT_WINDOW_VARIABLES_N_COLS
-};
-
-/* may become part of a plugin interface: */
-enum {
-    GSWAT_WINDOW_CONTAINER_MAIN,
-    GSWAT_WINDOW_CONTAINER_RIGHT0,
-    GSWAT_WINDOW_CONTAINER_RIGHT1,
-    GSWAT_WINDOW_CONTAINER_BOTTOM,
-    GSWAT_WINDOW_CONTAINER_COUNT
-};
 
 struct _GSwatWindowPrivate
 {
+    /* Per Session Data */
+    GSwatSession *session;
+    GSwatDebuggable *debuggable;
+
+    /* A context is responsible for optimising the
+     * gui to suit the task at hand. */
+    GSwatContext *context[GSWAT_WINDOW_CONTEXT_COUNT];
+    GSwatWindowContextID current_context_id;
+
+    /* Menu and toolbar state */
+    GtkUIManager *ui_manager;
+    GtkActionGroup *actiongroup;
+
+    /* Layout widgets */
     GtkWidget *window;
     GtkWidget *top_vbox;
     GtkWidget *center_vpaned;
     GtkWidget *center_hpaned;
     GtkWidget *right_vpaned;
-    GtkTreeView *stack_view;
-    GtkTreeView *variable_view;
-
-    GtkUIManager *ui_manager;
-    GtkActionGroup *actiongroup;
-
-
-    /********************
-     * Per Session Data *
-     ********************/
-    /* (i.e. needs to be freed
-     *  correctly when starting
-     *  a new session!)
-     */
-
-    GSwatDebuggable *debuggable;
-
-    /* The notebook itself is persistent
-     * accross sessions, but 
-     * GSwatSrcViewTab children are per
-     * session */
-    GSwatNotebook   *notebook[GSWAT_WINDOW_CONTAINER_COUNT];
-
-    GQueue          *debuggable_stack;
-    GtkListStore    *stack_list_store;
-    GList           *display_stack;
-
-    GtkTreeStore    *variable_store;
+    GSwatNotebook *notebook[GSWAT_WINDOW_CONTAINER_COUNT];
 };
 
-typedef struct {
-    GString *display;
-}GSwatWindowFrame;
-
-typedef struct {
-    GSwatVariableObject *variable_object;
-    GString *name;
-    GString *value;
-}GSwatWindowVariable;
 
 /* Variables */
 static GObjectClass *parent_class = NULL;
@@ -361,7 +265,7 @@ static void
 gswat_window_class_init(GSwatWindowClass *klass) /* Class Initialization */
 {   
     GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-    //GParamSpec *new_param;
+    GParamSpec *new_param;
 
     parent_class = g_type_class_peek_parent(klass);
 
@@ -369,6 +273,7 @@ gswat_window_class_init(GSwatWindowClass *klass) /* Class Initialization */
 
     gobject_class->get_property = gswat_window_get_property;
     gobject_class->set_property = gswat_window_set_property;
+
 
     /* set up properties */
 #if 0
@@ -402,6 +307,38 @@ gswat_window_class_init(GSwatWindowClass *klass) /* Class Initialization */
                                     PROP_NAME,
                                     new_param);
 #endif
+
+    new_param = g_param_spec_object("session", /* name */
+                                    "Session", /* nick name */
+                                    "The current session", /* description */
+                                    GSWAT_TYPE_SESSION, /* GType */
+                                    GSWAT_PARAM_READABLE /* flags */
+                                   );
+    g_object_class_install_property(gobject_class,
+                                    PROP_SESSION,
+                                    new_param);
+
+    new_param = g_param_spec_object("debuggable", /* name */
+                                    "Debuggable", /* nick name */
+                                    "The current debuggable", /* description */
+                                    GSWAT_TYPE_DEBUGGABLE, /* GType */
+                                    GSWAT_PARAM_READABLE /* flags */
+                                   );
+    g_object_class_install_property(gobject_class,
+                                    PROP_DEBUGGABLE,
+                                    new_param);
+
+    new_param = g_param_spec_uint("context-id", /* name */
+                                  "Context ID", /* nick name */
+                                  "The current context ID", /* description */
+                                  0, /* minimum */
+                                  (GSWAT_WINDOW_CONTEXT_COUNT-1), /* maximum */
+                                  0, /* default */
+                                  GSWAT_PARAM_READABLE /* flags */
+                                 );
+    g_object_class_install_property(gobject_class,
+                                    PROP_CONTEXT_ID,
+                                    new_param);
 
     /* set up signals */
 #if 0 /* template code */
@@ -498,7 +435,20 @@ gswat_window_init(GSwatWindow *self)
 {
     self->priv = GSWAT_WINDOW_GET_PRIVATE(self);
 
-    construct_widgets(self);
+    construct_layout_widgets(self);
+
+    self->priv->context[GSWAT_WINDOW_IN_LIMBO_CONTEXT] = 
+        GSWAT_CONTEXT(gswat_in_limbo_context_new(self));
+    self->priv->context[GSWAT_WINDOW_CONTROL_FLOW_DEBUGGING_CONTEXT] = 
+        GSWAT_CONTEXT(gswat_control_flow_debugging_context_new(self));
+    self->priv->context[GSWAT_WINDOW_SOURCE_BROWSING_CONTEXT] =
+        GSWAT_CONTEXT(gswat_source_browsing_context_new(self));
+    //TODO
+    //self->priv->context[GSWAT_WINDOW_NOTE_TAKING_CONTEXT] =
+    //    GSWAT_CONTEXT(g_object_new(GSWAT_TYPE_NOTE_TAKING_CONTEXT, NULL));
+
+    self->priv->current_context_id = -1;
+
     //connect_signals();
     //set_toolbar_state(self, GSWAT_DEBUGGABLE_NOT_RUNNING);
 }
@@ -512,12 +462,16 @@ gswat_window_new(GSwatSession *session)
     self = g_object_new(GSWAT_TYPE_WINDOW, NULL);
 
     /* If we have been passed a session, then
-     * we start that immediatly
+     * we start that immediately
      */
     if(session)
     {
         g_object_ref(session);
         on_gswat_session_edit_done(session, self);
+    }
+    else
+    {
+        gswat_window_set_context(self, GSWAT_WINDOW_IN_LIMBO_CONTEXT);
     }
 
     return self;
@@ -533,7 +487,13 @@ gswat_window_finalize(GObject *object)
 
     clean_up_current_session(self);
 
-    destruct_widgets(self);
+    if(self->priv->current_context_id != -1)
+    {
+        gint context_id = self->priv->current_context_id;
+        gswat_context_deactivate(self->priv->context[context_id]);
+    }
+
+    destruct_layout_widgets(self);
 
     G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -558,20 +518,14 @@ http://developer.gnome.org/arch/doc/authors.html
 #endif
 
 static void
-construct_widgets(GSwatWindow *self)
+construct_layout_widgets(GSwatWindow *self)
 {
     GtkWindow *window;
     GtkWidget *hbox;
     GtkWidget *menubar;
     GtkWidget *toolbar;
     GSwatNotebook *notebook;
-    GtkWidget *scrolled_window;
-    GtkWidget *drawing_area;
-    GtkTreeView *stack_view;
-    GtkTreeView *variable_view;
-    GtkTreeStore *variable_store;
-    GtkCellRenderer *renderer;
-    GtkTreeViewColumn *column;
+    //GtkWidget *drawing_area;
     GError *error=NULL;
 
 
@@ -585,7 +539,6 @@ construct_widgets(GSwatWindow *self)
     gtk_container_add(GTK_CONTAINER(window), self->priv->top_vbox);
     gtk_container_set_border_width(GTK_CONTAINER(self->priv->top_vbox), 0);
 
-    /* connect after, so that things can affect behaviour */
     g_signal_connect_object(G_OBJECT(window), "delete-event",
                             G_CALLBACK(on_window_delete_event),
                             self,
@@ -652,79 +605,8 @@ construct_widgets(GSwatWindow *self)
                     GTK_WIDGET(notebook), FALSE, TRUE);
 
 
-
-    /* Setup the local variables view */
-    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
-    notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_RIGHT0];
-    //gswat_notebook_insert_page(notebook, /* FIXME */, -1, TRUE);
-    gtk_notebook_insert_page(GTK_NOTEBOOK(notebook), scrolled_window, NULL, -1);
-    variable_view = GTK_TREE_VIEW(gtk_tree_view_new());
-    self->priv->variable_view = variable_view;
-    gtk_container_add(GTK_CONTAINER(scrolled_window),
-                      GTK_WIDGET(variable_view));
-    gtk_tree_view_set_rules_hint(variable_view, TRUE);
-
-    renderer = gtk_cell_renderer_text_new();
-    column = 
-        gtk_tree_view_column_new_with_attributes("Variable",
-                                                 renderer,
-                                                 "markup",
-                                                 GSWAT_WINDOW_VARIABLE_NAME_COL,
-                                                 NULL);
-    gtk_tree_view_append_column(variable_view, column);
-
-
-    renderer = gtk_cell_renderer_text_new();
-    column = 
-        gtk_tree_view_column_new_with_attributes("Value",
-                                                 renderer,
-                                                 "markup",
-                                                 GSWAT_WINDOW_VARIABLE_VALUE_COL,
-                                                 NULL);
-    gtk_tree_view_append_column(variable_view, column);
-
-    g_signal_connect(variable_view,
-                     "row-expanded",
-                     G_CALLBACK(on_gswat_window_variable_view_row_expanded),
-                     self);
-
-    g_signal_connect(variable_view,
-                     "row-collapsed",
-                     G_CALLBACK(on_gswat_window_variable_view_row_collapsed),
-                     self);
-
-    variable_store = gtk_tree_store_new(GSWAT_WINDOW_VARIABLES_N_COLS,
-                                        G_TYPE_STRING,
-                                        G_TYPE_STRING,
-                                        G_TYPE_OBJECT);
-    gtk_tree_view_set_model(variable_view, GTK_TREE_MODEL(variable_store));
-    self->priv->variable_store = variable_store;
-
-
-
-    /* Setup the stack view */
-    scrolled_window = gtk_scrolled_window_new(NULL, NULL);
-    notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_RIGHT1];
-    //gswat_notebook_insert_page(notebook, /* FIXME */, -1, TRUE);
-    gtk_notebook_insert_page(GTK_NOTEBOOK(notebook), scrolled_window, NULL, -1);
-    stack_view = GTK_TREE_VIEW(gtk_tree_view_new());
-    self->priv->stack_view = stack_view;
-    gtk_container_add(GTK_CONTAINER(scrolled_window),
-                      GTK_WIDGET(stack_view));
-    renderer = gtk_cell_renderer_text_new();
-    column = gtk_tree_view_column_new_with_attributes("Stack",
-                                                      renderer,
-                                                      "markup",
-                                                      GSWAT_WINDOW_STACK_FUNC_COL,
-                                                      NULL);
-    gtk_tree_view_append_column(stack_view, column);
-    g_signal_connect(G_OBJECT(stack_view),
-                     "row-activated",
-                     G_CALLBACK(on_gswat_window_stack_frame_activated),
-                     self);
-
-
     /* Put the bottom drawing area in place */
+#if 0
     notebook = GSWAT_NOTEBOOK(gswat_notebook_new());
     gtk_notebook_set_show_tabs(GTK_NOTEBOOK(notebook), FALSE);
     self->priv->notebook[GSWAT_WINDOW_CONTAINER_BOTTOM] = notebook;
@@ -733,13 +615,13 @@ construct_widgets(GSwatWindow *self)
     scrolled_window = gtk_scrolled_window_new(NULL, NULL);
     //gswat_notebook_insert_page(notebook, /* FIXME */, -1, TRUE);
     gtk_notebook_insert_page(GTK_NOTEBOOK(notebook), scrolled_window, NULL, -1);
-    drawing_area = gtk_label_new("drawing_area"); //gtk_drawing_area_new();
+    drawing_area = gtk_label_new(_("drawing_area")); //gtk_drawing_area_new();
     gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrolled_window),
                                           drawing_area);
     gtk_paned_add2(GTK_PANED(self->priv->center_vpaned),
                    drawing_area);
     gtk_widget_show(drawing_area);
-
+#endif
 
 
     gtk_widget_show_all(self->priv->center_vpaned);
@@ -753,8 +635,9 @@ construct_widgets(GSwatWindow *self)
     gtk_widget_show(self->priv->window);
 }
 
+
 static void
-destruct_widgets(GSwatWindow *self)
+destruct_layout_widgets(GSwatWindow *self)
 {
     gtk_widget_destroy(self->priv->window);
 }
@@ -845,89 +728,73 @@ static void on_session_new_activate(GtkAction *action,
 
 }
 
+
 static void
-on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *window)
+on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *self)
 {
+    clean_up_current_session(self);
 
-    clean_up_current_session(window);
+    self->priv->session = session;
+    /* Give others an opportunity to connect to the debuggable's
+     * signals before we connect to the target */
+    g_object_notify(G_OBJECT(self), "session");
 
-    window->priv->debuggable 
+    self->priv->debuggable 
         = GSWAT_DEBUGGABLE(gswat_gdb_debugger_new(session));
 
-    /* currently we don't require a handle to the session
-     * from this class..
-     */
-    g_object_unref(session);
-
-
-    g_signal_connect(G_OBJECT(window->priv->debuggable),
+    g_signal_connect(G_OBJECT(self->priv->debuggable),
                      "notify::state",
                      G_CALLBACK(on_gswat_debuggable_state_notify),
-                     window);
+                     self);
 
-    g_signal_connect(G_OBJECT(window->priv->debuggable),
-                     "notify::stack",
-                     G_CALLBACK(on_gswat_debuggable_stack_notify),
-                     window);
+    gswat_debuggable_target_connect(self->priv->debuggable);
 
-    g_signal_connect(G_OBJECT(window->priv->debuggable),
-                     "notify::locals",
-                     G_CALLBACK(on_gswat_debuggable_locals_notify),
-                     window);
-
-    g_signal_connect(G_OBJECT(window->priv->debuggable),
-                     "notify::source-uri",
-                     G_CALLBACK(on_gswat_debuggable_source_uri_notify),
-                     window);
-
-    g_signal_connect(G_OBJECT(window->priv->debuggable),
-                     "notify::source-line",
-                     G_CALLBACK(on_gswat_debuggable_source_line_notify),
-                     window);
-
-    g_signal_connect(G_OBJECT(window->priv->debuggable),
-                     "notify::breakpoints",
-                     G_CALLBACK(on_gswat_debuggable_breakpoints_notify),
-                     window);
-
-    gswat_debuggable_target_connect(window->priv->debuggable);
+    gswat_window_set_context(self, GSWAT_WINDOW_CONTROL_FLOW_DEBUGGING_CONTEXT);
 }
 
 
 static void 
 clean_up_current_session(GSwatWindow *self)
 {
-    GList *tabs, *tmp;
-    GSwatNotebook *notebook;
-
-
-    notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_MAIN];
-    tabs = gtk_container_get_children(GTK_CONTAINER(notebook));
-    for(tmp=tabs;tmp!=NULL;tmp=tmp->next)
-    {
-        GSwatSrcViewTab *current_tab;
-
-        current_tab = 
-            g_object_get_data(G_OBJECT(tmp->data),
-                              "gswat-src-view-tab");
-        if(GSWAT_IS_SRC_VIEW_TAB(current_tab))
-        {
-            gtk_widget_destroy(GTK_WIDGET(tmp->data));
-        }
-    }
-    g_list_free(tabs);
-
-    free_current_stack_view_entries(self);
-
     if(self->priv->debuggable)
     {
         g_object_unref(self->priv->debuggable);
         self->priv->debuggable = NULL;
+        g_object_notify(G_OBJECT(self), "debuggable");
     }
 
+    if(self->priv->session)
+    {
+        g_object_unref(self->priv->session);
+    }
+    self->priv->session = NULL;
+    g_object_notify(G_OBJECT(self), "session");
+
     /* FIXME - clear all other per session data */
+}
+
+
+static void
+on_gswat_debuggable_state_notify(GObject *object,
+                                 GParamSpec *property,
+                                 gpointer data)
+{
+    GSwatWindow *self = GSWAT_WINDOW(data);
+    GSwatDebuggable *debuggable = GSWAT_DEBUGGABLE(object);
+    guint state;
+
+    state = gswat_debuggable_get_state(debuggable);
+
+    if(state == GSWAT_DEBUGGABLE_DISCONNECTED)
+    {
+        clean_up_current_session(self);
+    }
+
+    set_toolbar_state(self, state);
 
 }
+
+
 
 
 static void
@@ -939,12 +806,14 @@ on_session_quit_activate(GtkAction *action,
     gtk_main_quit();
 }
 
+
 static void
 on_edit_preferences_activate(GtkAction *action,
                              GSwatWindow *self)
 {
     gedit_show_preferences_dialog();
 }
+
 
 static void
 on_help_about_activate(GtkAction *action,
@@ -953,19 +822,22 @@ on_help_about_activate(GtkAction *action,
 
 }
 
+
 static void
 on_control_flow_debug_context_activate(GtkAction *action,
                                        GSwatWindow *self)
 {
-
+    gswat_window_set_context(self, GSWAT_WINDOW_CONTROL_FLOW_DEBUGGING_CONTEXT);
 }
+
 
 static void
 on_browse_source_context_activate(GtkAction *action,
                                   GSwatWindow *self)
 {
-
+    gswat_window_set_context(self, GSWAT_WINDOW_SOURCE_BROWSING_CONTEXT);
 }
+
 
 static void
 on_debugger_step_activate(GtkAction *action,
@@ -977,6 +849,7 @@ on_debugger_step_activate(GtkAction *action,
     }
 }
 
+
 static void
 on_debugger_next_activate(GtkAction *action,
                           GSwatWindow *self)
@@ -986,6 +859,7 @@ on_debugger_next_activate(GtkAction *action,
         gswat_debuggable_next(self->priv->debuggable);
     }
 }
+
 
 static void
 on_debugger_up_frame_activate(GtkAction *action,
@@ -997,6 +871,7 @@ on_debugger_up_frame_activate(GtkAction *action,
     }
 }
 
+
 static void
 on_debugger_continue_activate(GtkAction *action,
                               GSwatWindow *self)
@@ -1006,6 +881,7 @@ on_debugger_continue_activate(GtkAction *action,
         gswat_debuggable_continue(self->priv->debuggable);
     }
 }
+
 
 static void
 on_debugger_interrupt_activate(GtkAction *action,
@@ -1017,6 +893,7 @@ on_debugger_interrupt_activate(GtkAction *action,
     }
 }
 
+
 static void
 on_debugger_restart_activate(GtkAction *action,
                              GSwatWindow *self)
@@ -1026,6 +903,7 @@ on_debugger_restart_activate(GtkAction *action,
         gswat_debuggable_restart(self->priv->debuggable);
     }
 }
+
 
 static void
 on_debugger_add_break_activate(GtkAction *action,
@@ -1089,829 +967,6 @@ get_current_view(GSwatWindow *self)
 }
 
 
-static void
-on_gswat_debuggable_source_uri_notify(GObject *debuggable,
-                                      GParamSpec *property,
-                                      gpointer data)
-{
-    GSwatWindow *self = GSWAT_WINDOW(data);
-    update_source_view(self);
-}
-
-
-static void
-on_gswat_debuggable_source_line_notify(GObject *debuggable,
-                                       GParamSpec *property,
-                                       gpointer data)
-{
-    GSwatWindow *self = GSWAT_WINDOW(data);
-    update_source_view(self);
-}
-
-static void
-on_gswat_debuggable_breakpoints_notify(GObject *debuggable,
-                                       GParamSpec *property,
-                                       gpointer data)
-{
-    GSwatWindow *self = GSWAT_WINDOW(data);
-
-    update_line_highlights(self);
-}
-
-/* FIXME, this seems fairly heavy weight to happen every
- * time you step a single line while debugging
- */
-static void
-update_source_view(GSwatWindow *self)
-{
-    GSwatDebuggable *debuggable;
-    gchar           *file_uri;
-    gint            line;
-    GSwatNotebook   *notebook;
-    GList           *tabs, *tmp;
-    GSwatView       *gswat_view;
-    GeditDocument   *gedit_document;
-    GtkTextIter     iter;
-    GtkTextMark     *mark;
-    GSwatSrcViewTab *src_view_tab;
-
-    debuggable = self->priv->debuggable;
-    
-
-    file_uri = gswat_debuggable_get_source_uri(debuggable);
-    if(!file_uri)
-    {
-        return;
-    }
-
-    line = gswat_debuggable_get_source_line(debuggable);
-
-    g_message("gswat-window update_source_view file=%s, line=%d", file_uri, line);
-
-    /* Until we support pining/snapshoting then we only
-     * support one GSwatSrcViewTab
-     */
-
-    /* Look for the source view tab... */
-    notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_MAIN];
-    tabs = gtk_container_get_children(GTK_CONTAINER(notebook));
-    src_view_tab = NULL;
-    for(tmp=tabs; tmp!=NULL; tmp=tmp->next)
-    {
-        GSwatSrcViewTab *current_tab;
-
-        current_tab = 
-            g_object_get_data(G_OBJECT(tmp->data),
-                              "gswat-src-view-tab");
-        if(!GSWAT_IS_SRC_VIEW_TAB(current_tab))
-        {
-            continue;
-        }
-        src_view_tab = current_tab;
-    }
-    g_list_free(tabs);
-
-
-    if(src_view_tab)
-    {
-        GSwatView *gswat_view;
-        char *uri;
-
-        gswat_view = gswat_src_view_tab_get_view(src_view_tab);
-
-        gedit_document = gswat_view_get_document(gswat_view);
-        uri = gedit_document_get_uri(gedit_document);
-        if(strcmp(uri, file_uri)!=0)
-        {
-            /* When a GeditDocument finishes loading a URI or
-             * loading is canceled we get a signal and we will
-             * end up re-calling update_source_view.
-             *
-             * Therefore in both of these cases we are going to
-             * bomb out of this update early.
-             */
-            if(gedit_document_is_loading(gedit_document))
-            {
-                gedit_document_load_cancel(gedit_document);
-            }
-            else
-            {
-                const GeditEncoding *encoding;
-                encoding = gedit_document_get_encoding(gedit_document);
-                gedit_document_load(gedit_document,
-                                    file_uri,
-                                    encoding,
-                                    line,
-                                    FALSE);
-            }
-            g_free(file_uri);
-            g_free(uri);
-            g_object_unref(gswat_view);
-            return;
-        }
-        g_free(uri);
-
-        gtk_text_buffer_get_iter_at_line(GTK_TEXT_BUFFER(gedit_document),
-                                         &iter,
-                                         line);
-        mark = gtk_text_buffer_create_mark(GTK_TEXT_BUFFER(gedit_document),
-                                           NULL,
-                                           &iter,
-                                           TRUE);
-        gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(gswat_view),
-                                     mark,
-                                     0.2,
-                                     FALSE,
-                                     0.0,
-                                     0.5);
-        gtk_text_buffer_delete_mark(GTK_TEXT_BUFFER(gedit_document),
-                                    mark);
-
-        g_object_unref(gswat_view);
-    }
-    else
-    {
-        /* If we dont already have a source view tab... */
-
-        src_view_tab = gswat_src_view_tab_new(file_uri, line);
-
-        g_object_set_data(G_OBJECT(gswat_tabable_get_page_widget(src_view_tab)),
-                          "gswat-src-view-tab",
-                          src_view_tab);
-
-        gswat_notebook_insert_page(notebook,
-                                   GSWAT_TABABLE(src_view_tab),
-                                   -1,
-                                   TRUE);
-
-        gswat_view = 
-            gswat_src_view_tab_get_view(GSWAT_SRC_VIEW_TAB(src_view_tab));
-
-        gedit_document = gswat_view_get_document(gswat_view);
-        g_signal_connect(gedit_document,
-                         "loaded",
-                         G_CALLBACK(on_gedit_document_loaded),
-                         self);
-        gtk_text_buffer_get_iter_at_line(GTK_TEXT_BUFFER(gedit_document),
-                                         &iter,
-                                         line);
-        mark = gtk_text_buffer_create_mark(GTK_TEXT_BUFFER(gedit_document),
-                                           NULL,
-                                           &iter,
-                                           TRUE);
-        gtk_text_view_scroll_to_mark(GTK_TEXT_VIEW(gswat_view),
-                                     mark,
-                                     0.2,
-                                     FALSE,
-                                     0.0,
-                                     0.5);
-        gtk_text_buffer_delete_mark(GTK_TEXT_BUFFER(gedit_document),
-                                    mark);
-    }
-
-    update_line_highlights(self);
-
-    g_free(file_uri);
-
-    return;
-
-}
-
-static void
-on_gedit_document_loaded(GeditDocument *doc,
-                         const GError *error,
-                         void *data)
-{
-    GSwatWindow *self = GSWAT_WINDOW(data);
-    update_source_view(self);
-}
-
-static void
-update_line_highlights(GSwatWindow *self)
-{
-    /* request all debuggable breakpoints */
-    GList *breakpoints;
-    GSwatNotebook *notebook;
-    GList *tabs;
-    GList *tmp, *tmp2;
-    GList *highlights=NULL;
-    GSwatViewLineHighlight *highlight;
-    gchar *current_doc_uri;
-    GdkColor breakpoint_color;
-    
-    /* FIXME - this is a hugely overweight solution
-     * we shouldn't need to update the list of line
-     * highlights in every view e.g. just to effectivly
-     * update the current line highlight in the current
-     * view.
-     */
-
-    breakpoints = gswat_debuggable_get_breakpoints(self->priv->debuggable);
-
-    notebook = self->priv->notebook[GSWAT_WINDOW_CONTAINER_MAIN];
-    tabs = gtk_container_get_children(GTK_CONTAINER(notebook));
-    for(tmp=tabs;tmp!=NULL;tmp=tmp->next)
-    {
-        GSwatSrcViewTab *current_tab;
-        GSwatView *current_gswat_view;
-
-        current_tab = 
-            g_object_get_data(G_OBJECT(tmp->data),
-                              "gswat-src-view-tab");
-        if(!GSWAT_IS_SRC_VIEW_TAB(current_tab))
-        {
-            continue;
-        }
-
-        current_gswat_view = gswat_src_view_tab_get_view(current_tab);
-
-        current_doc_uri 
-            = gedit_document_get_uri(gswat_view_get_document(current_gswat_view));
-        if(!current_doc_uri)
-        {
-            g_object_unref(current_gswat_view);
-            continue;
-        }
-
-        breakpoint_color = gedit_prefs_manager_get_breakpoint_bg_color();
-
-        /* generate a list of breakpount lines to highlight in this view */
-        for(tmp2=breakpoints; tmp2 != NULL; tmp2=tmp2->next)
-        {
-            GSwatDebuggableBreakpoint *current_breakpoint;
-
-            current_breakpoint = (GSwatDebuggableBreakpoint *)tmp2->data;
-            if(strcmp(current_breakpoint->source_uri, current_doc_uri)==0)
-            {
-                highlight = g_new(GSwatViewLineHighlight, 1);
-                highlight->line = current_breakpoint->line;
-                highlight->color = breakpoint_color;
-                highlights=g_list_prepend(highlights, highlight);
-            }
-        }
-
-        /* add a line to highlight the current line */
-        if(strcmp(gswat_debuggable_get_source_uri(self->priv->debuggable),
-                  current_doc_uri) == 0)
-        {
-            highlight = g_new(GSwatViewLineHighlight, 1);
-            highlight->line = gswat_debuggable_get_source_line(self->priv->debuggable);
-            highlight->color = gedit_prefs_manager_get_current_line_bg_color();
-            /* note we currently need to append here to ensure
-             * the current line gets rendered last */
-            highlights=g_list_append(highlights, highlight);
-        }
-
-        gswat_view_set_line_highlights(current_gswat_view, highlights);
-        g_object_unref(current_gswat_view);
-
-        /* free the list */
-        for(tmp2=highlights; tmp2!=NULL; tmp2=tmp2->next)
-        {
-            g_free(tmp2->data);
-        }
-        g_list_free(highlights);
-        highlights=NULL;
-    }
-}
-
-
-static void
-on_gswat_debuggable_state_notify(GObject *object,
-                                 GParamSpec *property,
-                                 gpointer data)
-{
-    GSwatWindow *self = GSWAT_WINDOW(data);
-    GSwatDebuggable *debuggable = GSWAT_DEBUGGABLE(object);
-    guint state;
-
-    state = gswat_debuggable_get_state(debuggable);
-
-    if(state == GSWAT_DEBUGGABLE_DISCONNECTED)
-    {
-        clean_up_current_session(self);
-    }
-
-    set_toolbar_state(self, state);
-
-}
-
-
-static void
-update_variable_view(gpointer data)
-{
-    GSwatWindow *self = GSWAT_WINDOW(data);
-    GSwatDebuggable *debuggable = self->priv->debuggable;
-    GList *variables, *tmp;
-    GtkTreeStore *variable_store;
-    
-
-    variables = gswat_debuggable_get_locals_list(debuggable);
-    variable_store = self->priv->variable_store;
-
-    /* iterate the current tree store and see if there
-     * is already an entry for each variable object.
-     * If not, then add one. */
-    for(tmp=variables; tmp!=NULL; tmp=tmp->next)
-    {
-        GSwatVariableObject *variable_object = tmp->data;
-        GtkTreeIter iter;
-
-        if(search_for_variable_store_entry(variable_store,
-                                           variable_object,
-                                           &iter))
-        {
-            continue;
-        }
-
-        add_variable_object_to_tree_store(variable_object,
-                                          variable_store,
-                                          NULL);
-    }
-
-    /* Remove tree store entries that don't exist in
-     * the current list of variables */
-    prune_variable_store(variable_store, variables);
-
-    for(tmp=variables; tmp!=NULL; tmp=tmp->next)
-    {
-        g_object_unref(G_OBJECT(tmp->data));
-    }
-    g_list_free(variables);
-
-    return;
-}
-
-
-static gboolean
-search_for_variable_store_entry(GtkTreeStore *variable_store,
-                                GSwatVariableObject *variable_object,
-                                GtkTreeIter *iter)
-{
-    GSwatVariableObject *current_variable_object;
-
-    if(!gtk_tree_model_get_iter_first(GTK_TREE_MODEL(variable_store),
-                                      iter))
-    {
-        return FALSE;
-    }
-
-    do{
-        gtk_tree_model_get(GTK_TREE_MODEL(variable_store),
-                           iter,
-                           GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                           &current_variable_object,
-                           -1);
-        if(current_variable_object == variable_object)
-        {
-            g_object_unref(G_OBJECT(current_variable_object));
-            return TRUE;
-        }
-        g_object_unref(G_OBJECT(current_variable_object));
-
-    }while(gtk_tree_model_iter_next(GTK_TREE_MODEL(variable_store), iter));
-
-    return FALSE;
-}
-
-
-static void
-add_variable_object_to_tree_store(GSwatVariableObject *variable_object,
-                                  GtkTreeStore *variable_store,
-                                  GtkTreeIter *parent)
-{
-    char *expression, *value;
-    GtkTreeIter iter, child;
-    GtkTreePath *path;
-    GtkTreeRowReference *row_ref;
-    guint child_count;
-
-    if(g_object_get_data(G_OBJECT(variable_object), "gswat_tree_store")!=NULL)
-    {
-        /* FIXME - Do we really need to object to this? */
-        g_warning("add_variable_object_to_tree_store: BUG: variable "
-                  "object is already in a tree store!");
-        return;
-    }
-
-    expression = 
-        gswat_variable_object_get_expression(variable_object);
-    value = gswat_variable_object_get_value(variable_object, NULL);
-
-    gtk_tree_store_append(variable_store, &iter, parent);
-
-    gtk_tree_store_set(variable_store, &iter,
-                       GSWAT_WINDOW_VARIABLE_NAME_COL,
-                       expression,
-                       GSWAT_WINDOW_VARIABLE_VALUE_COL,
-                       value,
-                       GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                       G_OBJECT(variable_object),
-                       -1);
-    g_object_set_data(G_OBJECT(variable_object),
-                      "gswat_tree_store",
-                      variable_store);
-
-    path = gtk_tree_model_get_path(GTK_TREE_MODEL(variable_store), &iter);
-    row_ref = gtk_tree_row_reference_new(GTK_TREE_MODEL(variable_store), path);
-    gtk_tree_path_free(path);
-    g_assert(gtk_tree_row_reference_get_path(row_ref)!=NULL);
-    g_object_set_data(G_OBJECT(variable_object),
-                      "gswat_row_reference",
-                      row_ref);
-    
-    g_signal_connect(variable_object,
-                     "notify::value",
-                     G_CALLBACK(on_variable_object_value_notify),
-                     NULL
-                    );
-
-    g_signal_connect(variable_object,
-                     "notify::valid",
-                     G_CALLBACK(on_variable_object_invalidated),
-                     NULL
-                    );
-    
-    child_count = 
-        gswat_variable_object_get_child_count(variable_object);
-
-    g_signal_connect(variable_object,
-                     "notify::child-count",
-                     G_CALLBACK(on_variable_object_child_count_notify),
-                     NULL
-                    );
-    if(child_count)
-    {
-        gtk_tree_store_append(variable_store, &child, &iter);
-        gtk_tree_store_set(variable_store, &child,
-                           GSWAT_WINDOW_VARIABLE_NAME_COL,
-                           "Retrieving Children...",
-                           GSWAT_WINDOW_VARIABLE_VALUE_COL,
-                           "",
-                           GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                           NULL,
-                           -1);
-    }
-
-    g_free(expression);
-    g_free(value);
-
-}
-
-
-static void
-prune_variable_store(GtkTreeStore *variable_store,
-                     GList *variables)
-{
-    GSwatVariableObject *current_variable_object;
-    GtkTreeIter iter;
-    GList *tmp, *row_refs=NULL;
-    GtkTreePath *path;
-    GtkTreeRowReference *row_ref;
-
-    if(!gtk_tree_model_get_iter_first(GTK_TREE_MODEL(variable_store),
-                                      &iter))
-    {
-        return;
-    }
-
-    do{
-        gtk_tree_model_get(GTK_TREE_MODEL(variable_store),
-                           &iter,
-                           GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                           &current_variable_object,
-                           -1);
-
-        if(g_list_find(variables, current_variable_object))
-        {
-            g_object_unref(G_OBJECT(current_variable_object));
-            continue;
-        }
-        /* else: mark this tree store entry for removal */
-
-        path = gtk_tree_model_get_path(GTK_TREE_MODEL(variable_store), &iter);
-        row_ref = gtk_tree_row_reference_new(GTK_TREE_MODEL(variable_store), path);
-        row_refs = g_list_prepend(row_refs, row_ref);
-        gtk_tree_path_free(path);
-
-
-        row_ref = g_object_get_data(G_OBJECT(current_variable_object),
-                                    "gswat_row_reference");
-        gtk_tree_row_reference_free(row_ref);
-
-        g_object_unref(current_variable_object);
-
-    }while(gtk_tree_model_iter_next(GTK_TREE_MODEL(variable_store), &iter));
-
-    /* iterate the list of rows that need to be deleted
-     * and actually remove them
-     */
-    for(tmp=row_refs; tmp!=NULL; tmp=tmp->next)
-    {
-        row_ref = tmp->data;
-        path = gtk_tree_row_reference_get_path(row_ref);
-        g_assert(path != NULL);
-        gtk_tree_model_get_iter(GTK_TREE_MODEL(variable_store), &iter, path);
-        gtk_tree_store_remove(variable_store, &iter);
-        gtk_tree_path_free(path);
-        gtk_tree_row_reference_free(row_ref);
-    }
-    if(row_refs)
-    {
-        g_list_free(row_refs);
-    }
-
-    return;
-}
-
-
-static void
-on_variable_object_value_notify(GObject *object,
-                                GParamSpec *property,
-                                gpointer data)
-{
-    GSwatVariableObject *variable_object;
-    GtkTreeStore *store;
-    GtkTreeRowReference *row_ref;
-    GtkTreePath *path;
-    char *value;
-    GtkTreeIter iter;
-
-    variable_object = GSWAT_VARIABLE_OBJECT(object);
-    g_message("on_variable_object_updated");
-    store = g_object_get_data(object, "gswat_tree_store");
-    if(!store)
-    {
-        g_warning("on_variable_object_invalidated: no tree store for variable");
-        g_message("on_variable_object_updated 1");
-        return;
-    }
-
-    row_ref = g_object_get_data(object, "gswat_row_reference");
-    if(!row_ref)
-    {
-        g_message("on_variable_object_updated 2");
-        return;
-    }
-
-    g_message("on_variable_object_updated3");
-    value = gswat_variable_object_get_value(variable_object, NULL);
-
-    path = gtk_tree_row_reference_get_path(row_ref);
-    g_assert(path != NULL);
-    gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &iter, path);
-    gtk_tree_store_set(store, &iter,
-                       GSWAT_WINDOW_VARIABLE_VALUE_COL,
-                       value,
-                       -1);
-    g_free(value);
-}
-
-static void
-on_variable_object_invalidated(GObject *object,
-                               GParamSpec *property,
-                               gpointer data)
-{
-    GSwatVariableObject *variable_object;
-    GtkTreeStore *store;
-    GtkTreeIter iter;
-
-    variable_object = GSWAT_VARIABLE_OBJECT(object);
-    g_message("on_variable_object_invalidated");
-    store = g_object_get_data(object, "gswat_tree_store");
-    if(!store)
-    {
-        g_warning("on_variable_object_invalidated: no tree store for variable");
-        return;
-    }
-
-    if(search_for_variable_store_entry(store,
-                                       variable_object,
-                                       &iter))
-    {
-        GtkTreeRowReference *row_ref;
-
-        row_ref = g_object_get_data(G_OBJECT(variable_object),
-                                    "gswat_row_reference");
-        gtk_tree_row_reference_free(row_ref);
-
-        gtk_tree_store_remove(store, &iter);
-    }
-}
-
-
-static void
-on_variable_object_child_count_notify(GObject *object,
-                                      GParamSpec *property,
-                                      gpointer data)
-{
-    GSwatVariableObject *variable_object;
-    GtkTreeStore *store;
-    GtkTreeIter iter, child;
-    GList *tmp;
-    GList *row_refs;
-    GtkTreeRowReference *row_ref;
-    GtkTreePath *path;
-    guint child_count;
-
-
-    variable_object = GSWAT_VARIABLE_OBJECT(object);
-    g_message("on_variable_object_invalidated");
-    store = g_object_get_data(object, "gswat_tree_store");
-    if(!store)
-    {
-        g_warning("on_variable_object_child_count_notify: no tree store for variable");
-        return;
-    }
-
-    if(!search_for_variable_store_entry(store,
-                                        variable_object,
-                                        &iter))
-    {
-        return;
-    }
-
-    /* Deleting multiple rows in one go is a little tricky. We need to
-     * take row references before they are deleted */
-    row_refs = NULL;
-    if(gtk_tree_model_iter_children(GTK_TREE_MODEL(store), &child, &iter))
-    {
-        /* Get row references */
-        do
-        {
-            path = gtk_tree_model_get_path (GTK_TREE_MODEL (store), &child);
-            row_ref = gtk_tree_row_reference_new (GTK_TREE_MODEL (store), path);
-            row_refs = g_list_prepend (row_refs, row_ref);
-            gtk_tree_path_free (path);
-        }
-        while(gtk_tree_model_iter_next(GTK_TREE_MODEL (store), &child));
-    }
-
-    gtk_tree_model_get(GTK_TREE_MODEL(store),
-                       &iter,
-                       GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                       &variable_object,
-                       -1);
-    child_count = 
-        gswat_variable_object_get_child_count(variable_object);
-
-    if(child_count)
-    {
-        gtk_tree_store_append(store, &child, &iter);
-        gtk_tree_store_set(store, &child,
-                           GSWAT_WINDOW_VARIABLE_NAME_COL,
-                           "Retrieving Children...",
-                           GSWAT_WINDOW_VARIABLE_VALUE_COL,
-                           "",
-                           GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                           NULL,
-                           -1);
-    }
-
-
-    /* Delete the referenced rows */
-    for(tmp=row_refs; tmp!=NULL; tmp=tmp->next)
-    {
-        row_ref = tmp->data;
-        path = gtk_tree_row_reference_get_path(row_ref);
-        if(path)
-        {
-            gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &child, path);
-            gtk_tree_store_remove(store, &child);
-            gtk_tree_path_free(path);
-        }
-        gtk_tree_row_reference_free(row_ref);
-    }
-    if(row_refs)
-    {
-        g_list_free(row_refs);
-    }
-
-}
-
-
-static void
-on_gswat_debuggable_stack_notify(GObject *object,
-                                 GParamSpec *property,
-                                 gpointer data)
-{
-    GSwatWindow *self = GSWAT_WINDOW(data);
-    GSwatDebuggable *debuggable = GSWAT_DEBUGGABLE(object);
-    GList *tmp, *tmp2;
-    GSwatDebuggableFrameArgument *arg;
-    GtkTreeView *stack_widget=NULL;
-    GtkListStore *list_store;
-    GtkTreeIter iter;
-    GList *disp_stack = NULL;
-    
-    gswat_debuggable_stack_free(self->priv->debuggable_stack);
-    self->priv->debuggable_stack = gswat_debuggable_get_stack(debuggable);
-    
-    /* create new display strings for the stack */
-    for(tmp=self->priv->debuggable_stack->head; tmp!=NULL; tmp=tmp->next)
-    {
-        GSwatDebuggableFrame *frame;
-        GSwatWindowFrame *display_frame = g_new0(GSwatWindowFrame, 1);
-        GString *display = g_string_new("");
-        
-        frame = (GSwatDebuggableFrame *)tmp->data;
-        
-        /* note: at this point the list is in reverse,
-         * so the last in the list is our current frame
-         */
-        if(tmp->prev==NULL)
-        {
-            display = g_string_append(display, "<b>");
-            display = g_string_append(display, frame->function);
-            display = g_string_append(display, "</b>");
-        }else{
-            display = g_string_append(display, frame->function);
-        }
-        
-        display = g_string_append(display, "(");
-        
-        for(tmp2 = frame->arguments; tmp2!=NULL; tmp2=tmp2->next)
-        {
-            arg = (GSwatDebuggableFrameArgument *)tmp2->data;
-            
-            display = g_string_append(display, arg->name);
-            display = g_string_append(display, "=<b>");
-            display = g_string_append(display, arg->value);
-            display = g_string_append(display, "</b>, ");
-        }
-        
-        if(display->str[display->len-2] == ',')
-        {
-            display = g_string_truncate(display, display->len-2);
-        }
-        
-        display = g_string_append(display, ")");
-        
-        display_frame->display = display;
-        
-        disp_stack = g_list_prepend(disp_stack, display_frame);
-    }
-    disp_stack = g_list_reverse(disp_stack);
-    
-    
-    /* start displaying the new stack frames */
-    stack_widget = GTK_TREE_VIEW(self->priv->stack_view);
-
-    list_store = gtk_list_store_new(GSWAT_WINDOW_STACK_N_COLS,
-                                    G_TYPE_STRING,
-                                    G_TYPE_ULONG);
-
-    for(tmp=disp_stack; tmp!=NULL; tmp=tmp->next)
-    {
-        GSwatWindowFrame *display_frame = (GSwatWindowFrame *)tmp->data;
-
-        gtk_list_store_append(list_store, &iter);
-
-        gtk_list_store_set(list_store, &iter,
-                           GSWAT_WINDOW_STACK_FUNC_COL,
-                           display_frame->display->str,
-                           -1);
-
-    }
-
-    gtk_tree_view_set_model(stack_widget, GTK_TREE_MODEL(list_store));
-
-
-    /* free the previously displayed stack */
-    free_current_stack_view_entries(self);
-
-    self->priv->stack_list_store = list_store;
-    self->priv->display_stack=disp_stack;
-
-}
-
-
-static void
-free_current_stack_view_entries(GSwatWindow *self)
-{
-    GList *tmp;
-
-    if(self->priv->stack_list_store)
-    {
-        gtk_list_store_clear(self->priv->stack_list_store);
-        g_object_unref(self->priv->stack_list_store);
-    }
-    self->priv->stack_list_store = NULL;
-
-    /* free the previously displayed stack frames */
-    for(tmp=self->priv->display_stack; tmp!=NULL; tmp=tmp->next)
-    {
-        GSwatWindowFrame *display_frame 
-            = (GSwatWindowFrame *)tmp->data;
-
-        g_string_free(display_frame->display, TRUE);
-
-        g_free(display_frame);
-    }
-    g_list_free(self->priv->display_stack);
-    self->priv->display_stack = NULL;
-}
-
 #if 0
 static void
 on_gswat_session_edit_abort(GSwatSession *session)
@@ -1920,203 +975,6 @@ on_gswat_session_edit_abort(GSwatSession *session)
 }
 #endif
 
-static void
-on_gswat_debuggable_locals_notify(GObject *object,
-                                  GParamSpec *property,
-                                  gpointer data)
-{
-    GSwatWindow *self = GSWAT_WINDOW(data);
-    update_variable_view(self);
-}
-
-static void
-on_gswat_window_variable_view_row_expanded(GtkTreeView *view,
-                                           GtkTreeIter *iter,
-                                           GtkTreePath *iter_path,
-                                           gpointer data)
-{
-    //GSwatWindow *self = GSWAT_WINDOW(data);
-    GtkTreeStore *store;
-    GtkTreeIter expanded, child;
-    GSwatVariableObject *variable_object, *current_child;
-    GList *children, *tmp;
-    GList *row_refs;
-    GtkTreeRowReference *row_ref;
-    GtkTreePath *path;
-
-
-    store = GTK_TREE_STORE(gtk_tree_view_get_model(view));
-
-    /* Deleting multiple rows in one go is a little tricky. We need to
-     * take row references before they are deleted */
-    row_refs = NULL;
-    if(gtk_tree_model_iter_children(GTK_TREE_MODEL(store), &child, iter))
-    {
-        /* Get row references */
-        do
-        {
-            path = gtk_tree_model_get_path (GTK_TREE_MODEL (store), &child);
-            row_ref = gtk_tree_row_reference_new (GTK_TREE_MODEL (store), path);
-            row_refs = g_list_prepend (row_refs, row_ref);
-            gtk_tree_path_free (path);
-        }
-        while(gtk_tree_model_iter_next(GTK_TREE_MODEL (store), &child));
-    }
-
-    gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &expanded, iter_path);
-
-    gtk_tree_model_get(GTK_TREE_MODEL(store),
-                       &expanded,
-                       GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                       &variable_object,
-                       -1);
-
-    children=gswat_variable_object_get_children(variable_object);
-    for(tmp=children; tmp!=NULL; tmp=tmp->next)
-    {
-        current_child = (GSwatVariableObject *)tmp->data;
-
-        add_variable_object_to_tree_store(current_child,
-                                          store,
-                                          &expanded);
-        g_object_unref(G_OBJECT(current_child));
-    }
-    g_object_unref(G_OBJECT(variable_object));
-
-
-    /* Delete the referenced rows */
-    for(tmp=row_refs; tmp!=NULL; tmp=tmp->next)
-    {
-        row_ref = tmp->data;
-        path = gtk_tree_row_reference_get_path(row_ref);
-        if(path)
-        {
-            gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &child, path);
-            gtk_tree_store_remove(store, &child);
-            gtk_tree_path_free(path);
-        }
-        gtk_tree_row_reference_free(row_ref);
-    }
-    if(row_refs)
-    {
-        g_list_free(row_refs);
-    }
-
-}
-
-static void
-on_gswat_window_variable_view_row_collapsed(GtkTreeView *view,
-                                            GtkTreeIter *iter,
-                                            GtkTreePath *iter_path,
-                                            gpointer data)
-{
-    GtkTreeStore *store;
-    GtkTreeIter collapsed, child;
-    GSwatVariableObject *variable_object;
-    GList *row_refs;
-    GtkTreeRowReference *row_ref;
-    GtkTreePath *path;
-    guint child_count;
-    GList *tmp;
-
-    store = GTK_TREE_STORE(gtk_tree_view_get_model(view));
-
-
-    /* Deleting multiple rows in one go is a little tricky. We need to
-     * take row references before they are deleted */
-    row_refs = NULL;
-    if(gtk_tree_model_iter_children(GTK_TREE_MODEL(store), &child, iter))
-    {
-        /* Get row references */
-        do
-        {
-            path = gtk_tree_model_get_path (GTK_TREE_MODEL (store), &child);
-            row_ref = gtk_tree_row_reference_new (GTK_TREE_MODEL (store), path);
-            row_refs = g_list_prepend (row_refs, row_ref);
-            gtk_tree_path_free (path);
-        }
-        while(gtk_tree_model_iter_next(GTK_TREE_MODEL (store), &child));
-    }
-
-    gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &collapsed, iter_path);
-
-    gtk_tree_model_get(GTK_TREE_MODEL(store),
-                       &collapsed,
-                       GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                       &variable_object,
-                       -1);
-    child_count = 
-        gswat_variable_object_get_child_count(variable_object);
-
-    if(child_count)
-    {
-        gtk_tree_store_append(store, &child, &collapsed);
-        gtk_tree_store_set(store, &child,
-                           GSWAT_WINDOW_VARIABLE_NAME_COL,
-                           "Retrieving Children...",
-                           GSWAT_WINDOW_VARIABLE_VALUE_COL,
-                           "",
-                           GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                           NULL,
-                           -1);
-    }
-
-
-    /* Delete the referenced rows */
-    for(tmp=row_refs; tmp!=NULL; tmp=tmp->next)
-    {
-        row_ref = tmp->data;
-        path = gtk_tree_row_reference_get_path(row_ref);
-        if(path)
-        {
-            gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &child, path);
-            
-#if 0
-            /* DEBUG: so you can inspect the iterated variables
-             * in a debugger */
-            gtk_tree_model_get(GTK_TREE_MODEL(store),
-                               &child,
-                               GSWAT_WINDOW_VARIABLE_OBJECT_COL,
-                               &variable_object,
-                               -1);
-            g_object_unref(variable_object);
-#endif
-
-            gtk_tree_store_remove(store, &child);
-            gtk_tree_path_free(path);
-        }
-        gtk_tree_row_reference_free(row_ref);
-    }
-    if(row_refs)
-    {
-        g_list_free(row_refs);
-    }
-}
-
-
-static void
-on_gswat_window_stack_frame_activated(GtkTreeView *tree_view,
-                                      GtkTreePath *path,
-                                      GtkTreeViewColumn *column,
-                                      gpointer data)
-{
-    gint path_depth;
-    gint *indices;
-    GSwatWindow *self = GSWAT_WINDOW(data);
-    GSwatDebuggableFrame *frame;
-    
-    path_depth = gtk_tree_path_get_depth(path);
-    g_return_if_fail(path_depth == 1);
-
-    indices = gtk_tree_path_get_indices(path);
-    frame = g_queue_peek_nth(self->priv->debuggable_stack, indices[0]);
-    g_return_if_fail(frame != NULL);
-    g_return_if_fail(frame->level == indices[0]);
-
-    gswat_debuggable_set_frame(GSWAT_DEBUGGABLE(self->priv->debuggable),
-                                                frame->level);
-    
-}
 
 static gboolean
 on_window_delete_event(GtkWidget *win,
@@ -2126,5 +984,92 @@ on_window_delete_event(GtkWidget *win,
     gtk_main_quit();
 
     return TRUE;
+}
+
+
+gboolean
+gswat_window_set_context(GSwatWindow *self, GSwatWindowContainerID context_id)
+{
+    GSwatWindowContainerID prev_id;
+    gboolean success;
+
+    prev_id = self->priv->current_context_id;
+    success = gswat_context_activate(self->priv->context[context_id]);
+
+    if(success)
+    {
+        if(self->priv->current_context_id != prev_id)
+        {
+            if(prev_id != -1)
+            {
+                gswat_context_deactivate(self->priv->context[prev_id]);
+            }
+            g_object_notify(G_OBJECT(self), "context-id");
+        }
+    }
+
+    return success;
+}
+
+
+GSwatDebuggable *
+gswat_window_get_debuggable(GSwatWindow *self)
+{
+    if(self->priv->debuggable)
+    {
+        g_object_ref(G_OBJECT(self->priv->debuggable));
+        return self->priv->debuggable;
+    }
+    else
+    {
+        return NULL;
+    }
+}
+
+
+GtkContainer *
+gswat_window_get_container(GSwatWindow *self, GSwatWindowContainerID container_id)
+{
+    if(container_id >= GSWAT_WINDOW_CONTAINER_COUNT)
+    {
+        g_warning("%s: Invalid container id (%d)", __FUNCTION__, container_id);
+        return NULL;
+    }
+
+    return GTK_CONTAINER(self->priv->notebook[container_id]);
+}
+
+
+GSwatWindowContextID
+gswat_window_get_context_id(GSwatWindow *self)
+{
+    g_assert(self->priv->current_context_id != -1);
+
+    return self->priv->current_context_id;
+}
+
+
+void
+gswat_window_insert_widget(GSwatWindow *self,
+                           GtkWidget *widget,
+                           GSwatWindowContainerID container_id)
+{
+    GtkNotebook *notebook;
+    notebook = GTK_NOTEBOOK(self->priv->notebook[container_id]);
+    gtk_notebook_insert_page(notebook, widget, NULL, -1);
+}
+
+void
+gswat_window_insert_tabable(GSwatWindow *self,
+                            GSwatTabable *tabable,
+                            GSwatWindowContainerID container_id)
+{
+    g_assert(GSWAT_IS_TABABLE(tabable));
+
+    GSwatNotebook *notebook = self->priv->notebook[container_id];
+    gswat_notebook_insert_page(notebook,
+                               tabable,
+                               -1,
+                               TRUE);
 }
 
