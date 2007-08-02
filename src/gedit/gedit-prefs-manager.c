@@ -299,7 +299,7 @@ gedit_prefs_manager_key_is_writable (const gchar* key)
 }
 
 static gchar* 
-gdk_color_to_string (GdkColor color)
+gdk_color_to_string_compat (GdkColor color)
 {
 	gedit_debug (DEBUG_PREFS);
 
@@ -349,7 +349,7 @@ gconf_client_set_color (GConfClient* client, const gchar* key,
 	g_return_val_if_fail (GCONF_IS_CLIENT (client), FALSE);  
 	g_return_val_if_fail (key != NULL, FALSE);
 
-	str_color = gdk_color_to_string (val);
+	str_color = gdk_color_to_string_compat (val);
 	g_return_val_if_fail (str_color != NULL, FALSE);
 
 	res = gconf_client_set_string (client,

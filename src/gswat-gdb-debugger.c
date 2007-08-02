@@ -614,7 +614,9 @@ start_spawner_process(GSwatGdbDebugger *self)
     mkfifo(fifo1_name, S_IRUSR|S_IWUSR);
 
 
-    terminal_command = g_strdup_printf("gnome-terminal -x gswat-spawner --read-fifo %s --write-fifo %s",
+    terminal_command = g_strdup_printf("gnome-terminal -x " 
+                                        GSWAT_BIN_DIR 
+                                        "/gswat-spawner --read-fifo %s --write-fifo %s",
                                        fifo1_name,
                                        fifo0_name);
 
