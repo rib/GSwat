@@ -30,8 +30,9 @@
 #include <sys/ptrace.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <string.h>
 
-#include <gnome.h>
+#include <glib.h>
 
 #include "gswat-spawn.h"
 

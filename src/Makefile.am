@@ -1,14 +1,19 @@
 
 bin_PROGRAMS = gswat gswat-spawner
+lib_LTLIBRARIES = libgswat-@GSWAT_API_VERSION@.la
 
+#TODO I think gswat-session.c should
+# probably be moved out of the core
+GSWAT_CORE_SOURCES = \
+			gswat-debuggable.c \
+			gswat-variable-object.c \
+			gswat-gdb-debugger.c \
+			gswat-gdb-variable-object.c \
+			gswat-gdbmi.c \
+			gswat-session.c
 
-GSWAT_SOURCES = main.c \
+GSWAT_UI_SOURCES = main.c \
 		gswat-window.c \
-		gswat-session.c \
-		gswat-debuggable.c \
-		gswat-variable-object.c \
-		gswat-gdb-debugger.c \
-		gswat-gdb-variable-object.c \
 		gswat-tabable.c \
 		gswat-notebook.c \
 		gswat-src-view-tab.c \
@@ -17,8 +22,7 @@ GSWAT_SOURCES = main.c \
 		gswat-control-flow-debugging-context.c \
 		gswat-source-browsing-context.c \
 		gswat-in-limbo-context.c \
-		sexy-icon-entry.c \
-		gswat-gdbmi.c
+		sexy-icon-entry.c
 
 
 BUILT_SOURCES = gedit/gedit-marshal.c \
@@ -65,15 +69,16 @@ RHYTHMBOX_SOURCES = \
 	rhythmbox/rb-file-helpers.h
 
 gswat_SOURCES = \
-	$(GSWAT_SOURCES) \
+	$(GSWAT_CORE_SOURCES) \
+	$(GSWAT_UI_SOURCES) \
 	$(GEDIT_SOURCES) \
 	$(DIALOG_SOURCES) \
 	$(RHYTHMBOX_SOURCES)
 
 		
-gswat_LDADD = @DEPS_LIBS@
+gswat_LDADD = @GSWAT_UI_DEP_LIBS@
 gswat_LDFLAGS = -export-dynamic
-gswat_CFLAGS = @EXTRA_CFLAGS@ @DEPS_CFLAGS@
+gswat_CFLAGS = @EXTRA_CFLAGS@ @GSWAT_UI_DEP_CFLAGS@
 gswat_CPPFLAGS = -DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"	\
 	   	 		 -DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
 				 -DGNOME_ICONDIR=\""$(datadir)/pixmaps"\" 		\
@@ -86,9 +91,40 @@ gswat_CPPFLAGS = -DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"	\
 		 		 -I$(top_srcdir)/src/rhythmbox					\
 	   	 		 @EXTRA_CPPFLAGS@
 
+libgswat_@GSWAT_API_VERSION@_la_SOURCES = \
+	$(GSWAT_CORE_SOURCES)
+
+libgswat_@GSWAT_API_VERSION@_la_LIBADD = @LIBGSWAT_DEP_LIBS@
+libgswat_@GSWAT_API_VERSION@_la_LDFLAGS = -no-undefined
+libgswat_@GSWAT_API_VERSION@_la_CFLAGS = @LIBGSWAT_DEP_CFLAGS@
+# TODO once we seperate out the ui code from gswat-session.c then
+# lots of these defines can go away.
+libgswat_@GSWAT_API_VERSION@_la_CPPFLAGS = \
+				 -DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"	\
+	   	 		 -DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
+				 -DGNOME_ICONDIR=\""$(datadir)/pixmaps"\" 		\
+				 -DSHARE_DIR=\"$(pkgdatadir)\"                  \
+				 -DGSWAT_LOCALEDIR=\""$(gswatlocaledir)"\"		\
+				 -DGSWAT_BIN_DIR=\""$(bindir)"\"	\
+		 		 -I$(top_srcdir)								\
+		 		 -I$(top_srcdir)/src							\
+		 		 -I$(top_srcdir)/src/gedit						\
+		 		 -I$(top_srcdir)/src/rhythmbox					\
+	   	 		 @EXTRA_CPPFLAGS@
+libgswat_@GSWAT_API_VERSION@_la_includedir = $(includedir)/gswat-@GSWAT_MAJOR_VERSION@.0
+libgswat_@GSWAT_API_VERSION@_la_include_HEADERS = \
+		gswat.h \
+		gswat-debuggable.h \
+		gswat-variable-object.h \
+		gswat-gdb-debugger.h \
+		gswat-gdb-variable-object.h \
+		gswat-gdbmi.h \
+		gswat-session.h
+
+
 gswat_spawner_SOURCES = gswat-spawn.c
-gswat_spawner_LDADD = @DEPS_LIBS@
-gswat_spawner_CFLAGS = @EXTRA_CFLAGS@ @DEPS_CFLAGS@
+gswat_spawner_LDADD = @GSWAT_SPAWNER_DEP_LIBS@
+gswat_spawner_CFLAGS = @EXTRA_CFLAGS@ @GSWAT_SPAWNER_DEP_CFLAGS@
 gswat_spawner_CPPFLAGS = @EXTRA_CPPFLAGS@
 
 

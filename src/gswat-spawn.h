@@ -25,7 +25,7 @@
 #ifndef _GSWAT_SPAWN_PROCESS_HEADER
 #define _GSWAT_SPAWN_PROCESS_HEADER
 
-#include <gnome.h>
+#include <glib.h>
 
 //void gswat_spawn_process(gchar *rfifo, gchar *wfifo);
 

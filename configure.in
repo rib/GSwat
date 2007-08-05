@@ -1,17 +1,112 @@
 dnl Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT(gswat, 0.0.0)
+
+dnl ================================================================
+dnl Version number definitions
+dnl ================================================================
+#Note these macros were nabbed from glib and I don't fully understand
+# them! I tried to reference the libtool docs and as you can tell from
+# my comments below I could not make much sense of it all. (Any help
+# would be appreciated :-)
+# 
+#adapted from the libtool info pages:
+#  1. Update the version information only immediately before a public
+#     release of your software.  More frequent updates are unnecessary,
+#     and only guarantee that the current interface number gets larger
+#     faster.
+#
+#  2. If the library source code has changed at all since the last
+#     update, then increment REVISION (`C:R:A' becomes `C:r+1:A').
+#     (Where REVISION=gswat_interface_age)
+#
+#  3. If any interfaces have been added, removed, or changed since the
+#     last update, increment CURRENT, and set REVISION to 0.
+#     (Where CURRENT=gswat_lt_current which is calculated as
+#      100*gswat_minor_version + gswat_micro_version - gswat_interface_age
+#        Note: I don't understand why gswat_interface_age is subtracted
+#        from gswat_lt_current, but that's what glib + gtk do so I left
+#        it there.)
+#
+#  4. If any interfaces have been added since the last public release,
+#     then increment AGE.
+#     (Where AGE=(gswat_binary_age - gswat_interface_age) and gswat_binary_age
+#      is calculated as:
+#      100*gswat_minor_version + gswat_micro_version.
+#         Note: It looks to me that ABE also effectlivly = gswat_lt_current which
+#         seems to imply continual backwards compatability since you can't
+#         zero AGE as required by point 5 below when you remove an
+#         interface.
+#
+#  5. If any interfaces have been removed since the last public release,
+#     then set AGE to 0.
+#     (Using these glib macros, it looks like you can't do this)
+#
+m4_define([gswat_major_version], [0])
+m4_define([gswat_minor_version], [1])
+m4_define([gswat_micro_version], [0])
+m4_define([gswat_interface_age], [0])
+m4_define([gswat_binary_age],
+          [m4_eval(100 * gswat_minor_version + gswat_micro_version)])
+m4_define([gswat_version],
+          [gswat_major_version.gswat_minor_version.gswat_micro_version])
+m4_define([gswat_api_version],
+          [gswat_major_version.gswat_minor_version])
+
+# libtool version related macros
+m4_define([gswat_lt_release], [gswat_major_version.gswat_minor_version])
+m4_define([gswat_lt_current],
+          [m4_eval(100 * gswat_minor_version + gswat_micro_version - gswat_interface_age)])
+m4_define([gswat_lt_revision], [gswat_interface_age])
+m4_define([gswat_lt_age], [m4_eval(gswat_binary_age - gswat_interface_age)])
+m4_define([gswat_lt_current_minus_age],
+          [m4_eval(gswat_lt_current - gswat_lt_age)])
+
+
+AC_INIT(gswat, [gswat_version])
 AC_CONFIG_SRCDIR(src/main.c)
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_HEADERS(config.h)
 AM_INIT_AUTOMAKE([gnu])
 
+
+dnl ================================================================
+dnl More version number stuff
+dnl ================================================================
+GSWAT_MAJOR_VERSION=gswat_major_version
+GSWAT_MINOR_VERSION=gswat_minor_version
+GSWAT_MICRO_VERSION=gswat_micro_version
+GSWAT_INTERFACE_AGE=gswat_interface_age
+GSWAT_BINARY_AGE=gswat_binary_age
+GSWAT_VERSION=gswat_version
+GSWAT_API_VERSION=gswat_api_version
+
+AC_SUBST(GSWAT_MAJOR_VERSION)
+AC_SUBST(GSWAT_MINOR_VERSION)
+AC_SUBST(GSWAT_MICRO_VERSION)
+AC_SUBST(GSWAT_VERSION)
+AC_SUBST(GSWAT_INTERFACE_AGE)
+AC_SUBST(GSWAT_BINARY_AGE)
+AC_SUBST(GSWAT_API_VERSION)
+
+
+dnl ================================================================
+dnl libtool versioning
+dnl ================================================================
+LT_RELEASE=gswat_lt_release
+LT_CURRENT=gswat_lt_current
+LT_REVISION=gswat_lt_revision
+LT_AGE=gswat_lt_age
+LT_CURRENT_MINUS_AGE=gswat_lt_current_minus_age
+AC_SUBST(LT_RELEASE)
+AC_SUBST(LT_CURRENT)
+AC_SUBST(LT_REVISION)
+AC_SUBST(LT_AGE)
+AC_SUBST(LT_CURRENT_MINUS_AGE)
+
+
 AM_MAINTAINER_MODE
 
-
-dnl make sure we keep ACLOCAL_FLAGS around for maintainer builds to work
-dnl AC_SUBST(ACLOCAL_AMFLAGS, "$ACLOCAL_FLAGS -I m4")
 
 
 dnl ================================================================
@@ -112,7 +207,18 @@ GNOME_DOC_INIT
 dnl ================================================================
 dnl Check for dependency packages.
 dnl ================================================================
-PKG_CHECK_MODULES(DEPS, [
+#TODO once we have seperated out the gui code for gswat-session.c
+# we will be able to remove most of these deps.
+PKG_CHECK_MODULES(LIBGSWAT_DEP, [
+		  gtksourceview-1.0 >= 1.2.0 
+		  libgnomeui-2.0
+		  libgnomeprintui-2.2
+		  gtk+-2.0 >= 2.2 
+		  glib-2.0 >= 2.2 
+		  libglade-2.0 >= 2.0 
+		  gthread-2.0
+])
+PKG_CHECK_MODULES(GSWAT_UI_DEP, [
 		  gtksourceview-1.0 >= 1.2.0
 		  libgnomeui-2.0
 		  libgnomeprintui-2.2
@@ -120,6 +226,9 @@ PKG_CHECK_MODULES(DEPS, [
 		  glib-2.0 >= 2.2 
 		  libglade-2.0 >= 2.0 
 		  gthread-2.0
+])
+PKG_CHECK_MODULES(GSWAT_SPAWNER_DEP, [
+		  glib-2.0 >= 2.2 
 ])
 
 
@@ -150,8 +259,12 @@ dnl What needs to be substituted in other files
 dnl ================================================================
 AC_SUBST(EXTRA_CFLAGS)
 AC_SUBST(EXTRA_CPPFLAGS)
-AC_SUBST(DEPS_CFLAGS)
-AC_SUBST(DEPS_LIBS)
+AC_SUBST(LIBGSWAT_DEP_CFLAGS)
+AC_SUBST(LIBGSWAT_DEP_LIBS)
+AC_SUBST(GSWAT_UI_DEP_CFLAGS)
+AC_SUBST(GSWAT_UI_DEP_LIBS)
+AC_SUBST(GSWAT_SPAWNER_DEP_LIBS)
+AC_SUBST(GSWAT_SPAWNER_DEP_CFLAGS)
 
 
 dnl ================================================================
@@ -161,5 +274,6 @@ AC_OUTPUT(
 Makefile 
 src/Makefile
 po/Makefile.in
+gswat-0.1.pc
 )
 
