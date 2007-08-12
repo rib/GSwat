@@ -112,16 +112,37 @@ main(int argc, char **argv)
     /* First we see if the user has described a new session
      * on the command line
      */
-    if(pid != -1 || remaining_args != NULL)
+    if(pid != -1)
     {
+        gchar *target;
+        if(!remaining_args)
+        {
+            g_message("%s",
+                      g_option_context_get_help(option_context, TRUE, NULL));
+            exit(1);
+        }
         session = gswat_session_new();
-        gswat_session_set_pid(session, pid);
-        
-        /* fixme support parsing arguments to a program
-         * on the command line
-         */
-        gswat_session_set_command(session, remaining_args[0]);
+        gswat_session_set_target_type(session, "PID Local");
+        target=g_strdup_printf("pid=%d file=%s", pid, remaining_args[0]);
+        gswat_session_set_target(session, target);
+        g_free(target);
     }
+    else if(remaining_args != NULL)
+    {
+        int i;
+        GString *target;
+        session = gswat_session_new();
+        gswat_session_set_target_type(session, "Run Local");
+        target = g_string_new(remaining_args[0]);
+        for(i=1; remaining_args[i] != NULL; i++)
+        {
+            g_string_append_printf(target, " %s",
+                                   g_shell_quote(remaining_args[i]));
+        }
+        gswat_session_set_target(session, target->str);
+        g_string_free(target, TRUE);
+    }
+    
     
     rb_file_helpers_init();
 

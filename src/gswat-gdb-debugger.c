@@ -176,10 +176,13 @@ static void gswat_gdb_debugger_debuggable_interface_init(gpointer interface,
 static void gswat_gdb_debugger_init(GSwatGdbDebugger *self);
 static void gswat_gdb_debugger_finalize(GObject *self);
 
+
+static gboolean gswat_gdb_debugger_target_connect(GSwatDebuggable* object, GError **error);
+static void gswat_gdb_debugger_target_disconnect(GSwatDebuggable* object);
+
 static gboolean start_spawner_process(GSwatGdbDebugger *self);
 
-
-static void spawn_local_process(GSwatGdbDebugger *self);
+static gboolean spawn_local_process(GSwatGdbDebugger *self, GError **error);
 static gboolean gdb_stdout_watcher(GIOChannel* io,
                                    GIOCondition cond,
                                    gpointer data);
@@ -198,8 +201,7 @@ static void process_gdb_pending(GSwatGdbDebugger *self);
 static void process_gdb_output_record(GSwatGdbDebugger *self,
                                       GdbPendingRecord *record);
 
-static GSwatGdbMIRecordType 
-gdb_mi_get_result_record_type(GString *record_str);
+static GSwatGdbMIRecordType gdb_mi_get_result_record_type(GString *record_str);
 static void process_gdb_mi_result_record(GSwatGdbDebugger *self,
                                          gulong token,
                                          GString *record_str);
@@ -245,10 +247,27 @@ static void basic_runner_mi_callback(GSwatGdbDebugger *self,
 static void break_insert_mi_callback(GSwatGdbDebugger *self,
                                      const GSwatGdbMIRecord *record,
                                      void *data);
-static void
-restart_running_mi_callback(GSwatGdbDebugger *self,
-                            const GSwatGdbMIRecord *record,
-                            void *data);
+
+static void gswat_gdb_debugger_request_line_breakpoint(GSwatDebuggable* object,
+                                                gchar *uri,
+                                                guint line);
+static void gswat_gdb_debugger_request_function_breakpoint(GSwatDebuggable* object,
+                                                           gchar *symbol);
+static void gswat_gdb_debugger_continue(GSwatDebuggable* object);
+static void gswat_gdb_debugger_finish(GSwatDebuggable* object);
+static void gswat_gdb_debugger_step_into(GSwatDebuggable* object);
+static void gswat_gdb_debugger_next(GSwatDebuggable* object);
+static void gswat_gdb_debugger_interrupt(GSwatDebuggable* object);
+static void gswat_gdb_debugger_restart(GSwatDebuggable* object);
+static void restart_running_mi_callback(GSwatGdbDebugger *self,
+                                        const GSwatGdbMIRecord *record,
+                                        void *data);
+static gchar *gswat_gdb_debugger_get_source_uri(GSwatDebuggable* object);
+static gint gswat_gdb_debugger_get_source_line(GSwatDebuggable* object);
+static guint gswat_gdb_debugger_get_state(GSwatDebuggable* object);
+static GQueue *gswat_gdb_debugger_get_stack(GSwatDebuggable* object);
+static GList *gswat_gdb_debugger_get_breakpoints(GSwatDebuggable* object);
+static GList *gswat_gdb_debugger_get_locals_list(GSwatDebuggable* object);
 static void synchronous_update_locals_list(GSwatGdbDebugger *self);
 static guint gdb_debugger_get_frame(GSwatDebuggable* object);
 static void gdb_debugger_set_frame(GSwatDebuggable* object, guint frame);
@@ -571,6 +590,17 @@ gswat_gdb_debugger_finalize(GObject *object)
 }
 
 
+GQuark
+gswat_gdb_debugger_error_quark(void)
+{
+    static GQuark q = 0;
+    if(q==0)
+    {
+        q = g_quark_from_static_string("gswat-gdb-debugger-error");
+    }
+    return q;
+}
+
 
 /* add new methods here */
 
@@ -690,54 +720,75 @@ start_spawner_process(GSwatGdbDebugger *self)
 static void
 stop_spawner_process(GSwatGdbDebugger *self)
 {
-    kill(self->priv->spawner_pid, SIGKILL);
+    if(self->priv->spawner_pid > 0)
+    {
+        kill(self->priv->spawner_pid, SIGKILL);
+    }
 
-    g_io_channel_shutdown(self->priv->spawn_read_fifo, FALSE, NULL);
-    g_io_channel_shutdown(self->priv->spawn_write_fifo, FALSE, NULL);
-    g_io_channel_unref(self->priv->spawn_read_fifo);
-    g_io_channel_unref(self->priv->spawn_write_fifo);
+    if(self->priv->spawn_read_fifo)
+    {
+        g_io_channel_shutdown(self->priv->spawn_read_fifo, FALSE, NULL);
+    }
+    if(self->priv->spawn_write_fifo)
+    {
+        g_io_channel_shutdown(self->priv->spawn_write_fifo, FALSE, NULL);
+    }
+    if(self->priv->spawn_read_fifo)
+    {
+        g_io_channel_unref(self->priv->spawn_read_fifo);
+    }
+    if(self->priv->spawn_write_fifo)
+    {
+        g_io_channel_unref(self->priv->spawn_write_fifo);
+    }
 
-    close(self->priv->spawn_read_fifo_fd);
-    close(self->priv->spawn_write_fifo_fd);
+    if(self->priv->spawn_read_fifo_fd)
+    {
+        close(self->priv->spawn_read_fifo_fd);
+    }
+    if(self->priv->spawn_write_fifo_fd)
+    {
+        close(self->priv->spawn_write_fifo_fd);
+    }
 
     self->priv->target_pid = -1;
 }
 
+
 /* Connect to the target as appropriate for the session */
-void
-gswat_gdb_debugger_target_connect(GSwatDebuggable* object)
+gboolean
+gswat_gdb_debugger_target_connect(GSwatDebuggable* object, GError **error)
 {
     GSwatGdbDebugger *self;
-    GError  * error = NULL;
-    gchar *gdb_argv[] = {
-        "gdb", "--interpreter=mi", NULL
-    };
-    gint fd_in, fd_out, fd_err;
-    const gchar *charset;
-    gboolean  retval;
-    const gchar *user_command;
-    gint user_argc;
-    gchar **user_argv;
+    gchar *target_type;
 
-    g_return_if_fail(GSWAT_IS_GDB_DEBUGGER(object));
+    g_return_val_if_fail(GSWAT_IS_GDB_DEBUGGER(object), FALSE);
     self = GSWAT_GDB_DEBUGGER(object);
 
-    /* Currently we assume a local gdb session */
+    target_type = gswat_session_get_target_type(self->priv->session);
+    if(strcmp(target_type, "Run Local") == 0)
+    {
+        GError  *tmp_error = NULL;
+        gchar *gdb_argv[] = {
+            "gdb", "--interpreter=mi", NULL
+        };
+        gint fd_in, fd_out, fd_err;
+        const gchar *charset;
+        gboolean  retval;
+        
+        retval = g_spawn_async_with_pipes(NULL, gdb_argv, NULL,
+                                          G_SPAWN_SEARCH_PATH,
+                                          NULL, NULL,
+                                          &self->priv->gdb_pid, &fd_in,
+                                          &fd_out, &fd_err,
+                                          &tmp_error);
+        if(!retval) {
+            g_warning("%s: %s", _("Could not start GDB"), tmp_error->message);
+            g_propagate_error(error, tmp_error);
+            g_free(target_type);
+            return FALSE;
+        }
 
-    retval = g_spawn_async_with_pipes(NULL, gdb_argv, NULL,
-                                      G_SPAWN_SEARCH_PATH,
-                                      NULL, NULL,
-                                      &self->priv->gdb_pid, &fd_in,
-                                      &fd_out, &fd_err,
-                                      &error);
-
-    if(error) {
-        g_warning("%s: %s", _("Could not start debugger"), error->message);
-        g_error_free(error);
-        error = NULL;
-    } else if(!retval) {
-        g_warning("%s", _("Could not start debugger"));
-    } else {
         // everything went fine
         self->priv->gdb_in  = g_io_channel_unix_new(fd_in);
         self->priv->gdb_out = g_io_channel_unix_new(fd_out);
@@ -750,10 +801,6 @@ gswat_gdb_debugger_target_connect(GSwatDebuggable* object)
         g_io_channel_set_encoding(self->priv->gdb_out, charset, NULL);
         g_io_channel_set_encoding(self->priv->gdb_err, charset, NULL);
 
-        //g_io_channel_set_flags(self->priv->gdb_in, G_IO_FLAG_NONBLOCK, NULL);
-        //g_io_channel_set_flags(self->priv->gdb_out, G_IO_FLAG_NONBLOCK, NULL);
-        //g_io_channel_set_flags(self->priv->gdb_err, G_IO_FLAG_NONBLOCK, NULL);
-
         self->priv->gdb_out_event = 
             g_io_add_watch(self->priv->gdb_out,
                            G_IO_IN,
@@ -764,17 +811,42 @@ gswat_gdb_debugger_target_connect(GSwatDebuggable* object)
                            G_IO_IN,
                            (GIOFunc)gdb_stderr_watcher,
                            self);
+
+        /* Note we set this immediatly so that spawn_local_process can
+         * e.g. use gswat_gdb_debugger_send_mi_command */
+        self->priv->gdb_connected = TRUE;
+
+        /* assume this session is for debugging a local file */
+        if(!spawn_local_process(self, &tmp_error))
+        {
+            /* FIXME - re-work gswat_gdb_debugger_target_disconnect a bit
+             * so we can re-use code for cleaning up neatly here!
+             * This is a bit of a hack.
+             */
+            self->priv->state=GSWAT_DEBUGGABLE_INTERRUPTED;
+            gswat_gdb_debugger_target_disconnect(GSWAT_DEBUGGABLE(self));
+            g_propagate_error(error, tmp_error);
+            g_free(target_type);
+            return FALSE;
+        }
     }
-
-    user_command = gswat_session_get_command(GSWAT_SESSION(self->priv->session),
-                                             &user_argc,
-                                             &user_argv);
-
-    self->priv->gdb_connected = TRUE;
-
-    /* assume this session is for debugging a local file */
-    spawn_local_process(self);
-
+    else
+    {
+        g_warning("GSwat GDB Debugger backend doesn't"
+                  " support a target type of \"%s\"",
+                  target_type);
+        g_set_error(error,
+                    GSWAT_DEBUGGABLE_ERROR,
+                    GSWAT_DEBUGGABLE_ERROR_TARGET_CONNECT_FAILED,
+                    "GSwat GDB Debugger backend doesn't"
+                    " support a target type of \"%s\"",
+                    target_type);
+        g_free(target_type);
+        return FALSE;
+    }
+    g_free(target_type);
+    
+    return TRUE;
 }
 
 
@@ -856,6 +928,7 @@ gswat_gdb_debugger_target_disconnect(GSwatDebuggable* object)
 
     de_queue_idle_process_gdb_pending(self);
 
+    
     self->priv->state = GSWAT_DEBUGGABLE_DISCONNECTED;
     g_object_notify(G_OBJECT(self), "state");
 }
@@ -873,66 +946,106 @@ gswat_gdb_debugger_nop_mi_callback(GSwatGdbDebugger *self,
 }
 
 
-static void
-spawn_local_process(GSwatGdbDebugger *self)
+static gboolean
+spawn_local_process(GSwatGdbDebugger *self, GError **error)
 {
     gchar **argv;
     GString *fifo_data;
-
+    GIOStatus status;
     gsize written;
     gchar *cwd;
     gchar *command;
     gchar *gdb_command;
 
-
+    g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
     fifo_data = g_string_new("");
 
     /* wait for ACK */
-    g_io_channel_read_line_string(self->priv->spawn_read_fifo,
+    status = g_io_channel_read_line_string(self->priv->spawn_read_fifo,
                                   fifo_data,
                                   NULL,
-                                  NULL);
-
+                                  error);
+    if(status != G_IO_STATUS_NORMAL)
+    {
+        goto spawner_process_io_channel_problem;
+    }
+    
     if(strcmp(fifo_data->str, "ACK\n") != 0)
     {
-        g_critical("Didn't get an expected \"ACK\" from target fifo\n");
+        g_message("Didn't get a response from the spawner process\n");
+        g_set_error(error,
+                    GSWAT_GDB_DEBUGGER_ERROR,
+                    GSWAT_GDB_DEBUGGER_ERROR_SPAWNER_PROCESS_IO,
+                    _("Didn't get a response from the spawner process"));
+        g_string_free(fifo_data, TRUE);
+        return FALSE;
+    }
+    
+    command = gswat_session_get_target(self->priv->session);
+    if(!g_shell_parse_argv(command, NULL, &argv, error))
+    {
+        g_warning("%s", "Failed to parse command arguments");
+        g_string_free(fifo_data, TRUE);
+        return FALSE;
     }
 
-
-    command = gswat_session_get_command(self->priv->session, NULL, &argv);
     g_string_printf(fifo_data, "%s\n", command);
     g_free(command);
-
+    
     /* Send the command to run */
-    g_io_channel_write_chars(self->priv->spawn_write_fifo,
-                             fifo_data->str,
-                             fifo_data->len,
-                             &written,
-                             NULL);
-    g_io_channel_flush(self->priv->spawn_write_fifo, NULL);
+    status = g_io_channel_write_chars(self->priv->spawn_write_fifo,
+                                      fifo_data->str,
+                                      fifo_data->len,
+                                      &written,
+                                      error);
+    if(status != G_IO_STATUS_NORMAL)
+    {
+        goto spawner_process_io_channel_problem;
+    }
+    status = g_io_channel_flush(self->priv->spawn_write_fifo, error);
+    if(status != G_IO_STATUS_NORMAL)
+    {
+        goto spawner_process_io_channel_problem;
+    }
 
     /* Send working directory */
     cwd = gswat_session_get_working_dir(self->priv->session);
     g_string_printf(fifo_data, "%s\n", cwd);
     g_free(cwd);
-    g_io_channel_write_chars(self->priv->spawn_write_fifo,
-                             fifo_data->str,
-                             fifo_data->len,
-                             &written,
-                             NULL);
-    g_io_channel_flush(self->priv->spawn_write_fifo, NULL);
+    status = g_io_channel_write_chars(self->priv->spawn_write_fifo,
+                                      fifo_data->str,
+                                      fifo_data->len,
+                                      &written,
+                                      error);
+    if(status != G_IO_STATUS_NORMAL)
+    {
+        goto spawner_process_io_channel_problem;
+    }
+    status = g_io_channel_flush(self->priv->spawn_write_fifo, error);
+    if(status != G_IO_STATUS_NORMAL)
+    {
+        goto spawner_process_io_channel_problem;
+    }
 
     /* Send the session environment */
     /* TODO */
 
     /* Terminate environment data */
-    g_io_channel_write_chars(self->priv->spawn_write_fifo,
-                             "*** END ENV ***\n",
-                             strlen("*** END ENV ***\n"),
-                             &written,
-                             NULL);
-    g_io_channel_flush(self->priv->spawn_write_fifo, NULL);
+    status = g_io_channel_write_chars(self->priv->spawn_write_fifo,
+                                      "*** END ENV ***\n",
+                                      strlen("*** END ENV ***\n"),
+                                      &written,
+                                      error);
+    if(status != G_IO_STATUS_NORMAL)
+    {
+        goto spawner_process_io_channel_problem;
+    }
+    status = g_io_channel_flush(self->priv->spawn_write_fifo, error);
+    if(status != G_IO_STATUS_NORMAL)
+    {
+        goto spawner_process_io_channel_problem;
+    }
 
 
     /* The command we sent should now get started in the
@@ -949,20 +1062,25 @@ spawn_local_process(GSwatGdbDebugger *self)
      */
 
 
-    g_io_channel_read_line_string(self->priv->spawn_read_fifo,
-                                  fifo_data,
-                                  NULL,
-                                  NULL);
+    status = g_io_channel_read_line_string(self->priv->spawn_read_fifo,
+                                           fifo_data,
+                                           NULL,
+                                           error);
+    if(status != G_IO_STATUS_NORMAL)
+    {
+        goto spawner_process_io_channel_problem;
+    }
     self->priv->target_pid = strtoul(fifo_data->str, NULL, 10);
     g_message("process PID=%d",self->priv->target_pid);
 
     g_string_free(fifo_data, TRUE);
+    fifo_data = NULL;
 
 
     /* load the symbols into gdb and attach to the suspended
      * process
      */
-
+    
     gdb_command=g_strdup_printf("-file-exec-and-symbols %s", argv[0]);
     gswat_gdb_debugger_send_mi_command(self,
                                        gdb_command,
@@ -970,8 +1088,8 @@ spawn_local_process(GSwatGdbDebugger *self)
                                        NULL);
     g_free(gdb_command);
     g_strfreev(argv);
-
-
+    
+    
     //gdb_command=g_strdup_printf("-target-attach %d", self->priv->target_pid);
     gdb_command=g_strdup_printf("attach %d", self->priv->target_pid);
     g_message("SENDING = \"%s\"", gdb_command);
@@ -995,7 +1113,23 @@ spawn_local_process(GSwatGdbDebugger *self)
                                        gswat_gdb_debugger_nop_mi_callback,
                                        NULL);
 
+    return TRUE;
 
+spawner_process_io_channel_problem:
+
+    g_warning("%s: IO error", __FUNCTION__);
+    if(status != G_IO_STATUS_ERROR)
+    {
+        g_set_error(error,
+                    GSWAT_GDB_DEBUGGER_ERROR,
+                    GSWAT_GDB_DEBUGGER_ERROR_SPAWNER_PROCESS_IO,
+                    _("Spawner process IO error"));
+    }
+    if(fifo_data)
+    {
+        g_string_free(fifo_data, TRUE);
+    }
+    return FALSE;
 }
 
 
@@ -2421,7 +2555,7 @@ break_insert_mi_callback(GSwatGdbDebugger *self,
  * information is usefull to users, without over
  * complicating the API. */
 
-void
+static void
 gswat_gdb_debugger_request_function_breakpoint(GSwatDebuggable *object,
                                                gchar *function)
 {
@@ -2443,6 +2577,7 @@ gswat_gdb_debugger_request_function_breakpoint(GSwatDebuggable *object,
         g_string_free(gdb_command, TRUE);
     }
 }
+
 
 
 void
@@ -2468,7 +2603,7 @@ gswat_gdb_debugger_request_address_breakpoint(GSwatDebuggable *object,
 }
 
 
-void
+static void
 gswat_gdb_debugger_continue(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
@@ -2485,7 +2620,7 @@ gswat_gdb_debugger_continue(GSwatDebuggable *object)
 }
 
 
-void
+static void
 gswat_gdb_debugger_finish(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
@@ -2504,7 +2639,7 @@ gswat_gdb_debugger_finish(GSwatDebuggable *object)
 
 
 
-void
+static void
 gswat_gdb_debugger_step_into(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
@@ -2521,7 +2656,7 @@ gswat_gdb_debugger_step_into(GSwatDebuggable *object)
 }
 
 
-void
+static void
 gswat_gdb_debugger_next(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
@@ -2538,7 +2673,7 @@ gswat_gdb_debugger_next(GSwatDebuggable *object)
 }
 
 
-void
+static void
 gswat_gdb_debugger_interrupt(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
@@ -2557,7 +2692,7 @@ gswat_gdb_debugger_interrupt(GSwatDebuggable *object)
 }
 
 
-void
+static void
 gswat_gdb_debugger_restart(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
@@ -2598,7 +2733,7 @@ restart_running_mi_callback(GSwatGdbDebugger *self,
 }
 
 
-gchar *
+static gchar *
 gswat_gdb_debugger_get_source_uri(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
@@ -2617,7 +2752,7 @@ gswat_gdb_debugger_get_source_uri(GSwatDebuggable *object)
 }
 
 
-gint
+static gint
 gswat_gdb_debugger_get_source_line(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
@@ -2634,7 +2769,7 @@ gswat_gdb_debugger_get_source_line(GSwatDebuggable *object)
 }
 
 
-guint
+static guint
 gswat_gdb_debugger_get_state(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;
@@ -2655,7 +2790,7 @@ gswat_gdb_debugger_get_interrupt_count(GSwatGdbDebugger *self)
 }
 
 
-GQueue *
+static GQueue *
 gswat_gdb_debugger_get_stack(GSwatDebuggable *object)
 { 
     GSwatGdbDebugger *self;
@@ -2709,7 +2844,7 @@ gswat_gdb_debugger_get_stack(GSwatDebuggable *object)
     return new_stack;
 }
 
-GList *
+static GList *
 gswat_gdb_debugger_get_breakpoints(GSwatDebuggable *object)
 { 
     GSwatGdbDebugger *self;
@@ -2735,7 +2870,7 @@ gswat_gdb_debugger_get_breakpoints(GSwatDebuggable *object)
 }
 
 
-GList *
+static GList *
 gswat_gdb_debugger_get_locals_list(GSwatDebuggable *object)
 {
     GSwatGdbDebugger *self;

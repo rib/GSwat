@@ -18,6 +18,11 @@ G_BEGIN_DECLS
 #define GSWAT_IS_GDB_DEBUGGER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), GSWAT_TYPE_GDB_DEBUGGER))
 #define GSWAT_GDB_DEBUGGER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), GSWAT_TYPE_GDB_DEBUGGER, GSwatGdbDebuggerClass))
 
+#define GSWAT_GDB_DEBUGGER_ERROR (gswat_gdb_debugger_error_quark())
+enum {
+    GSWAT_GDB_DEBUGGER_ERROR_SPAWNER_PROCESS_IO
+};
+
 #if !defined(GSWAT_GDB_DEBUGGER_TYPEDEF)
 #define GSWAT_GDB_DEBUGGER_TYPEDEF
 typedef struct _GSwatGdbDebugger        GSwatGdbDebugger;
@@ -73,13 +78,10 @@ typedef void (*GSwatGdbMIRecordCallback)(GSwatGdbDebugger *self,
 
 
 GType gswat_gdb_debugger_get_type(void);
+GQuark gswat_gdb_debugger_error_quark(void);
 
 /* add additional methods here */
 GSwatGdbDebugger *gswat_gdb_debugger_new(GSwatSession *session);
-void gswat_gdb_debugger_target_connect(GSwatDebuggable* object);
-void gswat_gdb_debugger_target_disconnect(GSwatDebuggable* object);
-//gulong gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* self,
-//                                          gchar const* command);
 gulong gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* object,
                                           const gchar* command,
                                           GSwatGdbMIRecordCallback result_callback,
@@ -87,30 +89,11 @@ gulong gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* object,
 void gswat_gdb_debugger_nop_mi_callback(GSwatGdbDebugger *self,
                                         const GSwatGdbMIRecord *record,
                                         void *data);
-GSwatGdbMIRecord *
-gswat_gdb_debugger_get_mi_result_record(GSwatGdbDebugger *object,
-                                        gulong token);
+GSwatGdbMIRecord *gswat_gdb_debugger_get_mi_result_record(GSwatGdbDebugger *object,
+                                                          gulong token);
 void gswat_gdb_debugger_free_mi_record(GSwatGdbMIRecord *record);
 void gswat_gdb_debugger_send_cli_command(GSwatGdbDebugger* self,
                                          gchar const* command);
-void gswat_gdb_debugger_request_line_breakpoint(GSwatDebuggable* object,
-                                                gchar *uri,
-                                                guint line);
-void gswat_gdb_debugger_request_function_breakpoint(GSwatDebuggable* object,
-                                                    gchar *symbol);
-void gswat_gdb_debugger_continue(GSwatDebuggable* object);
-void gswat_gdb_debugger_finish(GSwatDebuggable* object);
-void gswat_gdb_debugger_step_into(GSwatDebuggable* object);
-void gswat_gdb_debugger_next(GSwatDebuggable* object);
-void gswat_gdb_debugger_interrupt(GSwatDebuggable* object);
-void gswat_gdb_debugger_restart(GSwatDebuggable* object);
-gchar *gswat_gdb_debugger_get_source_uri(GSwatDebuggable* object);
-gint gswat_gdb_debugger_get_source_line(GSwatDebuggable* object);
-guint gswat_gdb_debugger_get_state(GSwatDebuggable* object);
-guint gswat_gdb_debugger_get_interrupt_count(GSwatGdbDebugger *self);
-GQueue *gswat_gdb_debugger_get_stack(GSwatDebuggable* object);
-GList *gswat_gdb_debugger_get_breakpoints(GSwatDebuggable* object);
-GList *gswat_gdb_debugger_get_locals_list(GSwatDebuggable* object);
 
 /* internal, but shared with gswat-gdb-variable-object.c */
 void _gswat_gdb_debugger_register_variable_object(GSwatGdbDebugger* self,
@@ -118,7 +101,10 @@ void _gswat_gdb_debugger_register_variable_object(GSwatGdbDebugger* self,
 void _gswat_gdb_debugger_unregister_variable_object(GSwatGdbDebugger* self,
                                                     GSwatGdbVariableObject *variable_object);
 
+guint gswat_gdb_debugger_get_interrupt_count(GSwatGdbDebugger *self);
 
+void gswat_gdb_debugger_request_address_breakpoint(GSwatDebuggable *object,
+                                                   unsigned long address);
 G_END_DECLS
 
 #endif /* GSWAT_GDB_DEBUGGER_H */

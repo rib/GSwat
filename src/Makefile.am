@@ -196,7 +196,9 @@ glade_DATA = \
 
 uidir = $(datadir)/gswat/ui/
 
-ui_DATA = data/ui/toolbar-menu-ui.xml
+ui_DATA = \
+		data/ui/toolbar-menu-ui.xml \
+		data/ui/control-flow-debugging-ui.xml
 
 gnomemenudir = $(datadir)/applications
 gnomemenu_in_files = data/gswat.desktop.in

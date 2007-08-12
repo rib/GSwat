@@ -23,17 +23,10 @@
   </menubar>
 
   <toolbar name="ToolBar">
-    <toolitem name="SessionNewButton" action="SessionNew"/>
+    <toolitem name="SessionNewButton" action="SessionNewTB"/>
     <separator/>
-    <toolitem name="DebuggerStepInButton" action="DebuggerStepIn"/>
-    <toolitem name="DebuggerNextButton" action="DebuggerNext"/>
-    <toolitem name="DebuggerUpFrameButton" action="DebuggerUpFrame"/>
-    <toolitem name="DebuggerContinueButton" action="DebuggerContinue"/>
-    <separator/>
-    <toolitem name="DebuggerBreakButton" action="DebuggerBreak"/>
-    <toolitem name="DebuggerRestartButton" action="DebuggerRestart"/>
-    <separator/>
-    <toolitem name="DebuggerAddBreakButton" action="DebuggerAddBreak"/>
-    <placeholder name="ToolBarPluginPlaceholder" />
+    <placeholder name="ToolBarLeftGroup0Placeholder" />
+    <placeholder name="ToolBarCenterGroup1Placeholder" />
+    <placeholder name="ToolBarRightGroup2Placeholder" />
   </toolbar>
 </ui>

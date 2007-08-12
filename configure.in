@@ -275,5 +275,8 @@ Makefile
 src/Makefile
 po/Makefile.in
 gswat-0.1.pc
+doc/Makefile
+doc/reference/version.xml
+doc/reference/Makefile
 )
 

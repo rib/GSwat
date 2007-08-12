@@ -10,6 +10,11 @@ G_BEGIN_DECLS
 #define GSWAT_IS_DEBUGGABLE(obj)        (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GSWAT_TYPE_DEBUGGABLE))
 #define GSWAT_DEBUGGABLE_GET_IFACE(obj) (G_TYPE_INSTANCE_GET_INTERFACE ((obj), GSWAT_TYPE_DEBUGGABLE, GSwatDebuggableIface))
 
+#define GSWAT_DEBUGGABLE_ERROR (gswat_debuggable_error_quark())
+enum {
+    GSWAT_DEBUGGABLE_ERROR_TARGET_CONNECT_FAILED
+};
+
 typedef struct _GSwatDebuggableIface GSwatDebuggableIface;
 typedef struct _GSwatDebuggable GSwatDebuggable; /* dummy typedef */
 
@@ -21,7 +26,7 @@ struct _GSwatDebuggableIface
     //void (* signal_member)(GSwatDebuggable *self);
 
     /* VTable: */
-    void (*target_connect)(GSwatDebuggable* object);
+    gboolean (*target_connect)(GSwatDebuggable* object, GError **error);
     void (*target_disconnect)(GSwatDebuggable* object);
     void (*request_line_breakpoint)(GSwatDebuggable* object,
                                     gchar *uri,
@@ -71,9 +76,10 @@ typedef struct {
 }GSwatDebuggableBreakpoint;
 
 GType gswat_debuggable_get_type(void);
+GQuark gswat_debuggable_error_quark(void);
 
 /* Interface functions */
-void gswat_debuggable_target_connect(GSwatDebuggable* object);
+gboolean gswat_debuggable_target_connect(GSwatDebuggable* object, GError **error);
 guint gswat_debuggable_get_state(GSwatDebuggable* object);
 void gswat_debuggable_request_line_breakpoint(GSwatDebuggable* object,
                                               gchar *uri,

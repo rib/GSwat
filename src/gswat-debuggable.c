@@ -191,6 +191,18 @@ gswat_debuggable_base_finalize(gpointer g_class)
 }
 #endif
 
+GQuark
+gswat_debuggable_error_quark(void)
+{
+    static GQuark q = 0;
+    if(q==0)
+    {
+        q = g_quark_from_static_string("gswat-debuggable-error");
+    }
+    return q;
+}
+
+
 /* Interface functions */
 
 /**
@@ -215,7 +227,7 @@ http://developer.gnome.org/arch/doc/authors.html
  * This should make the debuggable object connect to
  * its target and marks the start of a debug session.
  *
- * Returns: nothing
+ * Returns: sucess status
  */
 /* FIXME - there should a synchronous and asynchronous
  * way to connect the debugger to its target.
@@ -223,21 +235,27 @@ http://developer.gnome.org/arch/doc/authors.html
  * signal to reflect completion. Simple script bindings
  * might prefer to use a synchronous connect.
  */
-void
-gswat_debuggable_target_connect(GSwatDebuggable* object)
+gboolean
+gswat_debuggable_target_connect(GSwatDebuggable* object, GError **error)
 {
     GSwatDebuggableIface *debuggable;
-
-    g_return_if_fail(GSWAT_IS_DEBUGGABLE(object));
+    gboolean ret;
+    
+    g_return_val_if_fail(GSWAT_IS_DEBUGGABLE(object), FALSE);
+    g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+    
     debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
 
     g_object_ref(object);
     if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_DISCONNECTED)
     {
-        debuggable->target_connect(object);
+        ret = debuggable->target_connect(object, error);
     }
     g_object_unref(object);
+    
+    return ret;
 }
+
 
 void
 gswat_debuggable_request_line_breakpoint(GSwatDebuggable* object,

@@ -1,0 +1,73 @@
+<?xml version="1.0"?>
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN" 
+               "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd" [
+<!ENTITY version SYSTEM "version.xml">
+]>
+
+<book id="index" xmlns:xi="http://www.w3.org/2003/XInclude">
+  <bookinfo>
+    <title>GSwat &version; Reference Manual</title>
+    <releaseinfo>Version &version;</releaseinfo>
+    
+    <legalnotice>
+      <para>
+        Permission is granted to copy, distribute and/or modify this
+        document under the terms of the <citetitle>GNU Free
+        Documentation License</citetitle>, Version 1.1 or any later
+        version published by the Free Software Foundation with no
+        Invariant Sections, no Front-Cover Texts, and no Back-Cover
+        Texts. You may obtain a copy of the <citetitle>GNU Free
+        Documentation License</citetitle> from the Free Software
+        Foundation by visiting <ulink type="http"
+        url="http://www.fsf.org">their Web site</ulink> or by writing
+        to:
+
+        <address>
+          The Free Software Foundation, Inc.,
+          <street>59 Temple Place</street> - Suite 330,
+          <city>Boston</city>, <state>MA</state> <postcode>02111-1307</postcode>,
+          <country>USA</country>
+        </address>
+      </para>
+    </legalnotice>
+  </bookinfo>
+
+  <part id="gswat">
+    <title>GSwat Overview</title>
+    <partintro>
+      <para>
+      GSwat is a GObject based debugger, usuable either via a GTK+ gui or via a shared
+      library API. It is not limited to being a GDB frontend so look out for Python and
+      Mono backends in the future.
+      </para>
+      
+    </partintro>
+  </part>
+  <part>
+    <title>GSwat Core API Reference</title>
+    <xi:include href="xml/gswat-session.xml"/>
+    <xi:include href="xml/gswat-debuggable.xml"/>
+    <xi:include href="xml/gswat-gdb-debugger.xml"/>
+    <xi:include href="xml/gswat-variable-object.xml"/>
+    <xi:include href="xml/gswat-gdb-variable-object.xml"/>
+    <xi:include href="xml/gswat-gdbmi.xml"/>
+    <xi:include href="xml/gswat-utils.xml"/>
+  </part>
+  <part>
+    <title>GSwat GUI API Reference</title>
+    <partintro>
+    If you are interested in extending the GSwat debugger UI or - in the future - writting
+    a plugin for the UI, then these are the docs for you.
+    </partintro>
+    <xi:include href="xml/gswat-window.xml"/>
+    <xi:include href="xml/gswat-tabable.xml"/>
+    <xi:include href="xml/gswat-src-view-tab.xml"/>
+    <xi:include href="xml/gswat-notebook.xml"/>
+    <xi:include href="xml/gswat-view.xml"/>
+    <xi:include href="xml/gswat-context.xml"/>
+    <xi:include href="xml/gswat-in-limbo-context.xml"/>
+    <xi:include href="xml/gswat-control-flow-debugging-context.xml"/>
+    <xi:include href="xml/gswat-source-browsing-context.xml"/>
+  </part>
+</book>
+

@@ -1,0 +1,8 @@
+#include <gswat.h>
+
+gswat_gdb_variable_object_get_type
+gswat_variable_object_get_type
+gswat_session_get_type
+gswat_debuggable_get_type
+gswat_gdb_debugger_get_type
+

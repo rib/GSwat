@@ -64,30 +64,34 @@ struct _GSwatSessionClass
 };
 
 /* Session types */
-enum {
+typedef enum {
     GSWAT_SESSION_TYPE_LOCAL_RUN,
     GSWAT_SESSION_TYPE_LOCAL_PID,
     GSWAT_SESSION_TYPE_REMOTE_RUN,
-    GSWAT_SESSION_TYPE_REMOTE_PID
-};
+    GSWAT_SESSION_TYPE_REMOTE_PID,
+    GSWAT_SESSION_TYPE_COUNT 
+}GSwatSessionType;
+
 
 GType gswat_session_get_type(void);
 
 /* add additional methods here */
 GSwatSession *gswat_session_new(void);
 
-void gswat_session_edit(GSwatSession *session);
-gchar *gswat_session_get_target(GSwatSession *self);
-void gswat_session_set_target(GSwatSession *self, const gchar *target);
 gchar *gswat_session_get_name(GSwatSession *self);
 void gswat_session_set_name(GSwatSession* self, const char *name);
-gchar *gswat_session_get_command(GSwatSession* self, gint *argc, gchar ***argv);
-void gswat_session_set_command(GSwatSession* self, const gchar *command);
-gint gswat_session_get_pid(GSwatSession* self);
-void gswat_session_set_pid(GSwatSession* self, gint pid);
+gchar *gswat_session_get_target_type(GSwatSession *self);
+void gswat_session_set_target_type(GSwatSession *self, const gchar *target_type);
+gchar *gswat_session_get_target(GSwatSession *self);
+void gswat_session_set_target(GSwatSession *self, const gchar *target);
 gchar *gswat_session_get_working_dir(GSwatSession* self);
 void gswat_session_set_working_dir(GSwatSession* self, const gchar *working_dir);
+void gswat_session_add_environment_variable(GSwatSession *self,
+                                            const gchar *name,
+                                            const gchar *value);
 
+/* TODO seperate out UI code into a different class */
+void gswat_session_edit(GSwatSession *session);
 
 G_END_DECLS
 

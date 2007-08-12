@@ -49,9 +49,9 @@ enum {
 enum {
     PROP_0,
     PROP_NAME,
+    PROP_TARGET_TYPE,
     PROP_TARGET,
     PROP_COMMAND,
-    PROP_PID,
     PROP_WORKING_DIR
 };
 
@@ -60,7 +60,12 @@ enum {
     SESSION_NAME_COMBO_N_COLUMNS
 };
 
+typedef struct {
+    gchar *name;
+    gchar *value;
+}EnvironmentVariable;
 
+/* TODO move UI code out into a different class */
 typedef struct {
     GladeXML *dialog_xml;
 
@@ -72,29 +77,30 @@ typedef struct {
 }GSwatSessionEditor;
 
 typedef struct {
-    gchar   *name;
-    gchar   *target;
-    GPid    pid;
-    gchar   *command;
-    gint    argc;
-    gchar   **argv;
-    gchar   *working_dir;
-    GList   *environment;
+    gchar *name;
+    gchar *target_type;
+    gchar *target;
+    gchar *working_dir;
+    GList *environment;
 }GSwatSessionState;
 
 struct _GSwatSessionPrivate
 {
-    guint   type;
-    gchar   *name;
-    gchar   *target;
-    GPid    pid;
-    gchar   *command;
-    gint    argc;
-    gchar   **argv;
-    gchar   *working_dir;
-    GList   *environment;
+    gchar *name;
+    gchar *target_type;
+    gchar *target;
+
+    /* GSWAT_SESSION_TYPE_LOCAL_RUN */
+    //gint argc;
+    //gchar **argv;
+
+    gchar *working_dir;
+    GList *environment;
+
+    /* TODO move UI code out into a different class */
     GSwatSessionEditor *editor;
 };
+
 
 /* Function definitions */
 static void gswat_session_class_init(GSwatSessionClass *klass);
@@ -238,41 +244,30 @@ gswat_session_class_init(GSwatSessionClass *klass) /* Class Initialization */
     new_param = g_param_spec_string("name",
                                     _("Session Name"),
                                     _("The name of the debugging session"),
-                                    "Debug0",
-                                    G_PARAM_READABLE | G_PARAM_WRITABLE);
+                                    "Session0",
+                                    GSWAT_PARAM_READWRITE);
     g_object_class_install_property(gobject_class,
                                     PROP_NAME,
+                                    new_param);
+    
+    new_param = g_param_spec_string("target-type", /* name */
+                                    "Target Type", /* nick name */
+                                    "The type (Run Local, Run Remote, Serial, Core) of target you want to debug", /* description */
+                                    "Run Local",
+                                     GSWAT_PARAM_READWRITE /* flags */
+                                     );
+    g_object_class_install_property(gobject_class,
+                                    PROP_TARGET_TYPE,
                                     new_param);
 
     new_param = g_param_spec_string("target",
                                     _("Target Address"),
                                     _("The address of target you want to debug on"),
                                     "localhost",
-                                    G_PARAM_READABLE | G_PARAM_WRITABLE);
+                                     GSWAT_PARAM_READWRITE /* flags */
+                                     );
     g_object_class_install_property(gobject_class,
                                     PROP_TARGET,
-                                    new_param);
-
-    /* Details for local commands */
-    new_param = g_param_spec_string("command",
-                                    _("Command"),
-                                    _("The command to run"),
-                                    "./a.out",
-                                    G_PARAM_READABLE | G_PARAM_WRITABLE);
-    g_object_class_install_property(gobject_class,
-                                    PROP_COMMAND,
-                                    new_param);
-
-    /*  */
-    new_param = g_param_spec_int("pid",
-                                 _("Process ID"),
-                                 _("The ID of the process to debug"),
-                                 G_MININT,
-                                 G_MAXINT,
-                                 -1,
-                                 G_PARAM_READABLE | G_PARAM_WRITABLE);
-    g_object_class_install_property(gobject_class,
-                                    PROP_PID,
                                     new_param);
 
     new_param = g_param_spec_string("working-dir",
@@ -358,14 +353,11 @@ gswat_session_get_property(GObject *object,
         case PROP_NAME:
             g_value_set_string(value, self->priv->name);
             break;
+        case PROP_TARGET_TYPE:
+            g_value_set_string(value, self->priv->target_type);
+            break;
         case PROP_TARGET:
             g_value_set_string(value, self->priv->target);
-            break;
-        case PROP_COMMAND:
-            g_value_set_string(value, self->priv->command);
-            break;
-        case PROP_PID:
-            g_value_set_int(value, self->priv->pid);
             break;
         case PROP_WORKING_DIR:
             g_value_set_string(value, self->priv->working_dir);
@@ -417,14 +409,11 @@ gswat_session_set_property(GObject *object,
         case PROP_NAME:
             gswat_session_set_name(self, g_value_get_string(value));
             break;
+        case PROP_TARGET_TYPE:
+            gswat_session_set_target_type(self, g_value_get_string(value));
+            break;
         case PROP_TARGET:
             gswat_session_set_target(self, g_value_get_string(value));
-            break;
-        case PROP_COMMAND:
-            gswat_session_set_command(self, g_value_get_string(value));
-            break;
-        case PROP_PID:
-            gswat_session_set_pid(self, g_value_get_int(value));
             break;
         case PROP_WORKING_DIR:
             gswat_session_set_working_dir(self, g_value_get_string(value));
@@ -463,13 +452,12 @@ gswat_session_set_property(GObject *object,
     if(self->priv->name){
         session_state->name = g_strdup(self->priv->name);
     }
+    if(self->priv->target_type){
+        session_state->target_type = g_strdup(self->priv->target_type);
+    }
     if(self->priv->target){
         session_state->target = g_strdup(self->priv->target);
     }
-    if(self->priv->command){
-        session_state->command = g_strdup(self->priv->command);
-    }
-    session_state->pid = self->priv->pid;
     if(self->priv->working_dir){
         session_state->working_dir = g_strdup(self->priv->working_dir);
     }
@@ -496,12 +484,13 @@ gswat_session_init(GSwatSession *self)
 {
     self->priv = GSWAT_SESSION_GET_PRIVATE(self);
 
-    self->priv->type = GSWAT_SESSION_TYPE_LOCAL_RUN;
+    self->priv->name = g_strdup("Session0");
 
-    self->priv->pid = -1;
+    self->priv->target_type = g_strdup("Run Local");
 
     self->priv->working_dir = g_get_current_dir();
 }
+
 
 /* Instantiation wrapper */
 GSwatSession*
@@ -509,6 +498,7 @@ gswat_session_new(void)
 {
     return GSWAT_SESSION(g_object_new(gswat_session_get_type(), NULL));
 }
+
 
 /* Instance Destruction */
 void
@@ -519,25 +509,29 @@ gswat_session_finalize(GObject *object)
     if(self->priv->name){
         g_free(self->priv->name);
     }
-
+    
+    if(self->priv->target_type){
+        g_free(self->priv->target_type);
+    }
+    
     if(self->priv->target){
         g_free(self->priv->target);
-    }
-
-    if(self->priv->command){
-        g_free(self->priv->command);
-    }
-
-    if(self->priv->argv){
-        g_strfreev(self->priv->argv);
     }
 
     if(self->priv->working_dir){
         g_free(self->priv->working_dir);
     }
 
-    /* TODO - free environment */
-
+    if(self->priv->environment)
+    {
+        GList *tmp;
+        for(tmp=self->priv->environment; tmp!=NULL; tmp=tmp->next)
+        {
+            g_free(tmp->data);
+        }
+        g_list_free(self->priv->environment);
+    }
+    
     G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
@@ -732,10 +726,11 @@ set_session_dialog_defaults(GSwatSession *session, gchar *name)
     }
 
     /* Give the "command" entry a default */
-    if(current_session->command)
+    if(strcmp(current_session->target_type, "Run Local") == 0
+        && current_session->target)
     {
         gtk_entry_set_text(GTK_ENTRY(session->priv->editor->command_entry),
-                           current_session->command);
+                           current_session->target);
     }
 
     /* Give the "working dir" entry a default */
@@ -779,13 +774,13 @@ free_session_state_members(GSwatSessionState *session_state)
         g_free(session_state->name);
         session_state->name=NULL;
     }
+    if(session_state->target_type){
+        g_free(session_state->target_type);
+        session_state->target_type=NULL;
+    }
     if(session_state->target){
         g_free(session_state->target);
         session_state->target=NULL;
-    }
-    if(session_state->command){
-        g_free(session_state->command);
-        session_state->command=NULL;
     }
     if(session_state->working_dir){
         g_free(session_state->working_dir);
@@ -869,7 +864,7 @@ static GSwatSessionState *
 parse_session(xmlDocPtr doc, xmlNodePtr cur)
 {
     GSwatSessionState *session_state;
-    xmlChar *name, *target, *command, *working_dir;
+    xmlChar *name, *target_type, *target, *working_dir;
 
     g_message("parse_session");
 
@@ -904,6 +899,16 @@ parse_session(xmlDocPtr doc, xmlNodePtr cur)
             session_state->name = g_strdup((gchar *)name);
             xmlFree(name); 
         }
+        if(xmlStrcmp(cur->name, (const xmlChar *)"target_type") == 0)
+        {
+            target_type = xmlGetProp(cur, (const xmlChar *)"value");
+            if(!target_type){
+                goto parse_error;
+            }
+            
+            session_state->target_type = g_strdup((gchar *)target_type);
+            xmlFree(target_type);
+        }
         if(xmlStrcmp(cur->name, (const xmlChar *)"target") == 0)
         {
             target = xmlGetProp(cur, (const xmlChar *)"value");
@@ -913,16 +918,6 @@ parse_session(xmlDocPtr doc, xmlNodePtr cur)
 
             session_state->target = g_strdup((gchar *)target);
             xmlFree(target); 
-        }
-        if(xmlStrcmp(cur->name, (const xmlChar *)"command") == 0)
-        {
-            command = xmlGetProp(cur, (const xmlChar *)"value");
-            if(!command){
-                goto parse_error;
-            }
-
-            session_state->command = g_strdup((gchar *)command);
-            xmlFree(command); 
         }
         if(xmlStrcmp(cur->name, (const xmlChar *)"working_dir") == 0)
         {
@@ -940,11 +935,11 @@ parse_session(xmlDocPtr doc, xmlNodePtr cur)
     {
         goto parse_error;
     }
-    if(session_state->target == NULL)
+    if(session_state->target_type == NULL)
     {
         goto parse_error;
     }
-    if(session_state->command == NULL)
+    if(session_state->target == NULL)
     {
         goto parse_error;
     }
@@ -965,13 +960,13 @@ parse_error:
     {
         g_free(session_state->name);
     }
+    if(session_state->target_type)
+    {
+        g_free(session_state->target_type);
+    }
     if(session_state->target)
     {
         g_free(session_state->target);
-    }
-    if(session_state->command)
-    {
-        g_free(session_state->command);
     }
     if(session_state->working_dir)
     {
@@ -1041,29 +1036,23 @@ on_gswat_session_ok_button_clicked(GtkButton       *button,
     command_entry = glade_xml_get_widget(xml, "gswat_session_command_entry");
 
 
-    gchar *name = g_strdup("Test1");//gtk_combo_box_get_active_text(GTK_COMBO_BOX(name_combo));
-    //gchar *name = gtk_combo_box_get_active_text(GTK_COMBO_BOX(name_combo));
+    //gchar *name = g_strdup("Test1");//gtk_combo_box_get_active_text(GTK_COMBO_BOX(name_combo));
+    gchar *name = gtk_combo_box_get_active_text(GTK_COMBO_BOX(name_combo));
     g_object_set(session,
                  "name", name,
                  NULL);
     g_free(name);
 
 
-    gchar *target = g_strdup("localhost");//gtk_combo_box_get_active_text(GTK_COMBO_BOX(target_combo));
+    //gchar *target = g_strdup("localhost");//gtk_combo_box_get_active_text(GTK_COMBO_BOX(target_combo));
     //gtk_combo_box_get_active_text(GTK_COMBO_BOX(target_combo));
+    const gchar *target = gtk_entry_get_text(GTK_ENTRY(command_entry));
     g_object_set(session,
                  "target", target,
                  NULL);
-    g_free(target);
+    //g_free(target);
 
-
-    const gchar *command = gtk_entry_get_text(GTK_ENTRY(command_entry));
-    g_object_set(session,
-                 "command", command,
-                 NULL);
-
-
-
+    
     save_sessions();
 
     g_object_unref(xml);
@@ -1077,8 +1066,6 @@ on_gswat_session_ok_button_clicked(GtkButton       *button,
 
     gtk_widget_destroy(dialog);
 
-
-
     g_signal_emit_by_name(session, "edit-done");
 }
 
@@ -1088,8 +1075,9 @@ save_sessions(void)
 {
     xmlDocPtr doc;
     xmlNodePtr root;
-    gchar *file_name;
     GList *tmp;
+    gchar *file_name;
+    gchar *tmpfile;
 
     doc = xmlNewDoc((const xmlChar *)"1.0");
     if (doc == NULL)
@@ -1105,15 +1093,22 @@ save_sessions(void)
     {
         GSwatSessionState *current_session = (GSwatSessionState *)tmp->data;
         save_session(root, current_session);
-
     }
 
     /* FIXME: lock file - Paolo */
     file_name = gnome_util_home_file(SESSIONS_FILE);
-    xmlSaveFormatFile(file_name, doc, 1);
-    g_free(file_name);
+    tmpfile = g_strdup_printf("%sXXXXXX", file_name);
+    
+    xmlSaveFormatFile(tmpfile, doc, 1);
 
-    xmlFreeDoc (doc);
+    if(rename(tmpfile, file_name)==-1)
+    {
+        g_warning("Failed to save session state to %s", file_name);
+    }
+    g_free(file_name);
+    g_free(tmpfile);
+
+    xmlFreeDoc(doc);
 }
 
 
@@ -1122,11 +1117,12 @@ save_session(xmlNodePtr parent, GSwatSessionState *session_state)
 {
     xmlNodePtr session_node;
     xmlNodePtr name_node;
+    xmlNodePtr target_type_node;
     xmlNodePtr target_node;
-    xmlNodePtr command_node;
-    gchar *pid;
-    xmlNodePtr pid_node;
     xmlNodePtr working_dir_node;
+    xmlNodePtr environment_node;
+    xmlNodePtr variable_node;
+    GList *tmp;
 
     session_node = xmlNewChild(parent, NULL, (const xmlChar *)"session", NULL);
 
@@ -1136,27 +1132,41 @@ save_session(xmlNodePtr parent, GSwatSessionState *session_state)
                (const xmlChar *)"value",
                (const xmlChar *)session_state->name);
 
+    target_type_node = xmlNewChild(session_node, NULL, (const xmlChar *)"target_type", NULL);
+    xmlSetProp(target_type_node,
+               (const xmlChar *)"value",
+               (const xmlChar *)session_state->target_type);
+
     target_node = xmlNewChild(session_node, NULL, (const xmlChar *)"target", NULL);
     xmlSetProp(target_node,
                (const xmlChar *)"value",
                (const xmlChar *)session_state->target);
 
-    command_node = xmlNewChild(session_node, NULL, (const xmlChar *)"command", NULL);
-    xmlSetProp(command_node,
-               (const xmlChar *)"value",
-               (const xmlChar *)session_state->command);
-
-    pid_node = xmlNewChild(session_node, NULL, (const xmlChar *)"pid", NULL);
-    pid = g_strdup_printf("%d", session_state->pid);
-    xmlSetProp(pid_node,
-               (const xmlChar *)"value",
-               (const xmlChar *)pid);
-    g_free(pid);
-
     working_dir_node = xmlNewChild(session_node, NULL, (const xmlChar *)"working_dir", NULL);
     xmlSetProp(working_dir_node,
                (const xmlChar *)"value",
                (const xmlChar *)session_state->working_dir);
+
+    if(session_state->environment)
+    {
+        environment_node = xmlNewChild(session_node, NULL,
+                                       (const xmlChar *)"evironment",
+                                       NULL);
+        
+        for(tmp=session_state->environment; tmp!=NULL; tmp=tmp->next)
+        {
+            EnvironmentVariable *current_variable=tmp->data;
+            variable_node = xmlNewChild(environment_node, NULL,
+                                        (const xmlChar *)"evironment_variable",
+                                        NULL);
+            xmlSetProp(working_dir_node,
+                       (const xmlChar *)"name",
+                       (const xmlChar *)current_variable->name);
+            xmlSetProp(working_dir_node,
+                       (const xmlChar *)"value",
+                       (const xmlChar *)current_variable->value);
+        }
+    }
 }
 
 
@@ -1249,6 +1259,7 @@ gswat_session_set_PROPERTY(GSwatSession *self, PropType PROPERTY)
 }
 #endif
 
+
 /**
  * gswat_session_get_name:
  * @self:  A GSwatSession.
@@ -1279,6 +1290,7 @@ void
 gswat_session_set_name(GSwatSession* self, const gchar *name)
 {
     g_return_if_fail(GSWAT_IS_SESSION(self));
+    g_return_if_fail(name != NULL);
 
     if(self->priv->name == NULL
        || strcmp(self->priv->name, name) != 0)
@@ -1288,6 +1300,60 @@ gswat_session_set_name(GSwatSession* self, const gchar *name)
         g_object_notify(G_OBJECT(self), "name");
     }
 }
+
+
+gchar *
+gswat_session_get_target_type(GSwatSession *self)
+{
+    return self->priv->target_type;
+}
+
+
+void
+gswat_session_set_target_type(GSwatSession *self, const gchar *target_type)
+{
+    g_return_if_fail(target_type != NULL);
+    
+    if(self->priv->target_type == NULL
+       || strcmp(self->priv->target_type, target_type) != 0)
+    {
+        g_free(self->priv->target_type);
+        self->priv->target_type = g_strdup(target_type);
+        g_object_notify(G_OBJECT(self), "target-type");
+    }
+}
+
+
+#if 0
+static GSwatSessionType
+session_type_strtoui(const gchar *session_type)
+{
+    if(strcmp(session_type, "GSWAT_SESSION_TYPE_LOCAL_RUN")==0)
+        return 0;
+    if(strcmp(session_type, "GSWAT_SESSION_TYPE_LOCAL_PID")==0)
+        return 1;
+    if(strcmp(session_type, "GSWAT_SESSION_TYPE_REMOTE_RUN")==0)
+        return 2;
+    if(strcmp(session_type, "GSWAT_SESSION_TYPE_REMOTE_PID")==0)
+        return 3;
+    g_warning("Unknown session type (%s)", session_type);
+    return 0;
+}
+
+
+static const gchar *
+session_type_uitostr(GSwatSessionType session_type)
+{
+    const gchar *type[] = {
+        "GSWAT_SESSION_TYPE_LOCAL_RUN",
+        "GSWAT_SESSION_TYPE_LOCAL_PID",
+        "GSWAT_SESSION_TYPE_REMOTE_RUN",
+        "GSWAT_SESSION_TYPE_REMOTE_PID"
+    };
+    return type[session_type];
+}
+#endif
+
 
 /**
  * gswat_session_get_target:
@@ -1304,6 +1370,7 @@ gswat_session_get_target(GSwatSession *self)
 
     return g_strdup(self->priv->target);
 }
+
 
 /**
  * gswat_session_set_target:
@@ -1330,69 +1397,6 @@ gswat_session_set_target(GSwatSession *self, const gchar *target)
 
 
 gchar *
-gswat_session_get_command(GSwatSession* self, gint *argc, gchar ***argv)
-{
-    if(argc != NULL)
-    {
-        *argc = self->priv->argc;
-    }
-
-    if(argv != NULL)
-    {
-        *argv = g_strdupv(self->priv->argv);
-    }
-
-    return g_strdup(self->priv->command);
-}
-
-
-void
-gswat_session_set_command(GSwatSession* self, const gchar *command)
-{
-    GError *error=NULL;
-
-    g_assert(command != NULL);
-
-    if(self->priv->command == NULL ||
-       strcmp(command, self->priv->command) != 0)
-    {
-        self->priv->command = g_strdup(command);
-
-        g_strfreev(self->priv->argv);
-
-        if(!g_shell_parse_argv(command,
-                               &(self->priv->argc),
-                               &(self->priv->argv),
-                               &error))
-        {
-            g_message("Failed to parse command: %s\n", error->message);
-            g_error_free(error);
-        }
-
-        g_object_notify(G_OBJECT(self), "command");
-    }
-}
-
-
-gint
-gswat_session_get_pid(GSwatSession* self)
-{
-    return self->priv->pid;
-}
-
-
-void
-gswat_session_set_pid(GSwatSession* self, gint pid)
-{
-    if(pid != self->priv->pid)
-    {
-        self->priv->pid = pid;
-        g_object_notify(G_OBJECT(self), "pid");
-    }
-}
-
-
-gchar *
 gswat_session_get_working_dir(GSwatSession* self)
 {
     return g_strdup(self->priv->working_dir);
@@ -1407,9 +1411,25 @@ gswat_session_set_working_dir(GSwatSession* self, const gchar *working_dir)
     if(self->priv->working_dir == NULL ||
        strcmp(working_dir, self->priv->working_dir) != 0)
     {
+        g_free(self->priv->working_dir);
         self->priv->working_dir = g_strdup(working_dir);
-
         g_object_notify(G_OBJECT(self), "working-dir");
     }
+}
+
+
+void
+gswat_session_add_environment_variable(GSwatSession *self,
+                                       const gchar *name,
+                                       const gchar *value)
+{
+    EnvironmentVariable *variable;
+
+    variable = g_new(EnvironmentVariable, 1);
+    variable->name = g_strdup(name);
+    variable->value = g_strdup(value);
+    
+    self->priv->environment =
+        g_list_prepend(self->priv->environment, variable);
 }
 

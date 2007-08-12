@@ -126,6 +126,8 @@ void gswat_window_insert_tabable(GSwatWindow *self,
                                  GSwatTabable *tabable,
                                  GSwatWindowContainerID container_id);
 
+GtkUIManager *gswat_window_get_ui_manager(GSwatWindow *self);
+
 G_END_DECLS
 
 #endif /* GSWAT_WINDOW_H */

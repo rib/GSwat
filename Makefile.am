@@ -1,4 +1,4 @@
-SUBDIRS = src po
+SUBDIRS = src po doc
 
 pcfiles = gswat-@GSWAT_API_VERSION@.pc
 

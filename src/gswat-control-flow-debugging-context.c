@@ -28,6 +28,7 @@
 #include "gedit-prefs-manager.h"
 #include "gedit-document.h"
 #include "gedit-view.h"
+#include "rb-file-helpers.h"
 
 #include "gswat-variable-object.h"
 #include "gswat-context.h"
@@ -81,6 +82,10 @@ struct _GSwatControlFlowDebuggingContextPrivate
     GtkTreeView *stack_view;
     GtkTreeView *variable_view;
     
+    GtkUIManager *ui_manager;
+    GtkActionGroup *actiongroup;
+    guint merge_id;
+
     GQueue          *debuggable_stack;
     GtkListStore    *stack_list_store;
     GList           *display_stack;
@@ -121,6 +126,20 @@ static void connect_debuggable_signals(GSwatControlFlowDebuggingContext *self);
 static void on_gswat_window_debuggable_notify(GObject *object,
                                               GParamSpec *property,
                                               gpointer data);
+static void on_debugger_step_activate(GtkAction *action,
+                                      GSwatControlFlowDebuggingContext *self);
+static void on_debugger_next_activate(GtkAction *action,
+                                      GSwatControlFlowDebuggingContext *self);
+static void on_debugger_up_frame_activate(GtkAction *action,
+                                          GSwatControlFlowDebuggingContext *self);
+static void on_debugger_continue_activate(GtkAction *action,
+                                          GSwatControlFlowDebuggingContext *self);
+static void on_debugger_interrupt_activate(GtkAction *action,
+                                           GSwatControlFlowDebuggingContext *self);
+static void on_debugger_restart_activate(GtkAction *action,
+                                         GSwatControlFlowDebuggingContext *self);
+static void on_debugger_add_break_activate(GtkAction *action,
+                                           GSwatControlFlowDebuggingContext *self);
 static void on_variable_view_row_expanded(GtkTreeView *view,
                                           GtkTreeIter *iter,
                                           GtkTreePath *iter_path,
@@ -178,6 +197,36 @@ on_stack_frame_activated(GtkTreeView *tree_view,
 /* Variables */
 static GObjectClass *parent_class = NULL;
 //static guint gswat_control_flow_debugging_context_signals[LAST_SIGNAL] = { 0 };
+
+static GtkActionEntry gswat_control_flow_debugging_context_actions [] =
+{
+    { "DebuggerStepIn", GTK_STOCK_JUMP_TO, N_("Step In"), NULL,
+        N_("Step program until it reaches a different source line."),
+        G_CALLBACK(on_debugger_step_activate) },
+    { "DebuggerNext", GTK_STOCK_GO_FORWARD, N_("Next"), NULL,
+        N_("Step program, proceeding through subroutine calls."),
+        G_CALLBACK(on_debugger_next_activate) },
+    { "DebuggerUpFrame", GTK_STOCK_GO_UP, N_("Up Frame"), NULL,
+        N_("Step program, proceeding through subroutine calls."),
+        G_CALLBACK(on_debugger_up_frame_activate) },
+    { "DebuggerContinue", GTK_STOCK_MEDIA_FORWARD, N_("Continue"), NULL,
+        N_("Continue program being debugged, after signal or breakpoint."),
+        G_CALLBACK(on_debugger_continue_activate) },
+
+    { "DebuggerBreak", GTK_STOCK_STOP, N_("Interrupt"), NULL,
+        N_("Interrupt program execution"),
+        G_CALLBACK(on_debugger_interrupt_activate) },
+    { "DebuggerRestart", GTK_STOCK_REFRESH, N_("Restart"), NULL,
+        N_("Restart program execution"),
+        G_CALLBACK(on_debugger_restart_activate) },
+
+    { "DebuggerAddBreak", GTK_STOCK_STOP, N_("Add Break"), NULL,
+        N_("Set breakpoint at current line"),
+        G_CALLBACK(on_debugger_add_break_activate) },
+};
+
+static guint gswat_control_flow_debugging_context_n_actions = G_N_ELEMENTS(gswat_control_flow_debugging_context_actions);
+
 
 GType
 gswat_control_flow_debugging_context_get_type(void) /* Typechecking */
@@ -536,6 +585,13 @@ gswat_control_flow_debugging_context_deactivate(GSwatContext *object)
     gtk_container_remove(container,
                          GTK_WIDGET(self->priv->stack_view_scrolled_window));
 
+    if(self->priv->merge_id)
+    {
+        gtk_ui_manager_remove_ui(self->priv->ui_manager,
+                                 self->priv->merge_id);
+        self->priv->merge_id=0;
+    }
+    
     self->priv->active=FALSE;
 
     g_message("gswat_control_flow_debugging_context_deactivate");
@@ -550,6 +606,7 @@ optimise_gui_for_control_flow_debugging(GSwatControlFlowDebuggingContext *self)
     GtkTreeStore *variable_store;
     GtkCellRenderer *renderer;
     GtkTreeViewColumn *column;
+    GError *error=NULL;
 
 
     if(self->priv->src_view_tab)
@@ -695,6 +752,31 @@ optimise_gui_for_control_flow_debugging(GSwatControlFlowDebuggingContext *self)
                          self);
     }
     gtk_widget_show_all(GTK_WIDGET(self->priv->stack_view_scrolled_window));
+    
+
+    /* Enable context specific menu/toolbar entries */
+    if(!self->priv->actiongroup)
+    {
+        self->priv->actiongroup = gtk_action_group_new("ControlFlowDebuggingContextActions");
+        gtk_action_group_add_actions(self->priv->actiongroup,
+                                     gswat_control_flow_debugging_context_actions,
+                                     gswat_control_flow_debugging_context_n_actions,
+                                     self);
+        self->priv->ui_manager = gswat_window_get_ui_manager(self->priv->window); 
+    }
+    gtk_ui_manager_insert_action_group(self->priv->ui_manager,
+                                       self->priv->actiongroup, 
+                                       0);
+    g_assert(self->priv->merge_id == 0);
+    self->priv->merge_id = 
+        gtk_ui_manager_add_ui_from_file(self->priv->ui_manager,
+                                        rb_file("control-flow-debugging-ui.xml"),
+                                        &error);
+    if (error != NULL) {
+        g_warning("Couldn't merge %s: %s",
+                  rb_file("control-flow-debugging-ui.xml"), error->message);
+        g_clear_error(&error);
+    }
 }
 
 
@@ -762,6 +844,108 @@ on_gswat_window_debuggable_notify(GObject *object,
     {
         update_source_view(self);
     }
+}
+
+
+static void
+on_debugger_step_activate(GtkAction *action,
+                          GSwatControlFlowDebuggingContext *self)
+{
+    if(self->priv->debuggable)
+    {
+        gswat_debuggable_step_into(self->priv->debuggable);
+    }
+}
+
+
+static void
+on_debugger_next_activate(GtkAction *action,
+                          GSwatControlFlowDebuggingContext *self)
+{
+    if(self->priv->debuggable)
+    {
+        gswat_debuggable_next(self->priv->debuggable);
+    }
+}
+
+
+static void
+on_debugger_up_frame_activate(GtkAction *action,
+                              GSwatControlFlowDebuggingContext *self)
+{
+    if(self->priv->debuggable)
+    {
+        gswat_debuggable_finish(self->priv->debuggable);
+    }
+}
+
+
+static void
+on_debugger_continue_activate(GtkAction *action,
+                              GSwatControlFlowDebuggingContext *self)
+{
+    if(self->priv->debuggable)
+    {
+        gswat_debuggable_continue(self->priv->debuggable);
+    }
+}
+
+
+static void
+on_debugger_interrupt_activate(GtkAction *action,
+                               GSwatControlFlowDebuggingContext *self)
+{
+    if(self->priv->debuggable)
+    {
+        gswat_debuggable_interrupt(self->priv->debuggable);
+    }
+}
+
+
+static void
+on_debugger_restart_activate(GtkAction *action,
+                             GSwatControlFlowDebuggingContext *self)
+{
+    if(self->priv->debuggable)
+    {
+        gswat_debuggable_restart(self->priv->debuggable);
+    }
+}
+
+
+static void
+on_debugger_add_break_activate(GtkAction *action,
+                               GSwatControlFlowDebuggingContext *self)
+{
+    GSwatView *source_view = NULL;
+    GtkTextBuffer *source_buffer = NULL;
+    GeditDocument *current_document;
+    gchar *uri;
+    GtkTextIter cur;
+    gint line; 
+
+    if(!self->priv->debuggable)
+    {
+        return;
+    }
+
+    source_view=gswat_src_view_tab_get_view(self->priv->src_view_tab);
+    //source_view = get_current_view(self);
+    g_return_if_fail(source_view != NULL);
+
+    source_buffer = GTK_TEXT_VIEW(source_view)->buffer;
+
+    current_document = gswat_view_get_document(source_view);
+    uri = gedit_document_get_uri(current_document); 
+
+    gtk_text_buffer_get_iter_at_mark(source_buffer, 
+                                     &cur, 
+                                     gtk_text_buffer_get_insert(source_buffer)
+                                    );
+    line = gtk_text_iter_get_line(&cur);
+
+    gswat_debuggable_request_line_breakpoint(self->priv->debuggable, uri, line + 1);
+
 }
 
 
@@ -1688,5 +1872,7 @@ on_stack_frame_activated(GtkTreeView *tree_view,
                                frame->level);
 
 }
+
+
 
 
