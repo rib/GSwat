@@ -1,0 +1,17 @@
+<ui>
+  <toolbar name="ToolBar">
+    <placeholder name="ToolBarLeftGroup0Placeholder" />
+    <placeholder name="ToolBarCenterGroup1Placeholder">
+        <toolitem name="DebuggerStepInButton" action="DebuggerStepIn"/>
+        <toolitem name="DebuggerNextButton" action="DebuggerNext"/>
+        <toolitem name="DebuggerUpFrameButton" action="DebuggerUpFrame"/>
+        <toolitem name="DebuggerContinueButton" action="DebuggerContinue"/>
+        <separator/>
+        <toolitem name="DebuggerBreakButton" action="DebuggerBreak"/>
+        <toolitem name="DebuggerRestartButton" action="DebuggerRestart"/>
+        <separator/>
+        <toolitem name="DebuggerAddBreakButton" action="DebuggerAddBreak"/>
+    </placeholder>
+    <placeholder name="ToolBarRightGroup2Placeholder" />
+  </toolbar>
+</ui>
