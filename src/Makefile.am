@@ -111,6 +111,7 @@ libgswat_@GSWAT_API_VERSION@_la_CPPFLAGS = \
     -DSHARE_DIR=\"$(pkgdatadir)\" \
     -DGSWAT_LOCALEDIR=\""$(gswatlocaledir)"\" \
     -DGSWAT_BIN_DIR=\""$(bindir)"\" \
+    -DG_LOG_DOMAIN=\"GSwat\" \
     -I$(top_srcdir) \
     -I$(top_srcdir)/src \
     -I$(top_srcdir)/src/gedit \
