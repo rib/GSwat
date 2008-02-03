@@ -853,7 +853,7 @@ on_debugger_step_activate(GtkAction *action,
 {
     if(self->priv->debuggable)
     {
-        gswat_debuggable_step_into(self->priv->debuggable);
+        gswat_debuggable_step(self->priv->debuggable);
     }
 }
 
@@ -1600,7 +1600,7 @@ on_variable_object_invalidated(GObject *object,
     GtkTreeIter iter;
 
     variable_object = GSWAT_VARIABLE_OBJECT(object);
-    g_message("on_variable_object_invalidated");
+    g_message("on_variable_object_invalidated XYX");
     store = g_object_get_data(object, "gswat_tree_store");
     if(!store)
     {
@@ -1639,7 +1639,7 @@ on_variable_object_child_count_notify(GObject *object,
 
 
     variable_object = GSWAT_VARIABLE_OBJECT(object);
-    g_message("on_variable_object_invalidated");
+    g_message("on_variable_object_child_count_notify");
     store = g_object_get_data(object, "gswat_tree_store");
     if(!store)
     {

@@ -24,8 +24,8 @@
 
 #include <stdio.h>
 #include <gtk/gtk.h>
+#include <libgnome/gnome-util.h>
 #include <libgnomeui/libgnomeui.h>
-#include <glade/glade.h>
 #include <gtksourceview/gtksourceview.h>
 #include <glib/gi18n.h>
 #include "rb-file-helpers.h"
@@ -39,6 +39,8 @@
 #include "gswat-notebook.h"
 #include "gswat-src-view-tab.h"
 #include "gswat-view.h"
+#include "gswat-session-manager.h"
+#include "gswat-session-manager-dialog.h"
 #include "gswat-session.h"
 #include "gswat-debuggable.h"
 #include "gswat-gdb-debugger.h"
@@ -73,23 +75,29 @@ static void clean_up_current_session(GSwatWindow *self);
 static void on_gswat_debuggable_state_notify(GObject *object,
                                              GParamSpec *property,
                                              gpointer data);
-static void on_gswat_session_edit_done(GSwatSession *session,
-                                       GSwatWindow *window);
+static void on_gswat_gdb_debugger_io_error(GObject *object,
+					   gchar *error_message,
+					   gpointer data);
+static void on_gswat_session_manager_dialog_edit_done(GSwatSessionManagerDialog *dialog,
+						      GSwatWindow *window);
+static void set_current_session(GSwatWindow *self, GSwatSession *session);
 static void on_session_quit_activate(GtkAction *action,
-                                     GSwatWindow *self);
+				     GSwatWindow *self);
 static void on_edit_preferences_activate(GtkAction *action,
-                                         GSwatWindow *self);
+					 GSwatWindow *self);
 static void on_help_about_activate(GtkAction *action,
-                                   GSwatWindow *self);
+				   GSwatWindow *self);
 static void on_control_flow_debug_context_activate(GtkAction *action,
-                                                   GSwatWindow *self);
+						   GSwatWindow *self);
 static void on_browse_source_context_activate(GtkAction *action,
-                                              GSwatWindow *self);
+					      GSwatWindow *self);
 static gboolean on_window_delete_event(GtkWidget *win,
-                                       GdkEventAny *event,
-                                       GSwatWindow *self);
+				       GdkEventAny *event,
+				       GSwatWindow *self);
 /* Macros and defines */
 #define GSWAT_WINDOW_GET_PRIVATE(object)(G_TYPE_INSTANCE_GET_PRIVATE ((object), GSWAT_TYPE_WINDOW, GSwatWindowPrivate))
+
+#define SESSIONS_FILE "gswat-sessions.xml"
 
 /* Enums */
 /* add your signals here */
@@ -110,6 +118,8 @@ enum {
 
 struct _GSwatWindowPrivate
 {
+    GSwatSessionManager *session_manager;
+
     /* Per Session Data */
     GSwatSession *session;
     GSwatDebuggable *debuggable;
@@ -145,31 +155,31 @@ static GtkActionEntry gswat_window_actions [] =
     { "Help", NULL, N_("_Help") },
 
     { "SessionNew", GTK_STOCK_FILE, N_("_New Session..."), NULL,
-        N_("Start a new debugging session"),
-        G_CALLBACK(on_session_new_activate) },
+	N_("Start a new debugging session"),
+	G_CALLBACK(on_session_new_activate) },
     { "SessionQuit", GTK_STOCK_QUIT, N_("_Quit"), NULL,
-        N_("Quit the debugger"),
-        G_CALLBACK(on_session_quit_activate) },
+	N_("Quit the debugger"),
+	G_CALLBACK(on_session_quit_activate) },
 
     { "EditPreferences", GTK_STOCK_PREFERENCES, N_("Prefere_nces..."), NULL,
-        N_("Edit debugger preferences"),
-        G_CALLBACK(on_edit_preferences_activate) },
+	N_("Edit debugger preferences"),
+	G_CALLBACK(on_edit_preferences_activate) },
 
     { "ControlFlowDebugContext", NULL, N_("_Control Flow Debug"), NULL,
-        N_("Switch to the control flow debugging context"),
-        G_CALLBACK(on_control_flow_debug_context_activate) },
+	N_("Switch to the control flow debugging context"),
+	G_CALLBACK(on_control_flow_debug_context_activate) },
     { "BrowseSourceContext", NULL, N_("_Browse Source Code"), NULL,
-        N_("Switch to to the source browsing context"),
-        G_CALLBACK(on_browse_source_context_activate) },
+	N_("Switch to to the source browsing context"),
+	G_CALLBACK(on_browse_source_context_activate) },
 
     { "HelpAbout", GTK_STOCK_ABOUT, N_("_About"), NULL,
-        N_("Show information about the debugger"),
-        G_CALLBACK(on_help_about_activate) },
+	N_("Show information about the debugger"),
+	G_CALLBACK(on_help_about_activate) },
 
     /* Toolbar actions */
     { "SessionNewTB", GTK_STOCK_FILE, N_("New"), NULL,
-        N_("Start a new debugging session."),
-        G_CALLBACK(on_session_new_activate) },
+	N_("Start a new debugging session."),
+	G_CALLBACK(on_session_new_activate) },
 };
 
 static guint gswat_window_n_actions = G_N_ELEMENTS(gswat_window_actions);
@@ -181,41 +191,41 @@ gswat_window_get_type(void) /* Typechecking */
 
     if (!self_type)
     {
-        static const GTypeInfo object_info =
-        {
-            sizeof(GSwatWindowClass), /* class structure size */
-            NULL, /* base class initializer */
-            NULL, /* base class finalizer */
-            (GClassInitFunc)gswat_window_class_init, /* class initializer */
-            NULL, /* class finalizer */
-            NULL, /* class data */
-            sizeof(GSwatWindow), /* instance structure size */
-            0, /* preallocated instances */
-            (GInstanceInitFunc)gswat_window_init, /* instance initializer */
-            NULL /* function table */
-        };
+	static const GTypeInfo object_info =
+	{
+	    sizeof(GSwatWindowClass), /* class structure size */
+	    NULL, /* base class initializer */
+	    NULL, /* base class finalizer */
+	    (GClassInitFunc)gswat_window_class_init, /* class initializer */
+	    NULL, /* class finalizer */
+	    NULL, /* class data */
+	    sizeof(GSwatWindow), /* instance structure size */
+	    0, /* preallocated instances */
+	    (GInstanceInitFunc)gswat_window_init, /* instance initializer */
+	    NULL /* function table */
+	};
 
-        /* add the type of your parent class here */
-        self_type = g_type_register_static(G_TYPE_OBJECT, /* parent GType */
-                                           "GSwatWindow", /* type name */
-                                           &object_info, /* type info */
-                                           0 /* flags */
-                                          );
+	/* add the type of your parent class here */
+	self_type = g_type_register_static(G_TYPE_OBJECT, /* parent GType */
+					   "GSwatWindow", /* type name */
+					   &object_info, /* type info */
+					   0 /* flags */
+					  );
 #if 0
-        /* add interfaces here */
-        static const GInterfaceInfo mydoable_info =
-        {
-            (GInterfaceInitFunc)
-                gswat_window_mydoable_interface_init,
-            (GInterfaceFinalizeFunc)NULL,
-            NULL /* interface data */
-        };
+	/* add interfaces here */
+	static const GInterfaceInfo mydoable_info =
+	{
+	    (GInterfaceInitFunc)
+		gswat_window_mydoable_interface_init,
+	    (GInterfaceFinalizeFunc)NULL,
+	    NULL /* interface data */
+	};
 
-        if(self_type != G_TYPE_INVALID) {
-            g_type_add_interface_static(self_type,
-                                        MY_TYPE_MYDOABLE,
-                                        &mydoable_info);
-        }
+	if(self_type != G_TYPE_INVALID) {
+	    g_type_add_interface_static(self_type,
+					MY_TYPE_MYDOABLE,
+					&mydoable_info);
+	}
 #endif
     }
 
@@ -243,79 +253,79 @@ gswat_window_class_init(GSwatWindowClass *klass) /* Class Initialization */
     //new_param = g_param_spec_boolean("name", /* name */
     //new_param = g_param_spec_object("name", /* name */
     new_param = g_param_spec_pointer("name", /* name */
-                                     "Name", /* nick name */
-                                     "Name", /* description */
+				     "Name", /* nick name */
+				     "Name", /* description */
 #if INT/UINT/CHAR/LONG/FLOAT...
-                                     10, /* minimum */
-                                     100, /* maximum */
-                                     0, /* default */
+				     10, /* minimum */
+				     100, /* maximum */
+				     0, /* default */
 #elif BOOLEAN
-                                     FALSE, /* default */
+				     FALSE, /* default */
 #elif STRING
-                                     NULL, /* default */
+				     NULL, /* default */
 #elif OBJECT
-                                     MY_TYPE_PARAM_OBJ, /* GType */
+				     MY_TYPE_PARAM_OBJ, /* GType */
 #elif POINTER
-                                     /* nothing extra */
+				     /* nothing extra */
 #endif
-                                     GSWAT_PARAM_READABLE /* flags */
-                                     GSWAT_PARAM_WRITABLE /* flags */
-                                     GSWAT_PARAM_READWRITE /* flags */
-                                     | G_PARAM_CONSTRUCT
-                                     | G_PARAM_CONSTRUCT_ONLY
-                                     );
+				     GSWAT_PARAM_READABLE /* flags */
+				     GSWAT_PARAM_WRITABLE /* flags */
+				     GSWAT_PARAM_READWRITE /* flags */
+				     | G_PARAM_CONSTRUCT
+				     | G_PARAM_CONSTRUCT_ONLY
+				     );
     g_object_class_install_property(gobject_class,
-                                    PROP_NAME,
-                                    new_param);
+				    PROP_NAME,
+				    new_param);
 #endif
 
     new_param = g_param_spec_object("session", /* name */
-                                    "Session", /* nick name */
-                                    "The current session", /* description */
-                                    GSWAT_TYPE_SESSION, /* GType */
-                                    GSWAT_PARAM_READABLE /* flags */
-                                   );
+				    "Session", /* nick name */
+				    "The current session", /* description */
+				    GSWAT_TYPE_SESSION, /* GType */
+				    GSWAT_PARAM_READABLE /* flags */
+				   );
     g_object_class_install_property(gobject_class,
-                                    PROP_SESSION,
-                                    new_param);
+				    PROP_SESSION,
+				    new_param);
 
     new_param = g_param_spec_object("debuggable", /* name */
-                                    "Debuggable", /* nick name */
-                                    "The current debuggable", /* description */
-                                    GSWAT_TYPE_DEBUGGABLE, /* GType */
-                                    GSWAT_PARAM_READABLE /* flags */
-                                   );
+				    "Debuggable", /* nick name */
+				    "The current debuggable", /* description */
+				    GSWAT_TYPE_DEBUGGABLE, /* GType */
+				    GSWAT_PARAM_READABLE /* flags */
+				   );
     g_object_class_install_property(gobject_class,
-                                    PROP_DEBUGGABLE,
-                                    new_param);
+				    PROP_DEBUGGABLE,
+				    new_param);
 
     new_param = g_param_spec_uint("context-id", /* name */
-                                  "Context ID", /* nick name */
-                                  "The current context ID", /* description */
-                                  0, /* minimum */
-                                  (GSWAT_WINDOW_CONTEXT_COUNT-1), /* maximum */
-                                  0, /* default */
-                                  GSWAT_PARAM_READABLE /* flags */
-                                 );
+				  "Context ID", /* nick name */
+				  "The current context ID", /* description */
+				  0, /* minimum */
+				  (GSWAT_WINDOW_CONTEXT_COUNT-1), /* maximum */
+				  0, /* default */
+				  GSWAT_PARAM_READABLE /* flags */
+				 );
     g_object_class_install_property(gobject_class,
-                                    PROP_CONTEXT_ID,
-                                    new_param);
+				    PROP_CONTEXT_ID,
+				    new_param);
 
     /* set up signals */
 #if 0 /* template code */
     klass->signal_member = signal_default_handler;
     gswat_window_signals[SIGNAL_NAME] =
-        g_signal_new("signal_name", /* name */
-                     G_TYPE_FROM_CLASS(klass), /* interface GType */
-                     G_SIGNAL_RUN_LAST, /* signal flags */
-                     G_STRUCT_OFFSET(GSwatWindowClass, signal_member),
-                     NULL, /* accumulator */
-                     NULL, /* accumulator data */
-                     g_cclosure_marshal_VOID__VOID, /* c marshaller */
-                     G_TYPE_NONE, /* return type */
-                     0 /* number of parameters */
-                     /* vararg, list of param types */
-                    );
+	g_signal_new("signal_name", /* name */
+		     G_TYPE_FROM_CLASS(klass), /* interface GType */
+		     G_SIGNAL_RUN_LAST, /* signal flags */
+		     G_STRUCT_OFFSET(GSwatWindowClass, signal_member),
+		     NULL, /* accumulator */
+		     NULL, /* accumulator data */
+		     g_cclosure_marshal_VOID__VOID, /* c marshaller */
+		     G_TYPE_NONE, /* return type */
+		     0 /* number of parameters */
+		     /* vararg, list of param types */
+		    );
 #endif
 
     g_type_class_add_private(klass, sizeof(GSwatWindowPrivate));
@@ -323,55 +333,55 @@ gswat_window_class_init(GSwatWindowClass *klass) /* Class Initialization */
 
 static void
 gswat_window_get_property(GObject *object,
-                          guint id,
-                          GValue *value,
-                          GParamSpec *pspec)
+			  guint id,
+			  GValue *value,
+			  GParamSpec *pspec)
 {
     //GSwatWindow* self = GSWAT_WINDOW(object);
 
     switch(id) {
 #if 0 /* template code */
-        case PROP_NAME:
-            g_value_set_int(value, self->priv->property);
-            g_value_set_uint(value, self->priv->property);
-            g_value_set_boolean(value, self->priv->property);
-            /* don't forget that this will dup the string... */
-            g_value_set_string(value, self->priv->property);
-            g_value_set_object(value, self->priv->property);
-            g_value_set_pointer(value, self->priv->property);
-            break;
+	case PROP_NAME:
+	    g_value_set_int(value, self->priv->property);
+	    g_value_set_uint(value, self->priv->property);
+	    g_value_set_boolean(value, self->priv->property);
+	    /* don't forget that this will dup the string... */
+	    g_value_set_string(value, self->priv->property);
+	    g_value_set_object(value, self->priv->property);
+	    g_value_set_pointer(value, self->priv->property);
+	    break;
 #endif
-        default:
-            G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-            break;
+	default:
+	    G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+	    break;
     }
 }
 
 static void
 gswat_window_set_property(GObject *object,
-                          guint property_id,
-                          const GValue *value,
-                          GParamSpec *pspec)
+			  guint property_id,
+			  const GValue *value,
+			  GParamSpec *pspec)
 {   
     switch(property_id)
     {
 #if 0 /* template code */
-        case PROP_NAME:
-            self->priv->property = g_value_get_int(value);
-            self->priv->property = g_value_get_uint(value);
-            self->priv->property = g_value_get_boolean(value);
-            g_free(self->priv->property);
-            self->priv->property = g_value_dup_string(value);
-            if(self->priv->property)
-                g_object_unref(self->priv->property);
-            self->priv->property = g_value_dup_object(value);
-            /* g_free(self->priv->property)? */
-            self->priv->property = g_value_get_pointer(value);
-            break;
+	case PROP_NAME:
+	    self->priv->property = g_value_get_int(value);
+	    self->priv->property = g_value_get_uint(value);
+	    self->priv->property = g_value_get_boolean(value);
+	    g_free(self->priv->property);
+	    self->priv->property = g_value_dup_string(value);
+	    if(self->priv->property)
+		g_object_unref(self->priv->property);
+	    self->priv->property = g_value_dup_object(value);
+	    /* g_free(self->priv->property)? */
+	    self->priv->property = g_value_get_pointer(value);
+	    break;
 #endif
-        default:
-            g_warning("gswat_window_set_property on unknown property");
-            return;
+	default:
+	    g_warning("gswat_window_set_property on unknown property");
+	    return;
     }
 }
 
@@ -380,7 +390,7 @@ gswat_window_set_property(GObject *object,
 #if 0
 static void
 gswat_window_mydoable_interface_init(gpointer interface,
-                                     gpointer data)
+				     gpointer data)
 {
     MyDoableClass *mydoable = interface;
     g_assert(G_TYPE_FROM_INTERFACE(mydoable) = MY_TYPE_MYDOABLE);
@@ -399,16 +409,21 @@ gswat_window_init(GSwatWindow *self)
     construct_layout_widgets(self);
 
     self->priv->context[GSWAT_WINDOW_IN_LIMBO_CONTEXT] = 
-        GSWAT_CONTEXT(gswat_in_limbo_context_new(self));
+	GSWAT_CONTEXT(gswat_in_limbo_context_new(self));
     self->priv->context[GSWAT_WINDOW_CONTROL_FLOW_DEBUGGING_CONTEXT] = 
-        GSWAT_CONTEXT(gswat_control_flow_debugging_context_new(self));
+	GSWAT_CONTEXT(gswat_control_flow_debugging_context_new(self));
     self->priv->context[GSWAT_WINDOW_SOURCE_BROWSING_CONTEXT] =
-        GSWAT_CONTEXT(gswat_source_browsing_context_new(self));
+	GSWAT_CONTEXT(gswat_source_browsing_context_new(self));
     //TODO
     //self->priv->context[GSWAT_WINDOW_NOTE_TAKING_CONTEXT] =
     //    GSWAT_CONTEXT(g_object_new(GSWAT_TYPE_NOTE_TAKING_CONTEXT, NULL));
 
     self->priv->current_context_id = -1;
+
+    self->priv->session_manager = gswat_session_manager_new();
+    gswat_session_manager_set_sessions_file(self->priv->session_manager,
+					    gnome_util_home_file(SESSIONS_FILE));
+    gswat_session_manager_read_sessions_file(self->priv->session_manager);
 
     //connect_signals();
     //set_toolbar_state(self, GSWAT_DEBUGGABLE_NOT_RUNNING);
@@ -427,12 +442,13 @@ gswat_window_new(GSwatSession *session)
      */
     if(session)
     {
-        g_object_ref(session);
-        on_gswat_session_edit_done(session, self);
+	gswat_session_manager_add_session(self->priv->session_manager,
+					  session);
+	set_current_session(self, session);
     }
     else
     {
-        gswat_window_set_context(self, GSWAT_WINDOW_IN_LIMBO_CONTEXT);
+	gswat_window_set_context(self, GSWAT_WINDOW_IN_LIMBO_CONTEXT);
     }
 
     return self;
@@ -450,8 +466,8 @@ gswat_window_finalize(GObject *object)
 
     if(self->priv->current_context_id != -1)
     {
-        gint context_id = self->priv->current_context_id;
-        gswat_context_deactivate(self->priv->context[context_id]);
+	gint context_id = self->priv->current_context_id;
+	gswat_context_deactivate(self->priv->context[context_id]);
     }
 
     destruct_layout_widgets(self);
@@ -501,36 +517,36 @@ construct_layout_widgets(GSwatWindow *self)
     gtk_container_set_border_width(GTK_CONTAINER(self->priv->top_vbox), 0);
 
     g_signal_connect_object(G_OBJECT(window), "delete-event",
-                            G_CALLBACK(on_window_delete_event),
-                            self,
-                            G_CONNECT_AFTER);
+			    G_CALLBACK(on_window_delete_event),
+			    self,
+			    G_CONNECT_AFTER);
 
 
     /* Create the menus/toolbar */
     self->priv->actiongroup = gtk_action_group_new("MainActions");
     gtk_action_group_add_actions(self->priv->actiongroup,
-                                 gswat_window_actions,
-                                 gswat_window_n_actions,
-                                 self);
+				 gswat_window_actions,
+				 gswat_window_n_actions,
+				 self);
     self->priv->ui_manager = gtk_ui_manager_new(); 
     gtk_ui_manager_insert_action_group(self->priv->ui_manager,
-                                       self->priv->actiongroup, 
-                                       0);
+				       self->priv->actiongroup, 
+				       0);
     gtk_ui_manager_add_ui_from_file(self->priv->ui_manager,
-                                    rb_file("toolbar-menu-ui.xml"),
-                                    &error);
+				    rb_file("toolbar-menu-ui.xml"),
+				    &error);
     if (error != NULL) {
-        g_warning("Couldn't merge %s: %s",
-                  rb_file("toolbar-menu-ui.xml"), error->message);
-        g_clear_error(&error);
+	g_warning("Couldn't merge %s: %s",
+		  rb_file("toolbar-menu-ui.xml"), error->message);
+	g_clear_error(&error);
     }
     menubar = gtk_ui_manager_get_widget(self->priv->ui_manager, "/MenuBar");
     gtk_box_pack_start(GTK_BOX(self->priv->top_vbox),
-                       menubar, FALSE, FALSE, 0);
+		       menubar, FALSE, FALSE, 0);
     hbox = gtk_hbox_new(FALSE, 0);
     gtk_widget_show(hbox);
     gtk_box_pack_start(GTK_BOX(self->priv->top_vbox),
-                       hbox, FALSE, FALSE, 0);
+		       hbox, FALSE, FALSE, 0);
     toolbar = gtk_ui_manager_get_widget(self->priv->ui_manager, "/ToolBar");
     gtk_box_pack_start_defaults(GTK_BOX(hbox), toolbar);
 
@@ -539,31 +555,31 @@ construct_layout_widgets(GSwatWindow *self)
     /* Top level vpaned (source view etc top, drawing area bottom) */
     self->priv->center_vpaned = gtk_vpaned_new();
     gtk_box_pack_start(GTK_BOX(self->priv->top_vbox),
-                       self->priv->center_vpaned, TRUE, TRUE, 0);
+		       self->priv->center_vpaned, TRUE, TRUE, 0);
     /* A hpaned (source view left, stack/variables right) */
     self->priv->center_hpaned = gtk_hpaned_new();
     gtk_paned_set_position(GTK_PANED(self->priv->center_hpaned), 700);
     gtk_paned_pack1(GTK_PANED(self->priv->center_vpaned),
-                    self->priv->center_hpaned, TRUE, TRUE);
+		    self->priv->center_hpaned, TRUE, TRUE);
     /* A notebook for the main source view */
     notebook = GSWAT_NOTEBOOK(gswat_notebook_new());
     self->priv->notebook[GSWAT_WINDOW_CONTAINER_MAIN] = notebook;
     gtk_paned_pack1(GTK_PANED(self->priv->center_hpaned),
-                    GTK_WIDGET(notebook), TRUE, TRUE);
+		    GTK_WIDGET(notebook), TRUE, TRUE);
     /* A vpaned+notebooks for the right (variables top, stack bottom) */
     self->priv->right_vpaned = gtk_vpaned_new();
     gtk_paned_pack2(GTK_PANED(self->priv->center_hpaned),
-                    self->priv->right_vpaned, TRUE, TRUE);
+		    self->priv->right_vpaned, TRUE, TRUE);
     notebook = GSWAT_NOTEBOOK(gswat_notebook_new());
     gtk_notebook_set_show_tabs(GTK_NOTEBOOK(notebook), FALSE);
     self->priv->notebook[GSWAT_WINDOW_CONTAINER_RIGHT0] = notebook;
     gtk_paned_pack1(GTK_PANED(self->priv->right_vpaned),
-                    GTK_WIDGET(notebook), FALSE, TRUE);
+		    GTK_WIDGET(notebook), FALSE, TRUE);
     notebook = GSWAT_NOTEBOOK(gswat_notebook_new());
     gtk_notebook_set_show_tabs(GTK_NOTEBOOK(notebook), FALSE);
     self->priv->notebook[GSWAT_WINDOW_CONTAINER_RIGHT1] = notebook;
     gtk_paned_pack2(GTK_PANED(self->priv->right_vpaned),
-                    GTK_WIDGET(notebook), FALSE, TRUE);
+		    GTK_WIDGET(notebook), FALSE, TRUE);
 
 
     /* Put the bottom drawing area in place */
@@ -572,15 +588,15 @@ construct_layout_widgets(GSwatWindow *self)
     gtk_notebook_set_show_tabs(GTK_NOTEBOOK(notebook), FALSE);
     self->priv->notebook[GSWAT_WINDOW_CONTAINER_BOTTOM] = notebook;
     gtk_paned_add2(GTK_PANED(self->priv->center_vpaned),
-                   GTK_WIDGET(notebook));
+		   GTK_WIDGET(notebook));
     scrolled_window = gtk_scrolled_window_new(NULL, NULL);
     //gswat_notebook_insert_page(notebook, /* FIXME */, -1, TRUE);
     gtk_notebook_insert_page(GTK_NOTEBOOK(notebook), scrolled_window, NULL, -1);
     drawing_area = gtk_label_new(_("drawing_area")); //gtk_drawing_area_new();
     gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrolled_window),
-                                          drawing_area);
+					  drawing_area);
     gtk_paned_add2(GTK_PANED(self->priv->center_vpaned),
-                   drawing_area);
+		   drawing_area);
     gtk_widget_show(drawing_area);
 #endif
 
@@ -609,109 +625,125 @@ set_toolbar_state(GSwatWindow *self, guint state)
 {
     switch(state)
     {
-        case GSWAT_DEBUGGABLE_RUNNING:
-            g_message("******** setting toolbar state GSWAT_DEBUGGABLE_RUNNING");
-            //http://bugzilla.gnome.org/show_bug.cgi?id=56070
+	case GSWAT_DEBUGGABLE_RUNNING:
+	    g_message("******** setting toolbar state GSWAT_DEBUGGABLE_RUNNING");
+	    //http://bugzilla.gnome.org/show_bug.cgi?id=56070
 #if 0 
-            gtk_widget_set_sensitive(self->priv->step_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->next_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->finish_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->break_button, TRUE);
-            gtk_widget_set_sensitive(self->priv->restart_button, TRUE);
-            gtk_widget_set_sensitive(self->priv->add_break_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->step_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->next_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->finish_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->break_button, TRUE);
+	    gtk_widget_set_sensitive(self->priv->restart_button, TRUE);
+	    gtk_widget_set_sensitive(self->priv->add_break_button, FALSE);
 #endif
-            break;
-        case GSWAT_DEBUGGABLE_DISCONNECTED:
-            g_message("******** setting toolbar state GSWAT_DEBUGGABLE_DISCONNECTED");
-            //http://bugzilla.gnome.org/show_bug.cgi?id=56070
+	    break;
+	case GSWAT_DEBUGGABLE_DISCONNECTED:
+	    g_message("******** setting toolbar state GSWAT_DEBUGGABLE_DISCONNECTED");
+	    //http://bugzilla.gnome.org/show_bug.cgi?id=56070
 #if 0
-            gtk_widget_set_sensitive(self->priv->step_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->next_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->finish_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->break_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->add_break_button, TRUE);
+	    gtk_widget_set_sensitive(self->priv->step_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->next_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->finish_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->break_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->add_break_button, TRUE);
 #endif
-            break;
-        case GSWAT_DEBUGGABLE_INTERRUPTED:
-            g_message("******** setting toolbar state GSWAT_DEBUGGABLE_INTERRUPTED");
-            //http://bugzilla.gnome.org/show_bug.cgi?id=56070
+	    break;
+	case GSWAT_DEBUGGABLE_INTERRUPTED:
+	    g_message("******** setting toolbar state GSWAT_DEBUGGABLE_INTERRUPTED");
+	    //http://bugzilla.gnome.org/show_bug.cgi?id=56070
 #if 0
-            gtk_widget_set_sensitive(self->priv->step_button, TRUE);
-            gtk_widget_set_sensitive(self->priv->next_button, TRUE);
-            gtk_widget_set_sensitive(self->priv->continue_button, TRUE);
-            gtk_widget_set_sensitive(self->priv->finish_button, TRUE);
-            gtk_widget_set_sensitive(self->priv->break_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->restart_button, TRUE);
-            gtk_widget_set_sensitive(self->priv->add_break_button, TRUE);
+	    gtk_widget_set_sensitive(self->priv->step_button, TRUE);
+	    gtk_widget_set_sensitive(self->priv->next_button, TRUE);
+	    gtk_widget_set_sensitive(self->priv->continue_button, TRUE);
+	    gtk_widget_set_sensitive(self->priv->finish_button, TRUE);
+	    gtk_widget_set_sensitive(self->priv->break_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->restart_button, TRUE);
+	    gtk_widget_set_sensitive(self->priv->add_break_button, TRUE);
 #endif
-            break;
-        default:
-            g_warning("unexpected debuggable state");
-            //http://bugzilla.gnome.org/show_bug.cgi?id=56070
+	    break;
+	default:
+	    g_warning("unexpected debuggable state");
+	    //http://bugzilla.gnome.org/show_bug.cgi?id=56070
 #if 0
-            gtk_widget_set_sensitive(self->priv->step_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->next_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->finish_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->break_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->restart_button, FALSE);
-            gtk_widget_set_sensitive(self->priv->add_break_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->step_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->next_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->continue_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->finish_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->break_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->restart_button, FALSE);
+	    gtk_widget_set_sensitive(self->priv->add_break_button, FALSE);
 #endif
-            break;
+	    break;
     }
 
 }
 
 
-static void on_session_new_activate(GtkAction *action,
-                                    GSwatWindow *self)
+static void
+on_session_new_activate(GtkAction *action,
+			GSwatWindow *self)
 {
-    GSwatSession *gswat_session;
+    GSwatSessionManagerDialog *dialog;
 
+    dialog = gswat_session_manager_dialog_new(self->priv->session_manager);
 
-    /* Create a new session */
-    gswat_session = gswat_session_new();
-
-    g_signal_connect(gswat_session,
-                     "edit-done",
-                     G_CALLBACK(on_gswat_session_edit_done),
-                     self);
+    g_signal_connect(dialog,
+		     "edit-done",
+		     G_CALLBACK(on_gswat_session_manager_dialog_edit_done),
+		     self);
     /*
-       g_signal_connect(gswat_session,
+       g_signal_connect(session,
        "edit-abort",
-       G_CALLBACK(on_gswat_session_edit_done),
+       G_CALLBACK(on_gswat_session_manager_dialog_edit_done),
        NULL);
        */
-    gswat_session_edit(gswat_session);
-
-
+    gswat_session_manager_dialog_edit(dialog);
 }
 
 
 static void
-on_gswat_session_edit_done(GSwatSession *session, GSwatWindow *self)
+on_gswat_session_manager_dialog_edit_done(GSwatSessionManagerDialog *dialog,
+					  GSwatWindow *self)
 {
+    GSwatSession *session;
+
+    session = 
+	gswat_session_manager_dialog_get_current_session(dialog);
+
+    set_current_session(self, session);
+}
+
+
+static void
+set_current_session(GSwatWindow *self, GSwatSession *session)
+{
+
     clean_up_current_session(self);
 
     self->priv->session = session;
+
     /* Give others an opportunity to connect to the debuggable's
      * signals before we connect to the target */
     g_object_notify(G_OBJECT(self), "session");
 
     self->priv->debuggable 
-        = GSWAT_DEBUGGABLE(gswat_gdb_debugger_new(session));
+	= GSWAT_DEBUGGABLE(gswat_gdb_debugger_new(session));
 
     g_signal_connect(G_OBJECT(self->priv->debuggable),
-                     "notify::state",
-                     G_CALLBACK(on_gswat_debuggable_state_notify),
-                     self);
-    
+		     "notify::state",
+		     G_CALLBACK(on_gswat_debuggable_state_notify),
+		     self);
+    g_signal_connect(G_OBJECT(self->priv->debuggable),
+		     "gdb-io-error",
+		     G_CALLBACK(on_gswat_gdb_debugger_io_error),
+		     self);
+
     /* FIXME handle errors with target connection! */
-    if(gswat_debuggable_target_connect(self->priv->debuggable, NULL))
+    if(gswat_debuggable_connect(self->priv->debuggable, NULL))
     {
-        gswat_window_set_context(self, GSWAT_WINDOW_CONTROL_FLOW_DEBUGGING_CONTEXT);
+	gswat_window_set_context(self, GSWAT_WINDOW_CONTROL_FLOW_DEBUGGING_CONTEXT);
     }
 }
 
@@ -721,14 +753,14 @@ clean_up_current_session(GSwatWindow *self)
 {
     if(self->priv->debuggable)
     {
-        g_object_unref(self->priv->debuggable);
-        self->priv->debuggable = NULL;
-        g_object_notify(G_OBJECT(self), "debuggable");
+	g_object_unref(self->priv->debuggable);
+	self->priv->debuggable = NULL;
+	g_object_notify(G_OBJECT(self), "debuggable");
     }
 
     if(self->priv->session)
     {
-        g_object_unref(self->priv->session);
+	g_object_unref(self->priv->session);
     }
     self->priv->session = NULL;
     g_object_notify(G_OBJECT(self), "session");
@@ -739,8 +771,8 @@ clean_up_current_session(GSwatWindow *self)
 
 static void
 on_gswat_debuggable_state_notify(GObject *object,
-                                 GParamSpec *property,
-                                 gpointer data)
+				 GParamSpec *property,
+				 gpointer data)
 {
     GSwatWindow *self = GSWAT_WINDOW(data);
     GSwatDebuggable *debuggable = GSWAT_DEBUGGABLE(object);
@@ -750,7 +782,7 @@ on_gswat_debuggable_state_notify(GObject *object,
 
     if(state == GSWAT_DEBUGGABLE_DISCONNECTED)
     {
-        clean_up_current_session(self);
+	clean_up_current_session(self);
     }
 
     set_toolbar_state(self, state);
@@ -758,11 +790,28 @@ on_gswat_debuggable_state_notify(GObject *object,
 }
 
 
+static void
+on_gswat_gdb_debugger_io_error(GObject *object,
+			       gchar *error_message,
+			       gpointer data)
+{
+    //GSwatWindow *self = GSWAT_WINDOW(data);
+    //GSwatDebuggable *debuggable = GSWAT_DEBUGGABLE(object);
+    GtkWidget *dialog;
+
+    dialog = gtk_message_dialog_new(NULL,
+				    GTK_DIALOG_MODAL,
+				    GTK_MESSAGE_ERROR,
+				    GTK_BUTTONS_CLOSE,
+				    _("There was a GDB IO error: %s"),
+				    error_message);
+    gtk_dialog_run(GTK_DIALOG(dialog));
+}
 
 
 static void
 on_session_quit_activate(GtkAction *action,
-                         GSwatWindow *self)
+			 GSwatWindow *self)
 {
     g_object_unref(self->priv->debuggable);
     self->priv->debuggable = NULL;
@@ -772,7 +821,7 @@ on_session_quit_activate(GtkAction *action,
 
 static void
 on_edit_preferences_activate(GtkAction *action,
-                             GSwatWindow *self)
+			     GSwatWindow *self)
 {
     gedit_show_preferences_dialog();
 }
@@ -780,7 +829,7 @@ on_edit_preferences_activate(GtkAction *action,
 
 static void
 on_help_about_activate(GtkAction *action,
-                       GSwatWindow *self)
+		       GSwatWindow *self)
 {
 
 }
@@ -788,7 +837,7 @@ on_help_about_activate(GtkAction *action,
 
 static void
 on_control_flow_debug_context_activate(GtkAction *action,
-                                       GSwatWindow *self)
+				       GSwatWindow *self)
 {
     gswat_window_set_context(self, GSWAT_WINDOW_CONTROL_FLOW_DEBUGGING_CONTEXT);
 }
@@ -796,7 +845,7 @@ on_control_flow_debug_context_activate(GtkAction *action,
 
 static void
 on_browse_source_context_activate(GtkAction *action,
-                                  GSwatWindow *self)
+				  GSwatWindow *self)
 {
     gswat_window_set_context(self, GSWAT_WINDOW_SOURCE_BROWSING_CONTEXT);
 }
@@ -813,8 +862,8 @@ on_gswat_session_edit_abort(GSwatSession *session)
 
 static gboolean
 on_window_delete_event(GtkWidget *win,
-                       GdkEventAny *event,
-                       GSwatWindow *self)
+		       GdkEventAny *event,
+		       GSwatWindow *self)
 {
     gtk_main_quit();
 
@@ -833,14 +882,14 @@ gswat_window_set_context(GSwatWindow *self, GSwatWindowContainerID context_id)
 
     if(success)
     {
-        if(self->priv->current_context_id != prev_id)
-        {
-            if(prev_id != -1)
-            {
-                gswat_context_deactivate(self->priv->context[prev_id]);
-            }
-            g_object_notify(G_OBJECT(self), "context-id");
-        }
+	if(self->priv->current_context_id != prev_id)
+	{
+	    if(prev_id != -1)
+	    {
+		gswat_context_deactivate(self->priv->context[prev_id]);
+	    }
+	    g_object_notify(G_OBJECT(self), "context-id");
+	}
     }
 
     return success;
@@ -852,12 +901,12 @@ gswat_window_get_debuggable(GSwatWindow *self)
 {
     if(self->priv->debuggable)
     {
-        g_object_ref(G_OBJECT(self->priv->debuggable));
-        return self->priv->debuggable;
+	g_object_ref(G_OBJECT(self->priv->debuggable));
+	return self->priv->debuggable;
     }
     else
     {
-        return NULL;
+	return NULL;
     }
 }
 
@@ -867,8 +916,8 @@ gswat_window_get_container(GSwatWindow *self, GSwatWindowContainerID container_i
 {
     if(container_id >= GSWAT_WINDOW_CONTAINER_COUNT)
     {
-        g_warning("%s: Invalid container id (%d)", __FUNCTION__, container_id);
-        return NULL;
+	g_warning("%s: Invalid container id (%d)", __FUNCTION__, container_id);
+	return NULL;
     }
 
     return GTK_CONTAINER(self->priv->notebook[container_id]);
@@ -886,8 +935,8 @@ gswat_window_get_context_id(GSwatWindow *self)
 
 void
 gswat_window_insert_widget(GSwatWindow *self,
-                           GtkWidget *widget,
-                           GSwatWindowContainerID container_id)
+			   GtkWidget *widget,
+			   GSwatWindowContainerID container_id)
 {
     GtkNotebook *notebook;
     notebook = GTK_NOTEBOOK(self->priv->notebook[container_id]);
@@ -896,16 +945,16 @@ gswat_window_insert_widget(GSwatWindow *self,
 
 void
 gswat_window_insert_tabable(GSwatWindow *self,
-                            GSwatTabable *tabable,
-                            GSwatWindowContainerID container_id)
+			    GSwatTabable *tabable,
+			    GSwatWindowContainerID container_id)
 {
     g_assert(GSWAT_IS_TABABLE(tabable));
 
     GSwatNotebook *notebook = self->priv->notebook[container_id];
     gswat_notebook_insert_page(notebook,
-                               tabable,
-                               -1,
-                               TRUE);
+			       tabable,
+			       -1,
+			       TRUE);
 }
 
 

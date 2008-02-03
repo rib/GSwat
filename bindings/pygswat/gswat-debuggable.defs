@@ -1,0 +1,164 @@
+;; -*- scheme -*-
+; object definitions ...
+(define-interface Debuggable
+  (in-module "GSwat")
+  (c-name "GSwatDebuggable")
+  (gtype-id "G_TYPE_SWAT_DEBUGGABLE")
+)
+
+;; Enumerations and flags ...
+
+(define-enum DebuggableState
+  (in-module "GSwat")
+  (c-name "GSwatDebuggableState")
+  (gtype-id "G_TYPE_SWAT_DEBUGGABLE_STATE")
+  (values
+    '("disconnected" "GSWAT_DEBUGGABLE_DISCONNECTED")
+    '("running" "GSWAT_DEBUGGABLE_RUNNING")
+    '("interrupted" "GSWAT_DEBUGGABLE_INTERRUPTED")
+  )
+)
+
+
+;; From gswat-debuggable.h
+
+(define-function gswat_debuggable_get_type
+  (c-name "gswat_debuggable_get_type")
+  (return-type "GType")
+)
+
+(define-method target_connect
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_target_connect")
+  (return-type "none")
+)
+
+(define-method get_state
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_get_state")
+  (return-type "guint")
+)
+
+(define-method request_line_breakpoint
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_request_line_breakpoint")
+  (return-type "none")
+  (parameters
+    '("gchar*" "uri")
+    '("guint" "line")
+  )
+)
+
+(define-method request_function_breakpoint
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_request_function_breakpoint")
+  (return-type "none")
+  (parameters
+    '("gchar*" "symbol")
+  )
+)
+
+(define-method get_source_uri
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_get_source_uri")
+  (return-type "gchar*")
+)
+
+(define-method get_source_line
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_get_source_line")
+  (return-type "gint")
+)
+
+(define-method continue
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_continue")
+  (return-type "none")
+)
+
+(define-method finish
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_finish")
+  (return-type "none")
+)
+
+(define-method next
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_next")
+  (return-type "none")
+)
+
+(define-method step_into
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_step_into")
+  (return-type "none")
+)
+
+(define-method interrupt
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_interrupt")
+  (return-type "none")
+)
+
+(define-method restart
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_restart")
+  (return-type "none")
+)
+
+(define-method get_stack
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_get_stack")
+  (return-type "GQueue*")
+)
+
+(define-function gswat_debuggable_stack_free
+  (c-name "gswat_debuggable_stack_free")
+  (return-type "none")
+  (parameters
+    '("GQueue*" "stack")
+  )
+)
+
+(define-method free
+  (of-object "GSwatDebuggableFrame")
+  (c-name "gswat_debuggable_frame_free")
+  (return-type "none")
+)
+
+(define-method get_breakpoints
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_get_breakpoints")
+  (return-type "GList*")
+)
+
+(define-function gswat_debuggable_free_breakpoints
+  (c-name "gswat_debuggable_free_breakpoints")
+  (return-type "none")
+  (parameters
+    '("GList*" "breakpoints")
+  )
+)
+
+(define-method get_locals_list
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_get_locals_list")
+  (return-type "GList*")
+)
+
+(define-method get_frame
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_get_frame")
+  (return-type "guint")
+)
+
+(define-method set_frame
+  (of-object "GSwatDebuggable")
+  (c-name "gswat_debuggable_set_frame")
+  (return-type "none")
+  (parameters
+    '("guint" "frame")
+  )
+)
+
+

@@ -11,7 +11,7 @@ EXTRA_DIST = \
 	intltool-update.in \
 	config.rpath \
 	m4/ChangeLog \
-	clutter.pc.in
+	gswat-@GSWAT_API_VERSION@.pc.in
 
 DISTCLEANFILES = \
         intltool-extract \

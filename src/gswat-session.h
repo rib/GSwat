@@ -49,8 +49,8 @@ struct _GSwatSession
 
     /* add pointers to new members here */
     
-	/*< private > */
-	GSwatSessionPrivate *priv;
+    /*< private > */
+    GSwatSessionPrivate *priv;
 };
 
 struct _GSwatSessionClass
@@ -59,9 +59,14 @@ struct _GSwatSessionClass
     GObjectClass parent_class;
 
     /* add signals here */
-	void (* edit_done)		(GSwatSession *session);
-	void (* edit_abort)		(GSwatSession *session);
+    //void (* signal) (GSwatGSwatSessionManagerDialog *object);
 };
+
+typedef struct _GSwatSessionEnvironmentVariable
+{
+    gchar *name;
+    gchar *value;
+}GSwatSessionEnvironmentVariable;
 
 /* Session types */
 typedef enum {
@@ -86,12 +91,16 @@ gchar *gswat_session_get_target(GSwatSession *self);
 void gswat_session_set_target(GSwatSession *self, const gchar *target);
 gchar *gswat_session_get_working_dir(GSwatSession* self);
 void gswat_session_set_working_dir(GSwatSession* self, const gchar *working_dir);
+GList *gswat_session_get_environment(GSwatSession *self);
+void gswat_session_free_environment(GList *environment);
+void gswat_session_clear_environment(GSwatSession *self);
 void gswat_session_add_environment_variable(GSwatSession *self,
                                             const gchar *name,
                                             const gchar *value);
-
-/* TODO seperate out UI code into a different class */
-void gswat_session_edit(GSwatSession *session);
+void gswat_session_delete_environment_variable(GSwatSession *self,
+					       const gchar *name);
+glong gswat_session_get_access_time(GSwatSession *self);
+void gswat_session_set_access_time(GSwatSession *self, glong atime);
 
 G_END_DECLS
 

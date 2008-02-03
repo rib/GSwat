@@ -10,10 +10,13 @@ GSWAT_CORE_SOURCES = \
 			gswat-gdb-debugger.c \
 			gswat-gdb-variable-object.c \
 			gswat-gdbmi.c \
-			gswat-session.c
+			gswat-session.c \
+			gswat-session-manager.c
 
-GSWAT_UI_SOURCES = main.c \
+GSWAT_UI_SOURCES = gswat-main.c \
+		gswat-gui.c \
 		gswat-window.c \
+		gswat-session-manager-dialog.c \
 		gswat-tabable.c \
 		gswat-notebook.c \
 		gswat-src-view-tab.c \
@@ -92,6 +95,7 @@ gswat_CPPFLAGS = -DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"	\
 	   	 		 @EXTRA_CPPFLAGS@
 
 libgswat_@GSWAT_API_VERSION@_la_SOURCES = \
+	gswat-init.c \
 	$(GSWAT_CORE_SOURCES)
 
 libgswat_@GSWAT_API_VERSION@_la_LIBADD = @LIBGSWAT_DEP_LIBS@

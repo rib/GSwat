@@ -26,9 +26,6 @@
 #include <string.h>
 #include <gtk/gtk.h>
 #include <glib/gi18n.h>
-#include <glade/glade.h>
-#include <libxml/xmlreader.h>
-#include <libgnome/gnome-util.h>
 
 #include "gswat-utils.h"
 #include "gswat-session.h"
@@ -37,14 +34,6 @@
 /* Macros and defines */
 #define GSWAT_SESSION_GET_PRIVATE(object)(G_TYPE_INSTANCE_GET_PRIVATE ((object), GSWAT_TYPE_SESSION, GSwatSessionPrivate))
 
-#define SESSIONS_FILE "gswat-sessions.xml"
-
-/* Enums/Typedefs */
-enum {
-    SIG_EDIT_DONE,
-    SIG_EDIT_ABORT,
-    LAST_SIGNAL
-};
 
 enum {
     PROP_0,
@@ -52,37 +41,14 @@ enum {
     PROP_TARGET_TYPE,
     PROP_TARGET,
     PROP_COMMAND,
-    PROP_WORKING_DIR
+    PROP_WORKING_DIR,
+    PROP_ACCESS_TIME
 };
 
 enum {
     SESSION_NAME_COMBO_STRING,
     SESSION_NAME_COMBO_N_COLUMNS
 };
-
-typedef struct {
-    gchar *name;
-    gchar *value;
-}EnvironmentVariable;
-
-/* TODO move UI code out into a different class */
-typedef struct {
-    GladeXML *dialog_xml;
-
-    //GtkListStore *name_list_store;
-    GtkWidget *name_combo;
-    GtkWidget *command_entry;
-    GtkWidget *workdir_entry;
-    GtkWidget *serial_combo;
-}GSwatSessionEditor;
-
-typedef struct {
-    gchar *name;
-    gchar *target_type;
-    gchar *target;
-    gchar *working_dir;
-    GList *environment;
-}GSwatSessionState;
 
 struct _GSwatSessionPrivate
 {
@@ -97,8 +63,7 @@ struct _GSwatSessionPrivate
     gchar *working_dir;
     GList *environment;
 
-    /* TODO move UI code out into a different class */
-    GSwatSessionEditor *editor;
+    glong access_time;
 };
 
 
@@ -117,34 +82,10 @@ static void gswat_session_set_property(GObject *object,
 static void gswat_session_init(GSwatSession *self);
 static void gswat_session_finalize(GObject *self);
 
-static void set_session_dialog_defaults(GSwatSession *session, gchar *name);
-static GSwatSessionState *find_session_save_state(gchar *session_name);
-static void free_session_state_members(GSwatSessionState *session_state);
-static GList *read_sessions(void);
-static GSwatSessionState *parse_session(xmlDocPtr doc, xmlNodePtr cur);
-static void free_sessions(void);
-static void on_gswat_new_session_name_combo_change(GtkComboBoxEntry *name_combo,
-                                                   GSwatSession *session);
-static void on_gswat_session_ok_button_clicked(GtkButton *button,
-                                               gpointer user_data);
-static void save_sessions(void);
-static void save_session(xmlNodePtr parent,
-                         GSwatSessionState *session_state);
-static void on_gswat_session_cancel_button_clicked(GtkButton *button,
-                                       gpointer user_data);
-static gboolean on_gswat_new_session_dialog_delete_event(GtkWidget *widget,
-                                         GdkEvent *event,
-                                         gpointer user_data);
-static void gswat_session_abort_edit(GSwatSession *session);
-
-
 
 /* Variables */
 static GObjectClass *parent_class = NULL;
-static guint gswat_session_signals[LAST_SIGNAL] = { 0 };
-
-/* TODO - we need a lock for this */
-static GList *sessions = NULL;
+//static guint gswat_session_signals[LAST_SIGNAL] = { 0 };
 
 
 GType
@@ -194,6 +135,7 @@ gswat_session_get_type(void) /* Typechecking */
 
     return self_type;
 }
+
 
 static void
 gswat_session_class_init(GSwatSessionClass *klass) /* Class Initialization */
@@ -279,6 +221,18 @@ gswat_session_class_init(GSwatSessionClass *klass) /* Class Initialization */
                                     PROP_WORKING_DIR,
                                     new_param);
 
+    new_param = g_param_spec_long("access-time", /* name */
+                                  "Access time", /* nick name */
+				  "The last time this session was used (seconds since the epoch)", /* description */
+				  0, /* minimum */
+                                  G_MAXLONG, /* maximum */
+                                  0, /* default */
+                                  GSWAT_PARAM_READWRITE /* flags */
+                                  );
+    g_object_class_install_property(gobject_class,
+                                    PROP_ACCESS_TIME,
+                                    new_param);
+
 
     /* set up signals */
 #if 0 /* template code */
@@ -297,37 +251,10 @@ gswat_session_class_init(GSwatSessionClass *klass) /* Class Initialization */
                     );
 #endif
 
-    klass->edit_done=NULL;
-    klass->edit_abort=NULL;
-
-    gswat_session_signals[SIG_EDIT_DONE] =
-        g_signal_new("edit-done", /* name */
-                     G_TYPE_FROM_CLASS(klass), /* interface GType */
-                     G_SIGNAL_RUN_LAST, /* signal flags */
-                     G_STRUCT_OFFSET(GSwatSessionClass, edit_done),
-                     NULL, /* accumulator */
-                     NULL, /* accumulator data */
-                     g_cclosure_marshal_VOID__VOID, /* c marshaller */
-                     G_TYPE_NONE, /* return type */
-                     0 /* number of parameters */
-                     /* vararg, list of param types */
-                    );
-
-    gswat_session_signals[SIG_EDIT_ABORT] =
-        g_signal_new("edit-abort", /* name */
-                     G_TYPE_FROM_CLASS(klass), /* interface GType */
-                     G_SIGNAL_RUN_LAST, /* signal flags */
-                     G_STRUCT_OFFSET(GSwatSessionClass, edit_abort),
-                     NULL, /* accumulator */
-                     NULL, /* accumulator data */
-                     g_cclosure_marshal_VOID__VOID, /* c marshaller */
-                     G_TYPE_NONE, /* return type */
-                     0 /* number of parameters */
-                     /* vararg, list of param types */
-                    );
-
+    
     g_type_class_add_private(klass, sizeof(GSwatSessionPrivate));
 }
+
 
 static void
 gswat_session_get_property(GObject *object,
@@ -361,6 +288,9 @@ gswat_session_get_property(GObject *object,
             break;
         case PROP_WORKING_DIR:
             g_value_set_string(value, self->priv->working_dir);
+	    break;
+        case PROP_ACCESS_TIME:
+	    g_value_set_long(value, self->priv->access_time);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
@@ -373,6 +303,7 @@ gswat_session_get_property(GObject *object,
     }
 }
 
+
 static void
 gswat_session_set_property(GObject *object,
                            guint property_id,
@@ -380,19 +311,6 @@ gswat_session_set_property(GObject *object,
                            GParamSpec *pspec)
 {   
     GSwatSession *self = GSWAT_SESSION(object);
-    GSwatSessionState *session_state;
-    gboolean found = FALSE;
-
-    /* look up the save state for this session 
-     * (We do this before making changes so that
-     * name changes will cause a rename, not
-     * a copy of session save state)
-     */
-    session_state = find_session_save_state(self->priv->name);
-    if(session_state)
-    {
-        found = TRUE;
-    }
 
     switch(property_id)
     {
@@ -417,50 +335,15 @@ gswat_session_set_property(GObject *object,
             break;
         case PROP_WORKING_DIR:
             gswat_session_set_working_dir(self, g_value_get_string(value));
+	    break;
+        case PROP_ACCESS_TIME:
+            gswat_session_set_access_time(self, g_value_get_long(value));
+	    break;
         default:
             g_warning("gswat_session_set_property on unknown property");
             return;
     }
 
-    /* FIXME - these save state updates should be triggered by
-     * property notifactions, since they currently wont have any
-     * effect if a user directly uses the gswat_session_set_*
-     * methods
-     * Alternativly the set methods each need extending directly.
-     */
-
-    /* The name may have been unset previously so we have
-     * another search here...
-     */
-    if(!found)
-    {
-        session_state = find_session_save_state(self->priv->name);
-        if(session_state)
-        {
-            found = TRUE;
-        }
-    }
-
-    if(!found)
-    {
-        session_state = g_new0(GSwatSessionState, 1);
-        sessions = g_list_prepend(sessions, session_state);
-    }
-
-    free_session_state_members(session_state);
-
-    if(self->priv->name){
-        session_state->name = g_strdup(self->priv->name);
-    }
-    if(self->priv->target_type){
-        session_state->target_type = g_strdup(self->priv->target_type);
-    }
-    if(self->priv->target){
-        session_state->target = g_strdup(self->priv->target);
-    }
-    if(self->priv->working_dir){
-        session_state->working_dir = g_strdup(self->priv->working_dir);
-    }
 }
 
 /* Initialize interfaces here */
@@ -482,6 +365,8 @@ gswat_session_mydoable_interface_init(gpointer interface,
 static void
 gswat_session_init(GSwatSession *self)
 {
+    GTimeVal time;
+
     self->priv = GSWAT_SESSION_GET_PRIVATE(self);
 
     self->priv->name = g_strdup("Session0");
@@ -489,6 +374,9 @@ gswat_session_init(GSwatSession *self)
     self->priv->target_type = g_strdup("Run Local");
 
     self->priv->working_dir = g_get_current_dir();
+    
+    g_get_current_time(&time);
+    self->priv->access_time = time.tv_sec;
 }
 
 
@@ -508,18 +396,22 @@ gswat_session_finalize(GObject *object)
 
     if(self->priv->name){
         g_free(self->priv->name);
+	self->priv->name = NULL;
     }
     
     if(self->priv->target_type){
         g_free(self->priv->target_type);
+	self->priv->target_type = NULL;
     }
     
     if(self->priv->target){
         g_free(self->priv->target);
+	self->priv->target = NULL;
     }
 
     if(self->priv->working_dir){
         g_free(self->priv->working_dir);
+	self->priv->working_dir = NULL;
     }
 
     if(self->priv->environment)
@@ -531,6 +423,7 @@ gswat_session_finalize(GObject *object)
         }
         g_list_free(self->priv->environment);
     }
+    self->priv->environment = NULL;
     
     G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -554,663 +447,8 @@ For more gtk-doc notes, see:
 http://developer.gnome.org/arch/doc/authors.html
 #endif
 
-void
-gswat_session_edit(GSwatSession *session)
-{
-    GladeXML  *xml;
-    GtkWidget *dialog;
-    GtkWidget *ok_button;
-    GtkWidget *cancel_button;
-    GList *tmp;
-    GSwatSessionState *current_session;
-    GtkWidget *name_align;
-    GtkWidget *name_combo;
-    GtkWidget *serial_align;
-    GtkWidget *serial_combo;
-    GtkWidget *command_entry;
-    GtkWidget *workdir_entry;
-    //GtkListStore *name_list_store;
-    //GtkTreeIter iter;
-    //GtkCellRenderer *renderer;
 
 
-
-    /* load the session dialog */
-    xml = glade_xml_new(GSWAT_GLADEDIR "gswat.glade",
-                        "gswat_new_session_dialog",
-                        NULL);
-
-    /* in case we can't load the interface, bail */
-    if(!xml) {
-        g_warning("We could not load the interface!");
-        gtk_main_quit();
-    }
-    session->priv->editor = g_new0(GSwatSessionEditor, 1);
-
-    session->priv->editor->dialog_xml = xml;
-
-    glade_xml_signal_autoconnect(xml);
-
-
-    dialog = glade_xml_get_widget(xml, "gswat_new_session_dialog");
-    name_align = glade_xml_get_widget(xml, "gswat_session_name_align");
-    serial_align = glade_xml_get_widget(xml, "gswat_session_serial_align");
-    command_entry = glade_xml_get_widget(xml, "gswat_session_command_entry");
-    session->priv->editor->command_entry = command_entry;
-    workdir_entry = glade_xml_get_widget(xml, "gswat_session_workdir_entry");
-    session->priv->editor->workdir_entry = workdir_entry;
-    ok_button = glade_xml_get_widget(xml, "gswat_session_ok_button");
-    cancel_button = glade_xml_get_widget(xml, "gswat_session_cancel_button");
-
-
-
-    g_signal_connect(ok_button,
-                     "clicked",
-                     G_CALLBACK(on_gswat_session_ok_button_clicked),
-                     session);
-
-    g_signal_connect(cancel_button,
-                     "clicked",
-                     G_CALLBACK(on_gswat_session_cancel_button_clicked),
-                     session);
-
-    g_signal_connect(dialog,
-                     "delete-event",
-                     G_CALLBACK(on_gswat_new_session_dialog_delete_event),
-                     session);
-
-
-    serial_combo = gtk_combo_box_new_text();
-    session->priv->editor->serial_combo = serial_combo;
-    gtk_container_add(GTK_CONTAINER(serial_align), serial_combo);
-    gtk_widget_show(serial_combo);
-
-    /* Setup the serial port combo box */
-    gtk_combo_box_append_text(GTK_COMBO_BOX(serial_combo), "/dev/ttyS0");
-    gtk_combo_box_append_text(GTK_COMBO_BOX(serial_combo), "/dev/ttyS1");
-    gtk_combo_box_append_text(GTK_COMBO_BOX(serial_combo), "/dev/ttyS2");
-    gtk_combo_box_append_text(GTK_COMBO_BOX(serial_combo), "/dev/ttyS3");
-    gtk_combo_box_set_active(GTK_COMBO_BOX(serial_combo), 0);
-
-    /* populate the dialog with defaults from the first saved
-     * session
-     */
-    if(sessions != NULL)
-    {
-        free_sessions();
-    }
-    read_sessions();
-
-
-    /* Setup the "name" combo box */
-    /* FIXME - use gtk_combo_box_entry_new_text ()!! */
-
-    /*
-       name_list_store = gtk_list_store_new(SESSION_NAME_COMBO_N_COLUMNS,
-       G_TYPE_STRING);
-       session->priv->editor->name_list_store = name_list_store;
-       name_combo = gtk_combo_box_new_with_model(GTK_TREE_MODEL(name_list_store));
-       session->priv->editor->name_combo = name_combo;
-       renderer = gtk_cell_renderer_text_new();
-       g_object_set(renderer,
-       "mode", GTK_CELL_RENDERER_MODE_EDITABLE,
-       NULL);
-       gtk_cell_layout_pack_start(GTK_CELL_LAYOUT(name_combo), renderer, TRUE);
-       gtk_cell_layout_set_attributes(GTK_CELL_LAYOUT(name_combo), renderer,
-       "text", SESSION_NAME_COMBO_STRING,
-       NULL);
-       */
-    name_combo = gtk_combo_box_entry_new_text();
-    session->priv->editor->name_combo = name_combo;
-    gtk_container_add(GTK_CONTAINER(name_align), name_combo);
-    gtk_widget_show(name_combo);
-
-    g_signal_connect(name_combo,
-                     "changed",
-                     G_CALLBACK(on_gswat_new_session_name_combo_change),
-                     session);
-
-    for(tmp=sessions; tmp!=NULL; tmp=tmp->next)
-    {
-        current_session = (GSwatSessionState *)tmp->data;
-
-        gtk_combo_box_append_text(GTK_COMBO_BOX(name_combo),
-                                  current_session->name);
-        /*
-           gtk_list_store_append(name_list_store, &iter);
-           gtk_list_store_set(name_list_store, &iter,
-           SESSION_NAME_COMBO_STRING, current_session->name,
-           -1);
-           */
-    }
-    gtk_combo_box_set_active(GTK_COMBO_BOX(name_combo), 0);
-
-
-
-    set_session_dialog_defaults(session, NULL);
-
-    gtk_widget_show(dialog);
-
-    //gswat_new_session_dialog = session_dialog;
-    //gswat_new_session_xml = xml;
-
-}
-
-
-static void
-set_session_dialog_defaults(GSwatSession *session, gchar *name)
-{
-    GList *tmp;
-    GSwatSessionState *current_session;
-    gboolean found = FALSE;
-
-    if(!sessions)
-    {
-        return;
-    }
-
-    for(tmp=sessions; tmp!=NULL; tmp=tmp->next)
-    {
-        current_session = (GSwatSessionState *)tmp->data;
-
-        if(name==NULL || strcmp(current_session->name, name)==0)
-        {
-            found = TRUE;
-            break;
-        }
-    }
-
-    if(!found)
-    {
-        current_session = (GSwatSessionState *)sessions->data;
-    }
-
-    /* Give the "command" entry a default */
-    if(strcmp(current_session->target_type, "Run Local") == 0
-        && current_session->target)
-    {
-        gtk_entry_set_text(GTK_ENTRY(session->priv->editor->command_entry),
-                           current_session->target);
-    }
-
-    /* Give the "working dir" entry a default */
-    if(current_session->working_dir)
-    {
-        gtk_entry_set_text(GTK_ENTRY(session->priv->editor->workdir_entry),
-                           current_session->working_dir);
-    }
-
-    /* TODO - populate the list of environment variables */
-
-}
-
-
-static GSwatSessionState *
-find_session_save_state(gchar *session_name)
-{
-    GList *tmp;
-
-    if(!session_name)
-    {
-        return NULL;
-    }
-
-    for(tmp=sessions; tmp!=NULL; tmp=tmp->next)
-    {
-        GSwatSessionState *current_session = (GSwatSessionState *)tmp->data;
-        if(strcmp(current_session->name, session_name) == 0)
-        {
-            return current_session;
-        }
-    }
-    return NULL;
-}
-
-
-static void
-free_session_state_members(GSwatSessionState *session_state)
-{
-    if(session_state->name){
-        g_free(session_state->name);
-        session_state->name=NULL;
-    }
-    if(session_state->target_type){
-        g_free(session_state->target_type);
-        session_state->target_type=NULL;
-    }
-    if(session_state->target){
-        g_free(session_state->target);
-        session_state->target=NULL;
-    }
-    if(session_state->working_dir){
-        g_free(session_state->working_dir);
-        session_state->working_dir=NULL;
-    }
-}
-
-
-/* Read in all the users saved sessions */
-static GList *
-read_sessions(void)
-{
-    xmlDocPtr doc;
-    xmlNodePtr cur;
-    gchar *file_name;
-
-
-    /* FIXME: file locking - Paolo */
-    file_name = gnome_util_home_file(SESSIONS_FILE);
-    if (!g_file_test (file_name, G_FILE_TEST_EXISTS))
-    {
-        g_free (file_name);
-        g_warning("Failed to open saved sessions file: %s\n", file_name);
-        return NULL;
-    }
-
-    doc = xmlParseFile(file_name);
-    g_free(file_name);
-
-    if(doc == NULL)
-    {
-        g_warning("Failed to parse saved sessions file: %s\n", file_name);
-        return NULL;
-    }
-
-    cur = xmlDocGetRootElement(doc);
-    if(cur == NULL) 
-    {
-        g_message ("The sessions file '%s' is empty", SESSIONS_FILE);
-        xmlFreeDoc (doc);
-
-        return NULL;
-    }
-
-    if(xmlStrcmp (cur->name, (const xmlChar *) "sessions")) 
-    {
-        g_message ("File '%s' is of the wrong type", SESSIONS_FILE);
-        xmlFreeDoc (doc);
-
-        return NULL;
-    }
-
-    cur = xmlDocGetRootElement(doc);
-    cur = cur->xmlChildrenNode;
-
-    g_message("read_sessions");
-
-    /* FIXME take sessions mutex */
-
-    while (cur != NULL)
-    {
-        GSwatSessionState *next_session = parse_session(doc, cur);
-        if(next_session)
-        {
-            sessions = g_list_prepend(sessions, next_session);
-        }
-
-        cur = cur->next;
-    }
-
-    /* FIXME release sessions mutex */
-
-    xmlFreeDoc(doc);
-
-
-    return sessions; 
-}
-
-
-static GSwatSessionState *
-parse_session(xmlDocPtr doc, xmlNodePtr cur)
-{
-    GSwatSessionState *session_state;
-    xmlChar *name, *target_type, *target, *working_dir;
-
-    g_message("parse_session");
-
-    /* ignore blank space */
-    if(xmlIsBlankNode(cur))
-    {
-        return NULL;
-    }
-
-    if(xmlStrcmp(cur->name, (const xmlChar *)"session") != 0)
-    {
-        g_warning("missing \"session\" tag");
-        return NULL;
-    }
-
-    session_state = g_new0(GSwatSessionState, 1);
-
-    for(cur=cur->xmlChildrenNode; cur!=NULL; cur = cur->next)
-    {
-        if(xmlIsBlankNode(cur))
-        {
-            continue;
-        }
-
-        if(xmlStrcmp(cur->name, (const xmlChar *)"name") == 0)
-        {
-            name = xmlGetProp(cur, (const xmlChar *)"value");
-            if(!name){
-                goto parse_error;
-            }
-
-            session_state->name = g_strdup((gchar *)name);
-            xmlFree(name); 
-        }
-        if(xmlStrcmp(cur->name, (const xmlChar *)"target_type") == 0)
-        {
-            target_type = xmlGetProp(cur, (const xmlChar *)"value");
-            if(!target_type){
-                goto parse_error;
-            }
-            
-            session_state->target_type = g_strdup((gchar *)target_type);
-            xmlFree(target_type);
-        }
-        if(xmlStrcmp(cur->name, (const xmlChar *)"target") == 0)
-        {
-            target = xmlGetProp(cur, (const xmlChar *)"value");
-            if(!target){
-                goto parse_error;
-            }
-
-            session_state->target = g_strdup((gchar *)target);
-            xmlFree(target); 
-        }
-        if(xmlStrcmp(cur->name, (const xmlChar *)"working_dir") == 0)
-        {
-            working_dir = xmlGetProp(cur, (const xmlChar *)"value");
-            if(!working_dir){
-                goto parse_error;
-            }
-
-            session_state->working_dir = g_strdup((gchar *)working_dir);
-            xmlFree(working_dir); 
-        }
-    }
-
-    if(session_state->name == NULL)
-    {
-        goto parse_error;
-    }
-    if(session_state->target_type == NULL)
-    {
-        goto parse_error;
-    }
-    if(session_state->target == NULL)
-    {
-        goto parse_error;
-    }
-    if(session_state->working_dir == NULL)
-    {
-        goto parse_error;
-    }
-
-    g_message("Read in session with name=%s", session_state->name);
-
-    return session_state;
-
-parse_error:
-
-    g_warning("session parse error");
-
-    if(session_state->name)
-    {
-        g_free(session_state->name);
-    }
-    if(session_state->target_type)
-    {
-        g_free(session_state->target_type);
-    }
-    if(session_state->target)
-    {
-        g_free(session_state->target);
-    }
-    if(session_state->working_dir)
-    {
-        g_free(session_state->working_dir);
-    }
-
-    g_free(session_state);
-    return NULL;
-}
-
-
-static void
-free_sessions(void)
-{
-    GList *tmp;
-
-    /* FIXME take session mutex */
-
-    for(tmp=sessions; tmp!=NULL; tmp=tmp->next)
-    {
-        GSwatSessionState *current_session = (GSwatSessionState *)tmp->data;
-        free_session_state_members(current_session);
-        g_free(current_session);
-    }
-    g_list_free(sessions);
-    sessions = NULL;
-
-    /* FIXME release session mutex */
-}
-
-
-static void
-on_gswat_new_session_name_combo_change(GtkComboBoxEntry *name_combo,
-                                       GSwatSession *session)
-{
-    gchar *name;
-
-    name = gtk_combo_box_get_active_text(GTK_COMBO_BOX(name_combo));
-    set_session_dialog_defaults(session, name);
-    g_free(name);
-
-}
-
-
-static void
-on_gswat_session_ok_button_clicked(GtkButton       *button,
-                                   gpointer         user_data)
-{
-    GSwatSession *session = GSWAT_SESSION(user_data);
-
-    GladeXML *xml;
-    GtkWidget *dialog;
-
-    GtkWidget *name_combo;
-    GtkWidget *command_entry;
-    //GtkWidget *session_hostname_entry;
-    //GtkWidget *session_port_entry;
-
-
-    xml = session->priv->editor->dialog_xml;
-
-    dialog = glade_xml_get_widget(xml, "gswat_new_session_dialog");
-    gtk_widget_hide(dialog);
-
-    name_combo = session->priv->editor->name_combo;
-    //target_combo = glade_xml_get_widget(xml, "gswat_session_name_combo");
-    command_entry = glade_xml_get_widget(xml, "gswat_session_command_entry");
-
-
-    //gchar *name = g_strdup("Test1");//gtk_combo_box_get_active_text(GTK_COMBO_BOX(name_combo));
-    gchar *name = gtk_combo_box_get_active_text(GTK_COMBO_BOX(name_combo));
-    g_object_set(session,
-                 "name", name,
-                 NULL);
-    g_free(name);
-
-
-    //gchar *target = g_strdup("localhost");//gtk_combo_box_get_active_text(GTK_COMBO_BOX(target_combo));
-    //gtk_combo_box_get_active_text(GTK_COMBO_BOX(target_combo));
-    const gchar *target = gtk_entry_get_text(GTK_ENTRY(command_entry));
-    g_object_set(session,
-                 "target", target,
-                 NULL);
-    //g_free(target);
-
-    
-    save_sessions();
-
-    g_object_unref(xml);
-    gtk_widget_destroy(session->priv->editor->name_combo);
-    gtk_widget_destroy(session->priv->editor->serial_combo);
-    //g_object_unref(session->priv->editor->name_combo);
-    //g_object_unref(session->priv->editor->name_list_store);
-    //g_object_unref(session->priv->editor->serial_combo);
-    g_free(session->priv->editor);
-    session->priv->editor = NULL;
-
-    gtk_widget_destroy(dialog);
-
-    g_signal_emit_by_name(session, "edit-done");
-}
-
-
-static void
-save_sessions(void)
-{
-    xmlDocPtr doc;
-    xmlNodePtr root;
-    GList *tmp;
-    gchar *file_name;
-    gchar *tmpfile;
-
-    doc = xmlNewDoc((const xmlChar *)"1.0");
-    if (doc == NULL)
-    {
-        return;
-    }
-
-    /* Create metadata root */
-    root = xmlNewDocNode(doc, NULL, (const xmlChar *)"sessions", NULL);
-    xmlDocSetRootElement(doc, root);
-
-    for(tmp=sessions; tmp!=NULL; tmp=tmp->next)
-    {
-        GSwatSessionState *current_session = (GSwatSessionState *)tmp->data;
-        save_session(root, current_session);
-    }
-
-    /* FIXME: lock file - Paolo */
-    file_name = gnome_util_home_file(SESSIONS_FILE);
-    tmpfile = g_strdup_printf("%sXXXXXX", file_name);
-    
-    xmlSaveFormatFile(tmpfile, doc, 1);
-
-    if(rename(tmpfile, file_name)==-1)
-    {
-        g_warning("Failed to save session state to %s", file_name);
-    }
-    g_free(file_name);
-    g_free(tmpfile);
-
-    xmlFreeDoc(doc);
-}
-
-
-static void
-save_session(xmlNodePtr parent, GSwatSessionState *session_state)
-{
-    xmlNodePtr session_node;
-    xmlNodePtr name_node;
-    xmlNodePtr target_type_node;
-    xmlNodePtr target_node;
-    xmlNodePtr working_dir_node;
-    xmlNodePtr environment_node;
-    xmlNodePtr variable_node;
-    GList *tmp;
-
-    session_node = xmlNewChild(parent, NULL, (const xmlChar *)"session", NULL);
-
-
-    name_node = xmlNewChild(session_node, NULL, (const xmlChar *)"name", NULL);
-    xmlSetProp(name_node,
-               (const xmlChar *)"value",
-               (const xmlChar *)session_state->name);
-
-    target_type_node = xmlNewChild(session_node, NULL, (const xmlChar *)"target_type", NULL);
-    xmlSetProp(target_type_node,
-               (const xmlChar *)"value",
-               (const xmlChar *)session_state->target_type);
-
-    target_node = xmlNewChild(session_node, NULL, (const xmlChar *)"target", NULL);
-    xmlSetProp(target_node,
-               (const xmlChar *)"value",
-               (const xmlChar *)session_state->target);
-
-    working_dir_node = xmlNewChild(session_node, NULL, (const xmlChar *)"working_dir", NULL);
-    xmlSetProp(working_dir_node,
-               (const xmlChar *)"value",
-               (const xmlChar *)session_state->working_dir);
-
-    if(session_state->environment)
-    {
-        environment_node = xmlNewChild(session_node, NULL,
-                                       (const xmlChar *)"evironment",
-                                       NULL);
-        
-        for(tmp=session_state->environment; tmp!=NULL; tmp=tmp->next)
-        {
-            EnvironmentVariable *current_variable=tmp->data;
-            variable_node = xmlNewChild(environment_node, NULL,
-                                        (const xmlChar *)"evironment_variable",
-                                        NULL);
-            xmlSetProp(working_dir_node,
-                       (const xmlChar *)"name",
-                       (const xmlChar *)current_variable->name);
-            xmlSetProp(working_dir_node,
-                       (const xmlChar *)"value",
-                       (const xmlChar *)current_variable->value);
-        }
-    }
-}
-
-
-static void
-on_gswat_session_cancel_button_clicked(GtkButton       *button,
-                                       gpointer         user_data)
-{
-    GSwatSession *session = GSWAT_SESSION(user_data);
-
-    gswat_session_abort_edit(session);
-}
-
-
-static gboolean
-on_gswat_new_session_dialog_delete_event(GtkWidget       *widget,
-                                         GdkEvent        *event,
-                                         gpointer         user_data)
-{
-    GSwatSession *session = GSWAT_SESSION(user_data);
-
-    gswat_session_abort_edit(session);
-
-    return FALSE;
-}
-
-
-static void
-gswat_session_abort_edit(GSwatSession *session)
-{
-    GladeXML *xml;
-    GtkWidget *dialog;
-
-    xml = session->priv->editor->dialog_xml;
-
-    dialog = glade_xml_get_widget(xml, "gswat_new_session_dialog");
-    gtk_widget_destroy(dialog);
-
-    g_object_unref(xml);
-
-    g_free(session->priv->editor);
-    session->priv->editor = NULL;
-
-    g_signal_emit_by_name(session, "edit-abort");
-}
 
 #if 0 // getter/setter templates
 /**
@@ -1305,7 +543,9 @@ gswat_session_set_name(GSwatSession* self, const gchar *name)
 gchar *
 gswat_session_get_target_type(GSwatSession *self)
 {
-    return self->priv->target_type;
+    g_return_val_if_fail(GSWAT_IS_SESSION(self), NULL);
+    
+    return g_strdup(self->priv->target_type);
 }
 
 
@@ -1399,6 +639,8 @@ gswat_session_set_target(GSwatSession *self, const gchar *target)
 gchar *
 gswat_session_get_working_dir(GSwatSession* self)
 {
+    g_return_val_if_fail(GSWAT_IS_SESSION(self), NULL);
+
     return g_strdup(self->priv->working_dir);
 }
 
@@ -1423,13 +665,91 @@ gswat_session_add_environment_variable(GSwatSession *self,
                                        const gchar *name,
                                        const gchar *value)
 {
-    EnvironmentVariable *variable;
+    GSwatSessionEnvironmentVariable *variable;
 
-    variable = g_new(EnvironmentVariable, 1);
+    variable = g_new(GSwatSessionEnvironmentVariable, 1);
     variable->name = g_strdup(name);
     variable->value = g_strdup(value);
     
     self->priv->environment =
         g_list_prepend(self->priv->environment, variable);
+}
+
+
+void
+gswat_session_delete_environment_variable(GSwatSession *self,
+					  const gchar *name)
+{
+    GList *tmp;
+
+    for(tmp=self->priv->environment; tmp!=NULL; tmp=tmp->next)
+    {
+	GSwatSessionEnvironmentVariable *current_variable = tmp->data;
+
+	if(strcmp(current_variable->name, name) == 0)
+	{
+	    self->priv->environment = 
+		g_list_remove(self->priv->environment, current_variable);
+	    g_free(current_variable);
+	    return;
+	}
+    }
+}
+
+
+GList *
+gswat_session_get_environment(GSwatSession *self)
+{
+    GList *tmp;
+    GList *environment_copy=NULL;
+
+    for(tmp=self->priv->environment; tmp!=NULL; tmp=tmp->next)
+    {
+	GSwatSessionEnvironmentVariable *new_variable;
+
+	new_variable = g_new(GSwatSessionEnvironmentVariable, 1);
+	memcpy(new_variable,
+	       tmp->data,
+	       sizeof(GSwatSessionEnvironmentVariable));
+	environment_copy = 
+	    g_list_prepend(environment_copy, new_variable);
+    }
+
+    return environment_copy;
+}
+
+
+void
+gswat_session_free_environment(GList *environment)
+{
+    GList *tmp;
+    for(tmp=environment; tmp!=NULL; tmp=tmp->next)
+    {
+	g_free(tmp->data);
+    }
+    g_list_free(environment);
+}
+
+
+void
+gswat_session_clear_environment(GSwatSession *self)
+{
+    gswat_session_free_environment(self->priv->environment);
+    self->priv->environment = NULL;
+}
+
+
+glong
+gswat_session_get_access_time(GSwatSession *self)
+{
+    return self->priv->access_time;
+}
+
+
+void
+gswat_session_set_access_time(GSwatSession *self, glong access_time)
+{
+    self->priv->access_time = access_time;
+    g_object_notify(G_OBJECT(self), "access-time");
 }
 

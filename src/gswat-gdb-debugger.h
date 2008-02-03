@@ -20,8 +20,18 @@ G_BEGIN_DECLS
 
 #define GSWAT_GDB_DEBUGGER_ERROR (gswat_gdb_debugger_error_quark())
 enum {
-    GSWAT_GDB_DEBUGGER_ERROR_SPAWNER_PROCESS_IO
+    GSWAT_GDB_DEBUGGER_ERROR_SPAWNER_PROCESS_IO,
+    GSWAT_GDB_DEBUGGER_ERROR_GDB_IO
 };
+
+/* TODO support dynamically determined workarounds */
+
+/* In gdb 6.5 and 6.6 it looks like there might be a bug related
+ * to querying child information for a variable with a NULL value.
+ * (Note it seems to work in 6.4) */
+#define GSWAT_GDB_DEBUGGER_CAN_INSPECT_NULL_VAROBJS	FALSE
+//#define GSWAT_GDB_DEBUGGER_CAN_INSPECT_NULL_VAROBJS	TRUE
+
 
 #if !defined(GSWAT_GDB_DEBUGGER_TYPEDEF)
 #define GSWAT_GDB_DEBUGGER_TYPEDEF
@@ -37,8 +47,8 @@ struct _GSwatGdbDebugger
 
     /* add pointers to new members here */
     
-	/*< private > */
-	GSwatGdbDebuggerPrivate *priv;
+    /*< private > */
+    GSwatGdbDebuggerPrivate *priv;
 };
 
 struct _GSwatGdbDebuggerClass
@@ -47,7 +57,8 @@ struct _GSwatGdbDebuggerClass
     GObjectClass parent_class;
 
     /* add signals here */
-    //void (* signal) (GSwatGdbDebugger *object);
+    void (* gdb_io_error_signal) (GSwatGdbDebugger *object, gchar *error_message, gpointer data);
+    void (* gdb_io_timeout_signal) (GSwatGdbDebugger *object, gpointer data);
 };
 
 

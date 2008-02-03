@@ -236,7 +236,7 @@ http://developer.gnome.org/arch/doc/authors.html
  * might prefer to use a synchronous connect.
  */
 gboolean
-gswat_debuggable_target_connect(GSwatDebuggable* object, GError **error)
+gswat_debuggable_connect(GSwatDebuggable* object, GError **error)
 {
     GSwatDebuggableIface *debuggable;
     gboolean ret;
@@ -249,11 +249,29 @@ gswat_debuggable_target_connect(GSwatDebuggable* object, GError **error)
     g_object_ref(object);
     if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_DISCONNECTED)
     {
-        ret = debuggable->target_connect(object, error);
+        ret = debuggable->connect(object, error);
     }
     g_object_unref(object);
     
     return ret;
+}
+
+
+void
+gswat_debuggable_disconnect(GSwatDebuggable* object)
+{
+    GSwatDebuggableIface *debuggable;
+    
+    g_return_if_fail(GSWAT_IS_DEBUGGABLE(object));
+    
+    debuggable = GSWAT_DEBUGGABLE_GET_IFACE(object);
+
+    g_object_ref(object);
+    if(gswat_debuggable_get_state(object) != GSWAT_DEBUGGABLE_DISCONNECTED)
+    {
+        debuggable->disconnect(object);
+    }
+    g_object_unref(object);
 }
 
 
@@ -387,7 +405,7 @@ gswat_debuggable_next(GSwatDebuggable* object)
 }
 
 void
-gswat_debuggable_step_into(GSwatDebuggable* object)
+gswat_debuggable_step(GSwatDebuggable* object)
 {
     GSwatDebuggableIface *debuggable;
 
@@ -397,7 +415,7 @@ gswat_debuggable_step_into(GSwatDebuggable* object)
     g_object_ref(object);
     if(gswat_debuggable_get_state(object) == GSWAT_DEBUGGABLE_INTERRUPTED)
     {
-        debuggable->step_into(object);
+        debuggable->step(object);
     }
     g_object_unref(object);
 }

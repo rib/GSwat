@@ -26,8 +26,8 @@ struct _GSwatDebuggableIface
     //void (* signal_member)(GSwatDebuggable *self);
 
     /* VTable: */
-    gboolean (*target_connect)(GSwatDebuggable* object, GError **error);
-    void (*target_disconnect)(GSwatDebuggable* object);
+    gboolean (*connect)(GSwatDebuggable* object, GError **error);
+    void (*disconnect)(GSwatDebuggable* object);
     void (*request_line_breakpoint)(GSwatDebuggable* object,
                                     gchar *uri,
                                     guint line);
@@ -38,7 +38,7 @@ struct _GSwatDebuggableIface
     void (*cont)(GSwatDebuggable* object);
     void (*finish)(GSwatDebuggable* object);
     void (*next)(GSwatDebuggable* object);
-    void (*step_into)(GSwatDebuggable* object);
+    void (*step)(GSwatDebuggable* object);
     void (*interrupt)(GSwatDebuggable* object);
     void (*restart)(GSwatDebuggable* object);
     guint (*get_state)(GSwatDebuggable* object);
@@ -79,7 +79,8 @@ GType gswat_debuggable_get_type(void);
 GQuark gswat_debuggable_error_quark(void);
 
 /* Interface functions */
-gboolean gswat_debuggable_target_connect(GSwatDebuggable* object, GError **error);
+gboolean gswat_debuggable_connect(GSwatDebuggable* object, GError **error);
+void gswat_debuggable_disconnect(GSwatDebuggable* object);
 guint gswat_debuggable_get_state(GSwatDebuggable* object);
 void gswat_debuggable_request_line_breakpoint(GSwatDebuggable* object,
                                               gchar *uri,
@@ -91,7 +92,7 @@ gint gswat_debuggable_get_source_line(GSwatDebuggable* object);
 void gswat_debuggable_continue(GSwatDebuggable* object);
 void gswat_debuggable_finish(GSwatDebuggable* object);
 void gswat_debuggable_next(GSwatDebuggable* object);
-void gswat_debuggable_step_into(GSwatDebuggable* object);
+void gswat_debuggable_step(GSwatDebuggable* object);
 void gswat_debuggable_interrupt(GSwatDebuggable* object);
 void gswat_debuggable_restart(GSwatDebuggable* object);
 GQueue *gswat_debuggable_get_stack(GSwatDebuggable* object);

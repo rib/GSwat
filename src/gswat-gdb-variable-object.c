@@ -52,7 +52,7 @@ gswat_gdb_variable_object_variable_object_interface_init(gpointer interface,
 static void gswat_gdb_variable_object_init(GSwatGdbVariableObject *self);
 static void gswat_gdb_variable_object_finalize(GObject *self);
 
-static void create_gdb_variable_object(GSwatGdbVariableObject *self);
+static gboolean create_gdb_variable_object(GSwatGdbVariableObject *self);
 static GSwatGdbVariableObject *wrap_child_gdb_variable_object(GSwatGdbDebugger *debugger,
                                                               GSwatGdbVariableObject *parent,
                                                               const gchar *gdb_name,
@@ -436,7 +436,10 @@ gswat_gdb_variable_object_new(GSwatGdbDebugger *debugger,
     variable_object->priv->gdb_interrupt_count =
         gswat_gdb_debugger_get_interrupt_count(debugger);
 
-    create_gdb_variable_object(variable_object);
+    if(!create_gdb_variable_object(variable_object))
+    {
+	g_object_unref(variable_object);
+    }
 
     register_variable_object(debugger, variable_object);
 
@@ -479,7 +482,7 @@ For more gtk-doc notes, see:
 http://developer.gnome.org/arch/doc/authors.html
 #endif
 
-static void
+static gboolean
 create_gdb_variable_object(GSwatGdbVariableObject *self)
 {
     gchar *command;
@@ -513,6 +516,12 @@ create_gdb_variable_object(GSwatGdbVariableObject *self)
 
     /* FIXME - make sure we can cope with junk expressions */
     result=gswat_gdb_debugger_get_mi_result_record(self->priv->debugger, token);
+    if(!result)
+    {
+	/* An IO error has occurred */
+	return FALSE;
+    }
+
     numchild_val=gdbmi_value_hash_lookup(result->val, "numchild");
     if(numchild_val)
     {
@@ -532,6 +541,8 @@ create_gdb_variable_object(GSwatGdbVariableObject *self)
                                            global_variable_object_index);
 
     global_variable_object_index++;
+
+    return TRUE;
 }
 
 
@@ -800,6 +811,11 @@ evaluate_gdb_variable_object_expression(GSwatGdbVariableObject *self,
 
     result = gswat_gdb_debugger_get_mi_result_record(self->priv->debugger,
                                                      token);
+    if(!result)
+    {
+	/* An IO error has occurred */
+	return g_strdup("Error retrieving value!");;
+    }
     if(result && result->val)
     {
         value = gdbmi_value_hash_lookup(result->val, "value");
@@ -865,7 +881,13 @@ count_gdb_variable_object_children(GSwatGdbVariableObject *self)
                                                command,
                                                NULL,
                                                NULL);
+    g_free(command);
     result=gswat_gdb_debugger_get_mi_result_record(self->priv->debugger, token);
+    if(!result)
+    {
+	/* An IO error has occurred */
+	return 0;
+    }
     numchild_val=gdbmi_value_hash_lookup(result->val, "numchild");
     if(numchild_val)
     {
@@ -878,8 +900,6 @@ count_gdb_variable_object_children(GSwatGdbVariableObject *self)
         child_count = 0;
     }
     gswat_gdb_debugger_free_mi_record(result);
-
-    g_free(command);
 
     return child_count;
 }
@@ -927,7 +947,11 @@ gswat_gdb_variable_object_get_children(GSwatVariableObject *object)
     g_free(command);
     result = gswat_gdb_debugger_get_mi_result_record(self->priv->debugger,
                                                      token);
-
+    if(!result)
+    {
+	/* An IO error has occurred */
+	return NULL;
+    }
 
     children_val = gdbmi_value_hash_lookup(result->val, "children");
     n=0;
@@ -1038,6 +1062,11 @@ synchronous_update_all(GSwatGdbDebugger *gdb_debugger)
                                                NULL,
                                                NULL);
     result = gswat_gdb_debugger_get_mi_result_record(gdb_debugger, token);
+    if(!result)
+    {
+	/* An IO error has occcurred */
+	return;
+    }
     update_variable_objects_mi_callback(gdb_debugger, result, NULL);
     gswat_gdb_debugger_free_mi_record(result);
 }
@@ -1186,6 +1215,21 @@ handle_changelist(GSwatGdbDebugger *gdb_debugger,
             variable_object->priv->cached_value
                 = evaluate_gdb_variable_object_expression(variable_object, NULL);
         }
+	
+//#warning FIXME this workaround probably needs to be put in more places
+	if(!GSWAT_GDB_DEBUGGER_CAN_INSPECT_NULL_VAROBJS)
+	{
+	    if(strcmp(variable_object->priv->cached_value, "0x0")==0)
+	    {
+		variable_object->priv->child_count = 0;
+		child_count_changed = TRUE;
+	    }
+	    else
+	    {
+		variable_object->priv->child_count = -1;
+		child_count_changed = TRUE;
+	    }
+	}
 
         if(child_count_changed)
         {

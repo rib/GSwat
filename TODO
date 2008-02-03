@@ -55,6 +55,7 @@ misusing this, so we shouldn't copy them!
 --------------------------------------------------------------------
 
 summary of blockers for early preview release:
+- Segfaults/FPEs should be handled!!
 - Help->About, with homepage and bugtracker links
 - Fix Edit->Preferences to _some_ degree.
 
