@@ -26,6 +26,10 @@
 
 #define DEFAULT_GDB_IO_TIMEOUT (15000)
 
+#define GSWAT_DEBUG(...)
+//#define GSWAT_DEBUG(FORMAT, ...) g_message(FORMAT, __VA_ARGS__)
+
+
 /* Enums/Typedefs */
 /* add your signals here */
 enum {
@@ -692,7 +696,7 @@ start_spawner_process(GSwatGdbDebugger *self)
 				     fifo0_name);
 
     g_shell_parse_argv(server_command, &argc, &argv, NULL);
-    g_message(server_command);
+    GSWAT_DEBUG(server_command);
     g_free(server_command);
 
 
@@ -1009,7 +1013,7 @@ gswat_gdb_debugger_nop_mi_callback(GSwatGdbDebugger *self,
 				   const GSwatGdbMIRecord *record,
 				   void *data)
 {
-    g_message("NOP result callback:");
+    GSWAT_DEBUG("NOP result callback:");
     if(record->val)
     {
 	gdbmi_value_dump(record->val, 0);
@@ -1044,7 +1048,7 @@ spawn_local_process(GSwatGdbDebugger *self, GError **error)
 
     if(strcmp(fifo_data->str, "ACK\n") != 0)
     {
-	g_message("Didn't get a response from the spawner process\n");
+	GSWAT_DEBUG("Didn't get a response from the spawner process");
 	g_set_error(error,
 		    GSWAT_GDB_DEBUGGER_ERROR,
 		    GSWAT_GDB_DEBUGGER_ERROR_SPAWNER_PROCESS_IO,
@@ -1142,7 +1146,7 @@ spawn_local_process(GSwatGdbDebugger *self, GError **error)
 	goto spawner_process_io_channel_problem;
     }
     self->priv->target_pid = strtoul(fifo_data->str, NULL, 10);
-    g_message("process PID=%d",self->priv->target_pid);
+    GSWAT_DEBUG("process PID=%d",self->priv->target_pid);
 
     g_string_free(fifo_data, TRUE);
     fifo_data = NULL;
@@ -1163,7 +1167,7 @@ spawn_local_process(GSwatGdbDebugger *self, GError **error)
 
     //gdb_command=g_strdup_printf("-target-attach %d", self->priv->target_pid);
     gdb_command=g_strdup_printf("attach %d", self->priv->target_pid);
-    g_message("SENDING = \"%s\"", gdb_command);
+    GSWAT_DEBUG("SENDING = \"%s\"", gdb_command);
     //gswat_gdb_debugger_send_mi_command(self, gdb_command);
     gswat_gdb_debugger_send_cli_command(self, gdb_command);
     g_free(gdb_command);
@@ -1440,7 +1444,7 @@ queue_pending_record(GSwatGdbDebugger *self, gulong token, GString *record_str)
 
     /* FIXME - tmp debug */
 #if 0
-    g_message("queueing gdb record - token=\"%lu\", record=\"%s\"",
+    GSWAT_DEBUG("queueing gdb record - token=\"%lu\", record=\"%s\"",
 	      token,
 	      record_str->str);
 #endif
@@ -1489,11 +1493,11 @@ process_gdb_pending(GSwatGdbDebugger *self)
     copy = g_queue_copy(self->priv->gdb_pending);
 
 #if 0
-    g_message("Pending queue dump:");
+    GSWAT_DEBUG("Pending queue dump:");
     for(n=0, tmp=copy->head; tmp!=NULL; n++, tmp=tmp->next)
     {
 	pending_record = tmp->data;
-	g_message("index=%d: %s", n, pending_record->record_str->str); 
+	GSWAT_DEBUG("index=%d: %s", n, pending_record->record_str->str); 
     }
 #endif
 
@@ -1826,7 +1830,7 @@ process_gdb_mi_stream_record(GSwatGdbDebugger *self,
 			     gulong token,
 			     GString *record_str)
 {
-    g_message("%s", record_str->str);
+    GSWAT_DEBUG("%s", record_str->str);
 }
 
 
@@ -2532,7 +2536,7 @@ gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* object,
 
     self->priv->mi_handlers = g_slist_prepend(self->priv->mi_handlers, handler);
 
-    g_message("gdb mi command:%s\n",complete_command);
+    GSWAT_DEBUG("gdb mi command:%s",complete_command);
     g_free(complete_command);
 
     return self->priv->gdb_sequence++;
@@ -2596,7 +2600,7 @@ gswat_gdb_debugger_send_cli_command(GSwatGdbDebugger* object,
 	g_io_channel_flush(self->priv->gdb_trace, NULL);
     }
     
-    g_message("gdb cli command:%s\n", complete_command);
+    GSWAT_DEBUG("gdb cli command:%s", complete_command);
 
     g_free(complete_command);
 

@@ -36,6 +36,8 @@
 
 #include "gswat-server.h"
 
+#define GSWAT_DEBUG(...)
+//#define GSWAT_DEBUG(FORMAT, ...) g_message(FORMAT, __VA_ARGS__)
 
 static void command_loop(gchar *read_fifo_name, gchar *write_fifo_name);
 static int assign_terminal(int ctty, pid_t pgrp);
@@ -131,8 +133,8 @@ command_loop(gchar *read_fifo_name, gchar *write_fifo_name)
     pid_t pgrp;
     int ctty;
 
-    g_message("read_fifo_name=%s", read_fifo_name);
-    g_message("write_fifo_name=%s", write_fifo_name);
+    GSWAT_DEBUG("read_fifo_name=%s", read_fifo_name);
+    GSWAT_DEBUG("write_fifo_name=%s", write_fifo_name);
 
 
     write_fifo_fd = open(write_fifo_name, O_WRONLY);
@@ -174,9 +176,6 @@ command_loop(gchar *read_fifo_name, gchar *write_fifo_name)
 	return;
     }
     g_assert(status == G_IO_STATUS_NORMAL);
-    fprintf(stderr, "writtenn=%d fifo_data->len=%d\n",
-	    written,
-	    fifo_data->len);
     g_assert(written == fifo_data->len);
 
     status = g_io_channel_flush(write_fifo, &error);
@@ -239,7 +238,7 @@ command_loop(gchar *read_fifo_name, gchar *write_fifo_name)
 					   fifo0_name);
 
 	g_shell_parse_argv(terminal_command, &argc, &argv, NULL);
-	g_message(terminal_command);
+	GSWAT_DEBUG(terminal_command);
 	g_free(terminal_command);
 
 
@@ -286,7 +285,7 @@ command_loop(gchar *read_fifo_name, gchar *write_fifo_name)
 	    continue;
 	}
 	g_assert(status == G_IO_STATUS_NORMAL);
-	g_message("command=%s", fifo_data->str);
+	GSWAT_DEBUG("command=%s", fifo_data->str);
 
 	g_shell_parse_argv(fifo_data->str, &argc, &argv, NULL);
 
@@ -303,7 +302,7 @@ command_loop(gchar *read_fifo_name, gchar *write_fifo_name)
 	    continue;
 	}
 	g_assert(status == G_IO_STATUS_NORMAL);
-	g_message("dir=%s", fifo_data->str);
+	GSWAT_DEBUG("dir=%s", fifo_data->str);
 	chdir(fifo_data->str);
 
 	/* read the session environment */
@@ -331,7 +330,7 @@ command_loop(gchar *read_fifo_name, gchar *write_fifo_name)
 	{
 	    continue;
 	}
-	g_message("env done");
+	GSWAT_DEBUG("env done");
 
 
 
