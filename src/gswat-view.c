@@ -358,7 +358,8 @@ gswat_view_expose(GtkWidget *widget,
     gint y;
     gint height;
     gint win_y;
-    GdkGC *gc;
+    //GdkGC *gc;
+    cairo_t *cr;
 
     if ((event->window != gtk_text_view_get_window(text_view, GTK_TEXT_WINDOW_TEXT)))
     {
@@ -367,7 +368,11 @@ gswat_view_expose(GtkWidget *widget,
 
     gtk_text_view_get_visible_rect(text_view, &visible_rect);
 
-    gc = gdk_gc_new(GDK_DRAWABLE(event->window));
+    cr = gdk_cairo_create(GDK_DRAWABLE(event->window));
+    cairo_rectangle(cr,
+		    event->area.x, event->area.y,
+		    event->area.width, event->area.height);
+    cairo_clip(cr);
 
     for(tmp=self->priv->line_highlights; tmp!=NULL; tmp=tmp->next)
     {
@@ -405,19 +410,16 @@ gswat_view_expose(GtkWidget *widget,
             continue;
         }
 
-        gdk_gc_set_rgb_fg_color(gc, &(current_line_highlight->color));
-        gdk_draw_rectangle(event->window,
-                           gc,
-                           TRUE,
-                           redraw_rect.x + MAX(0, gtk_text_view_get_left_margin(text_view) - 1),
-                           win_y,
-                           redraw_rect.width,
-                           height);
-
+	gdk_cairo_set_source_color(cr, &(current_line_highlight->color));
+	cairo_rectangle(cr,
+			redraw_rect.x + MAX(0, gtk_text_view_get_left_margin(text_view) - 1),
+			win_y,
+			redraw_rect.width,
+			height);
+	cairo_stroke(cr);
     }
 
-    g_object_unref(gc);
-
+    cairo_destroy (cr);
 
 parent_expose:
     {
