@@ -29,7 +29,6 @@
 
 #include "gedit-prefs-manager.h"
 #include "gswat-window.h"
-#include "gswat-spawn.h"
 #include "gswat-session.h"
 
 

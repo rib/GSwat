@@ -1,5 +1,5 @@
 
-bin_PROGRAMS = gswat gswat-spawner
+bin_PROGRAMS = gswat gswat-server gswat-ptrace-stub
 lib_LTLIBRARIES = libgswat-@GSWAT_API_VERSION@.la
 
 #TODO I think gswat-session.c should
@@ -82,17 +82,18 @@ gswat_SOURCES = \
 gswat_LDADD = @GSWAT_UI_DEP_LIBS@
 gswat_LDFLAGS = -export-dynamic
 gswat_CFLAGS = @EXTRA_CFLAGS@ @GSWAT_UI_DEP_CFLAGS@
-gswat_CPPFLAGS = -DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"	\
-	   	 		 -DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
-				 -DGNOME_ICONDIR=\""$(datadir)/pixmaps"\" 		\
-				 -DSHARE_DIR=\"$(pkgdatadir)\"                  \
-				 -DGSWAT_LOCALEDIR=\""$(gswatlocaledir)"\"		\
-				 -DGSWAT_BIN_DIR=\""$(bindir)"\"	\
-		 		 -I$(top_srcdir)								\
-		 		 -I$(top_srcdir)/src							\
-		 		 -I$(top_srcdir)/src/gedit						\
-		 		 -I$(top_srcdir)/src/rhythmbox					\
-	   	 		 @EXTRA_CPPFLAGS@
+gswat_CPPFLAGS = \
+	-DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
+	-DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
+	-DGNOME_ICONDIR=\""$(datadir)/pixmaps"\" \
+	-DSHARE_DIR=\"$(pkgdatadir)\" \
+	-DGSWAT_LOCALEDIR=\""$(gswatlocaledir)"\" \
+	-DGSWAT_BIN_DIR=\""$(bindir)"\"	\
+	-I$(top_srcdir) \
+	-I$(top_srcdir)/src \
+	-I$(top_srcdir)/src/gedit \
+	-I$(top_srcdir)/src/rhythmbox \
+	@EXTRA_CPPFLAGS@
 
 libgswat_@GSWAT_API_VERSION@_la_SOURCES = \
 	gswat-init.c \
@@ -104,32 +105,37 @@ libgswat_@GSWAT_API_VERSION@_la_CFLAGS = @LIBGSWAT_DEP_CFLAGS@
 # TODO once we seperate out the ui code from gswat-session.c then
 # lots of these defines can go away.
 libgswat_@GSWAT_API_VERSION@_la_CPPFLAGS = \
-				 -DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"	\
-	   	 		 -DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
-				 -DGNOME_ICONDIR=\""$(datadir)/pixmaps"\" 		\
-				 -DSHARE_DIR=\"$(pkgdatadir)\"                  \
-				 -DGSWAT_LOCALEDIR=\""$(gswatlocaledir)"\"		\
-				 -DGSWAT_BIN_DIR=\""$(bindir)"\"	\
-		 		 -I$(top_srcdir)								\
-		 		 -I$(top_srcdir)/src							\
-		 		 -I$(top_srcdir)/src/gedit						\
-		 		 -I$(top_srcdir)/src/rhythmbox					\
-	   	 		 @EXTRA_CPPFLAGS@
+    -DGEDIT_GLADEDIR=\""$(datadir)/gswat/glade/"\"	\
+    -DGSWAT_GLADEDIR=\""$(datadir)/gswat/glade/"\" \
+    -DGNOME_ICONDIR=\""$(datadir)/pixmaps"\" \
+    -DSHARE_DIR=\"$(pkgdatadir)\" \
+    -DGSWAT_LOCALEDIR=\""$(gswatlocaledir)"\" \
+    -DGSWAT_BIN_DIR=\""$(bindir)"\" \
+    -I$(top_srcdir) \
+    -I$(top_srcdir)/src \
+    -I$(top_srcdir)/src/gedit \
+    -I$(top_srcdir)/src/rhythmbox \
+    @EXTRA_CPPFLAGS@
 libgswat_@GSWAT_API_VERSION@_la_includedir = $(includedir)/gswat-@GSWAT_MAJOR_VERSION@.0
 libgswat_@GSWAT_API_VERSION@_la_include_HEADERS = \
-		gswat.h \
-		gswat-debuggable.h \
-		gswat-variable-object.h \
-		gswat-gdb-debugger.h \
-		gswat-gdb-variable-object.h \
-		gswat-gdbmi.h \
-		gswat-session.h
+    gswat.h \
+    gswat-debuggable.h \
+    gswat-variable-object.h \
+    gswat-gdb-debugger.h \
+    gswat-gdb-variable-object.h \
+    gswat-gdbmi.h \
+    gswat-session.h
 
 
-gswat_spawner_SOURCES = gswat-spawn.c
-gswat_spawner_LDADD = @GSWAT_SPAWNER_DEP_LIBS@
-gswat_spawner_CFLAGS = @EXTRA_CFLAGS@ @GSWAT_SPAWNER_DEP_CFLAGS@
-gswat_spawner_CPPFLAGS = @EXTRA_CPPFLAGS@
+gswat_server_SOURCES = gswat-server.c
+gswat_server_LDADD = @GSWAT_SERVER_DEP_LIBS@
+gswat_server_CFLAGS = @EXTRA_CFLAGS@ @GSWAT_SERVER_DEP_CFLAGS@
+gswat_server_CPPFLAGS = @EXTRA_CPPFLAGS@
+
+gswat_ptrace_stub_SOURCES = gswat-ptrace-stub.c
+gswat_ptrace_stub_LDADD = @GSWAT_PTRACE_STUB_DEP_LIBS@
+gswat_ptrace_stub_CFLAGS = @EXTRA_CFLAGS@ @GSWAT_PTRACE_STUB_DEP_CFLAGS@
+gswat_ptrace_stub_CPPFLAGS = @EXTRA_CPPFLAGS@
 
 
 GSWAT_EXTRA_DIST = \
@@ -142,7 +148,8 @@ GSWAT_EXTRA_DIST = \
 		gswat-notebook.h \
 		gswat-session.h \
 		gswat-source-browsing-context.h \
-		gswat-spawn.h \
+		gswat-server.h \
+		gswat-ptrace-stub.h \
 		gswat-src-view-tab.h \
 		gswat-tabable.h \
 		gswat-utils.h \

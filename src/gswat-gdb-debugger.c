@@ -671,7 +671,7 @@ start_spawner_process(GSwatGdbDebugger *self)
     int write_fifo_fd;
     GIOChannel *read_fifo;
     GIOChannel *write_fifo;
-    gchar *terminal_command;
+    gchar *server_command;
     gint argc;
     gchar **argv;
     gboolean retval;
@@ -686,18 +686,16 @@ start_spawner_process(GSwatGdbDebugger *self)
     mkfifo(fifo1_name, S_IRUSR|S_IWUSR);
 
 
-    terminal_command = g_strdup_printf("gnome-terminal -x " 
-				       GSWAT_BIN_DIR 
-				       "/gswat-spawner --read-fifo %s --write-fifo %s",
-				       fifo1_name,
-				       fifo0_name);
+    server_command = g_strdup_printf(GSWAT_BIN_DIR
+				     "/gswat-server --read-fifo %s --write-fifo %s",
+				     fifo1_name,
+				     fifo0_name);
 
-    g_shell_parse_argv(terminal_command, &argc, &argv, NULL);
-    g_message(terminal_command);
-    g_free(terminal_command);
+    g_shell_parse_argv(server_command, &argc, &argv, NULL);
+    g_message(server_command);
+    g_free(server_command);
 
 
-    /* run gnome-terminal -x argv[0] -magic /path/to/fifo */
     retval = g_spawn_async(NULL,
 			   argv,
 			   NULL,
@@ -710,7 +708,7 @@ start_spawner_process(GSwatGdbDebugger *self)
 
 
     if(error) {
-	g_warning("%s: %s", _("Could not start terminal"), error->message);
+	g_warning("%s: %s", _("Could not start server"), error->message);
 	g_error_free(error);
 	error = NULL;
 
@@ -719,7 +717,7 @@ start_spawner_process(GSwatGdbDebugger *self)
 	return FALSE;
 
     } else if(!retval) {
-	g_warning("%s", _("Could not start terminal"));
+	g_warning("%s", _("Could not start server"));
 
 	g_free(fifo0_name);
 	g_free(fifo1_name);
