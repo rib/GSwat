@@ -187,7 +187,7 @@ dnl ================================================================
 dnl I18n stuff.
 dnl ================================================================
 AC_PROG_INTLTOOL([0.23])
-GETTEXT_PACKAGE=gedit
+GETTEXT_PACKAGE=gswat
 AC_SUBST(GETTEXT_PACKAGE)
 AC_SUBST([CONFIG_STATUS_DEPENDENCIES],['$(top_srcdir)/po/LINGUAS'])
 AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE,"$GETTEXT_PACKAGE", [Gettext package])
@@ -210,25 +210,11 @@ dnl ================================================================
 #TODO once we have seperated out the gui code for gswat-session.c
 # we will be able to remove most of these deps.
 PKG_CHECK_MODULES(LIBGSWAT_DEP, [
-		  gtksourceview-1.0 >= 1.2.0 
-		  libgnomeui-2.0
-		  libgnomeprintui-2.2
-		  gtk+-2.0 >= 2.2 
 		  glib-2.0 >= 2.2 
                   gio-2.0
-		  libglade-2.0 >= 2.0 
 		  gthread-2.0
 ])
-PKG_CHECK_MODULES(GSWAT_UI_DEP, [
-		  gtksourceview-1.0 >= 1.2.0
-		  libgnomeui-2.0
-		  libgnomeprintui-2.2
-		  gtk+-2.0 >= 2.2 
-		  glib-2.0 >= 2.2 
-                  gio-2.0
-		  libglade-2.0 >= 2.0 
-		  gthread-2.0
-])
+
 PKG_CHECK_MODULES(GSWAT_SERVER_DEP, [
 		  glib-2.0 >= 2.2 
 ])
@@ -266,8 +252,6 @@ AC_SUBST(EXTRA_CFLAGS)
 AC_SUBST(EXTRA_CPPFLAGS)
 AC_SUBST(LIBGSWAT_DEP_CFLAGS)
 AC_SUBST(LIBGSWAT_DEP_LIBS)
-AC_SUBST(GSWAT_UI_DEP_CFLAGS)
-AC_SUBST(GSWAT_UI_DEP_LIBS)
 AC_SUBST(GSWAT_SERVER_DEP_LIBS)
 AC_SUBST(GSWAT_SERVER_DEP_CFLAGS)
 AC_SUBST(GSWAT_PTRACE_STUB_DEP_LIBS)
@@ -280,6 +264,7 @@ dnl ================================================================
 AC_OUTPUT(
 Makefile 
 src/Makefile
+tests/Makefile
 po/Makefile.in
 gswat-0.1.pc
 doc/Makefile
