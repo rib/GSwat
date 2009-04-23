@@ -36,15 +36,20 @@
     <title>GSwat Overview</title>
     <partintro>
       <para>
-      GSwat is a GObject based debugger, usuable either via a GTK+ gui or via a shared
-      library API. It is not limited to being a GDB frontend so look out for Python and
-      Mono backends in the future.
+      GSwat is a GObject based debugger API, intended as a foundation for
+      writting debugger frontends (either graphical or command line based) It
+      is not limited to being a GDB frontend so look out for Python and Ruby
+      backends in the future.
+
+      GSwat will also provide bindings for any language supported by the
+      GObject introspection libraries meaning any debugger interface that uses
+      GSwat will trivially be able to use a multitude of scripting languages
+      to extend the debugger.
       </para>
-      
     </partintro>
   </part>
   <part>
-    <title>GSwat Core API Reference</title>
+    <title>GSwat API Reference</title>
     <xi:include href="xml/gswat-session.xml"/>
     <xi:include href="xml/gswat-debuggable.xml"/>
     <xi:include href="xml/gswat-gdb-debugger.xml"/>
@@ -52,22 +57,6 @@
     <xi:include href="xml/gswat-gdb-variable-object.xml"/>
     <xi:include href="xml/gswat-gdbmi.xml"/>
     <xi:include href="xml/gswat-utils.xml"/>
-  </part>
-  <part>
-    <title>GSwat GUI API Reference</title>
-    <partintro>
-    If you are interested in extending the GSwat debugger UI or - in the future - writting
-    a plugin for the UI, then these are the docs for you.
-    </partintro>
-    <xi:include href="xml/gswat-window.xml"/>
-    <xi:include href="xml/gswat-tabable.xml"/>
-    <xi:include href="xml/gswat-src-view-tab.xml"/>
-    <xi:include href="xml/gswat-notebook.xml"/>
-    <xi:include href="xml/gswat-view.xml"/>
-    <xi:include href="xml/gswat-context.xml"/>
-    <xi:include href="xml/gswat-in-limbo-context.xml"/>
-    <xi:include href="xml/gswat-control-flow-debugging-context.xml"/>
-    <xi:include href="xml/gswat-source-browsing-context.xml"/>
   </part>
 </book>
 
