@@ -862,7 +862,7 @@ gswat_gdb_debugger_connect(GSwatDebuggable* object, GError **error)
 	    trace_header =  
 		"###################################################\n"
 		"# To run this script back through gdb run:\n"
-		"# $ cat %s|grep -v '^#'|gdb --interpreter=mi\n"
+		"# $ gdb --command=%s\n"
 		"###################################################\n\n";
 	    trace_header = g_strdup_printf(trace_header, getenv("GSWAT_TRACE_GDB"));
 	    g_io_channel_write_chars(self->priv->gdb_trace,
@@ -1168,8 +1168,10 @@ spawn_local_process(GSwatGdbDebugger *self, GError **error)
     //gdb_command=g_strdup_printf("-target-attach %d", self->priv->target_pid);
     gdb_command=g_strdup_printf("attach %d", self->priv->target_pid);
     GSWAT_DEBUG("SENDING = \"%s\"", gdb_command);
-    //gswat_gdb_debugger_send_mi_command(self, gdb_command);
-    gswat_gdb_debugger_send_cli_command(self, gdb_command);
+    gswat_gdb_debugger_send_mi_command(self,
+				       gdb_command,
+				       gswat_gdb_debugger_nop_mi_callback,
+				       NULL);
     g_free(gdb_command);
 
     gswat_gdb_debugger_request_function_breakpoint(GSWAT_DEBUGGABLE(self),
@@ -1178,7 +1180,10 @@ spawn_local_process(GSwatGdbDebugger *self, GError **error)
 
     /* easier than sending a SIGCONT... */
     //gswat_gdb_debugger_run(self);
-    gswat_gdb_debugger_send_cli_command(self, "signal SIGCONT");
+    gswat_gdb_debugger_send_mi_command(self,
+				       "signal SIGCONT",
+				       gswat_gdb_debugger_nop_mi_callback,
+				       NULL);
     gswat_gdb_debugger_send_mi_command(self,
 				       "-exec-continue",
 				       gswat_gdb_debugger_nop_mi_callback,
@@ -1381,16 +1386,16 @@ read_next_gdb_line(GSwatGdbDebugger* self, GError **error)
 
     if(self->priv->tracing)
     {
-	gchar *log_record = g_strdup_printf("#%s", record_str->str);
+	char *log_record = g_strdup_printf("#%s", record_str->str);
 	gsize len = record_str->len + 1;
 	gsize remaining = len;
 	do{
 	    gsize written;
 	    gio_status = g_io_channel_write_chars(self->priv->gdb_trace,
-					      &log_record[len-remaining],
-					      remaining,
-					      &written,
-					      NULL);
+						  &log_record[len-remaining],
+						  remaining,
+						  &written,
+						  NULL);
 	    if(gio_status != G_IO_STATUS_NORMAL)
 	    {
 		g_warning("Problem writting to gdb trace file\n");
@@ -2518,13 +2523,20 @@ gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* object,
 
     if(self->priv->tracing)
     {
-	len = strlen(complete_command);
+	char *escaped_command = g_strescape (command, "");
+	char *log_command =
+	    g_strdup_printf("interpreter-exec mi '%ld%s'\n",
+			    self->priv->gdb_sequence,
+			    escaped_command);
+	g_free (escaped_command);
+	len = strlen(log_command);
 	remaining = len;
+
 	do{
 	    gsize written;
 	    GIOStatus status;
 	    status = g_io_channel_write_chars(self->priv->gdb_trace,
-					      &complete_command[len-remaining],
+					      &log_command[len-remaining],
 					      remaining,
 					      &written,
 					      NULL);
@@ -2536,6 +2548,7 @@ gswat_gdb_debugger_send_mi_command(GSwatGdbDebugger* object,
 	    remaining -= written;
 	}while(remaining);
 	g_io_channel_flush(self->priv->gdb_trace, NULL);
+	g_free (log_command);
     }
 
     self->priv->mi_handlers = g_slist_prepend(self->priv->mi_handlers, handler);
