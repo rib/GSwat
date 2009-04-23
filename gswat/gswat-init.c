@@ -27,7 +27,7 @@
 #include <config.h>
 
 void
-gswat_init(void)
+gswat_init(int *argc, char ***argv)
 {
     static gboolean initialised = FALSE;
 
