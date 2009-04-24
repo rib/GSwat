@@ -236,7 +236,7 @@ Makefile
 gswat/Makefile
 tests/Makefile
 po/Makefile.in
-gswat-0.1.pc
+gswat-$GSWAT_MAJOR_VERSION.$GSWAT_MINOR_VERSION.pc:gswat.pc.in
 doc/Makefile
 doc/reference/version.xml
 doc/reference/Makefile
