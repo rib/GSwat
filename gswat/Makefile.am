@@ -1,5 +1,4 @@
 
-bin_PROGRAMS = gswat-server gswat-ptrace-stub
 lib_LTLIBRARIES = libgswat-@GSWAT_API_VERSION@.la
 
 #TODO I think gswat-session.c should
@@ -43,34 +42,15 @@ libgswat_@GSWAT_API_VERSION@_la_include_HEADERS = \
     gswat-session.h
 
 
-gswat_server_SOURCES = gswat-server.c
-gswat_server_LDADD = @GSWAT_SERVER_DEP_LIBS@
-gswat_server_CFLAGS = @EXTRA_CFLAGS@ @GSWAT_SERVER_DEP_CFLAGS@
-gswat_server_CPPFLAGS = @EXTRA_CPPFLAGS@
-
-gswat_ptrace_stub_SOURCES = gswat-ptrace-stub.c
-gswat_ptrace_stub_LDADD = @GSWAT_PTRACE_STUB_DEP_LIBS@
-gswat_ptrace_stub_CFLAGS = @EXTRA_CFLAGS@ @GSWAT_PTRACE_STUB_DEP_CFLAGS@
-gswat_ptrace_stub_CPPFLAGS = @EXTRA_CPPFLAGS@
-
-
 GSWAT_EXTRA_DIST = \
 		gswat-debuggable.h \
 		gswat-gdb-debugger.h \
 		gswat-gdbmi.h \
 		gswat-gdb-variable-object.h \
 		gswat-session.h \
-		gswat-server.h \
-		gswat-ptrace-stub.h \
 		gswat-utils.h \
 		gswat-variable-object.h \
-		gswat-variable-object.h \
-		templates/g-object-class.c \
-		templates/g-object-class.h \
-		templates/new_g_object_class.sh \
-		templates/g-interface.c \
-		templates/g-interface.h \
-		templates/new_g_interface.sh
+		gswat-variable-object.h
 
 EXTRA_DIST = \
 	$(GSWAT_EXTRA_DIST)
