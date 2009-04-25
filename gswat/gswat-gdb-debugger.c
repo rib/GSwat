@@ -39,6 +39,7 @@
 #include "gswat-variable-object.h"
 #include "gswat-gdb-debugger.h"
 #include "gswat-gdb-variable-object.h"
+#include "gswat-debug.h"
 
 #define GSWAT_GDB_DEBUGGER_GET_PRIVATE(object) \
   (G_TYPE_INSTANCE_GET_PRIVATE ((object), \
@@ -48,9 +49,6 @@
 #define GDBMI_DONE_CALLBACK(X)   ( (GDBMIDoneCallback) (X))
 
 #define DEFAULT_GDB_IO_TIMEOUT  (15000)
-
-#define GSWAT_DEBUG(...)
-/* #define GSWAT_DEBUG(FORMAT, ...) g_message (FORMAT, __VA_ARGS__) */
 
 
 enum {
@@ -145,10 +143,6 @@ struct _GSwatGdbDebuggerPrivate
   guint           gdb_err_event;
   int		    gdb_io_timeout;
   GPid            gdb_pid;
-
-  gboolean	    tracing;
-  int		    gdb_trace_fd;
-  GIOChannel	    *gdb_trace;
 
   /* Our incrementing source of tokens to
    * use with GDB MI requests */
@@ -613,33 +607,14 @@ gswat_gdb_debugger_connect (GSwatDebuggable* object, GError **error)
       g_io_channel_set_encoding (self->priv->gdb_out, charset, NULL);
       g_io_channel_set_encoding (self->priv->gdb_err, charset, NULL);
 
-      if (getenv ("GSWAT_TRACE_GDB"))
+      if (gswat_debug_flags & GSWAT_DEBUG_GDB_TRACE)
 	{
-	  gchar *trace_header;
-	  gsize written;
-
-	  self->priv->gdb_trace_fd =
-	    open (getenv ("GSWAT_TRACE_GDB"),
-		  O_CREAT|O_TRUNC|O_WRONLY|O_APPEND, 0644);
-	  self->priv->gdb_trace =
-	    g_io_channel_unix_new (self->priv->gdb_trace_fd);
-	  g_io_channel_set_encoding (self->priv->gdb_trace, charset, NULL);
-
-	  trace_header =
+	  gchar *trace_header =
 	    "###################################################\n"
 	    "# To run this script back through gdb run:\n"
-	    "# $ gdb --command=%s\n"
+	    "# $ gdb --command=gswat.log\n"
 	    "###################################################\n\n";
-	  trace_header = g_strdup_printf (trace_header,
-					  getenv ("GSWAT_TRACE_GDB"));
-	  g_io_channel_write_chars (self->priv->gdb_trace,
-				    trace_header,
-				    strlen (trace_header),
-				    &written,
-				    NULL);
-	  g_free (trace_header);
-	  self->priv->tracing = TRUE;
-
+	  gswat_log (trace_header);
 	}
 
       self->priv->gdb_out_event =
@@ -780,10 +755,13 @@ gswat_gdb_debugger_nop_mi_callback (GSwatGdbDebugger *self,
 				    const GSwatGdbMIRecord *record,
 				    void *data)
 {
-  GSWAT_DEBUG ("NOP result callback:");
+  GSWAT_DEBUG (MISC, "NOP result callback:");
   if (record->val)
     {
-      gdbmi_value_dump (record->val, 0);
+      GString *string = g_string_new ("");
+      gdbmi_value_dump (string, record->val, 0);
+      g_message ("%s", string->str);
+      g_string_free (string, TRUE);
     }
 }
 
@@ -988,31 +966,15 @@ read_next_gdb_line (GSwatGdbDebugger* self, GError **error)
       return FALSE;
     }
 
-  if (self->priv->tracing)
+  if (gswat_debug_flags & GSWAT_DEBUG_GDB_TRACE)
     {
       char *log_record = g_strdup_printf ("#%s", record_str->str);
-      gsize len = record_str->len + 1;
-      gsize remaining = len;
-      do{
-	  gsize written;
-	  gio_status = g_io_channel_write_chars (self->priv->gdb_trace,
-						 &log_record[len-remaining],
-						 remaining,
-						 &written,
-						 NULL);
-	  if (gio_status != G_IO_STATUS_NORMAL)
-	    {
-	      g_warning ("Problem writting to gdb trace file\n");
-	      break;
-	    }
-	  remaining -= written;
-      }while (remaining);
+      gswat_log (log_record);
       g_free (log_record);
-      g_io_channel_flush (self->priv->gdb_trace, NULL);
     }
 
   if (record_str->len >= 7
-      &&  (strncmp (record_str->str, " (gdb) \n", 7) == 0))
+      &&  (strncmp (record_str->str, "(gdb) \n", 7) == 0))
     {
       g_string_free (record_str, TRUE);
       return TRUE;
@@ -1052,7 +1014,7 @@ queue_pending_record (GSwatGdbDebugger *self, gulong token, GString *record_str)
 
   /* FIXME - tmp debug */
 #if 0
-  GSWAT_DEBUG ("queueing gdb record - token=\"%lu\", record=\"%s\"",
+  GSWAT_DEBUG (MISC, "queueing gdb record - token=\"%lu\", record=\"%s\"",
 	       token,
 	       record_str->str);
 #endif
@@ -1098,11 +1060,11 @@ process_gdb_pending (GSwatGdbDebugger *self)
   copy = g_queue_copy (self->priv->gdb_pending);
 
 #if 0
-  GSWAT_DEBUG ("Pending queue dump:");
+  GSWAT_DEBUG (MISC, "Pending queue dump:");
   for (n=0, tmp=copy->head; tmp!=NULL; n++, tmp=tmp->next)
     {
       pending_record = tmp->data;
-      GSWAT_DEBUG ("index=%d: %s", n, pending_record->record_str->str);
+      GSWAT_DEBUG (MISC, "index=%d: %s", n, pending_record->record_str->str);
     }
 #endif
 
@@ -1192,7 +1154,10 @@ process_gdb_mi_result_record (GSwatGdbDebugger *self,
       val = gdbmi_value_parse (record_str->str);
       if (val)
 	{
-	  gdbmi_value_dump (val, 0);
+	  GString *string = g_string_new ("");
+	  gdbmi_value_dump (string, val, 0);
+	  g_message ("%s", string->str);
+	  g_string_free (string, TRUE);
 	}
       else
 	{
@@ -1228,7 +1193,6 @@ process_gdb_mi_result_record (GSwatGdbDebugger *self,
 
 	  break;
 	}
-
     }
 
   if (val)
@@ -1274,7 +1238,7 @@ process_gdb_mi_oob_record (GSwatGdbDebugger *self,
 			   GString *record_str)
 {
   GDBMIValue *val;
-  //GSList *tmp;
+  GString *string = g_string_new ("");
 
   val = gdbmi_value_parse (record_str->str);
   if (!val)
@@ -1283,7 +1247,9 @@ process_gdb_mi_oob_record (GSwatGdbDebugger *self,
       return;
     }
 
-  gdbmi_value_dump (val, 0);
+  gdbmi_value_dump (string, val, 0);
+  g_message ("%s", string->str);
+  g_string_free (string, TRUE);
 
   if (strncasecmp (record_str->str, "*stopped", 8) == 0)
     {
@@ -1345,10 +1311,13 @@ process_gdb_mi_oob_stopped_record (GSwatGdbDebugger *self,
   GDBMIValue *val;
   const GDBMIValue *reason;
   const gchar *str = NULL;
+  GString *string = g_string_new ("");
 
   val = record->val;
 
-  gdbmi_value_dump (val, 0);
+  gdbmi_value_dump (string, val, 0);
+  g_message ("%s", string->str);
+  g_string_free (string, TRUE);
 
   /* Invalidate all variable objects */
   self->priv->interrupt_count++;
@@ -1430,7 +1399,7 @@ process_gdb_mi_stream_record (GSwatGdbDebugger *self,
 			      gulong token,
 			      GString *record_str)
 {
-  GSWAT_DEBUG ("%s", record_str->str);
+  GSWAT_DEBUG (MISC, "%s", record_str->str);
 }
 
 static void
@@ -2107,7 +2076,7 @@ gswat_gdb_debugger_send_mi_command (GSwatGdbDebugger* object,
 
   g_io_channel_flush (self->priv->gdb_in, NULL);
 
-  if (self->priv->tracing)
+  if (gswat_debug_flags & GSWAT_DEBUG_GDB_TRACE)
     {
       char *escaped_command = g_strescape  (command, "");
       char *log_command =
@@ -2115,31 +2084,13 @@ gswat_gdb_debugger_send_mi_command (GSwatGdbDebugger* object,
 			 self->priv->gdb_sequence,
 			 escaped_command);
       g_free  (escaped_command);
-      len = strlen (log_command);
-      remaining = len;
-
-      do{
-	  gsize written;
-	  GIOStatus status;
-	  status = g_io_channel_write_chars (self->priv->gdb_trace,
-					     &log_command[len-remaining],
-					     remaining,
-					     &written,
-					     NULL);
-	  if (status != G_IO_STATUS_NORMAL)
-	    {
-	      g_warning ("Problem writting to gdb trace file\n");
-	      break;
-	    }
-	  remaining -= written;
-      }while (remaining);
-      g_io_channel_flush (self->priv->gdb_trace, NULL);
+      gswat_log (log_command);
       g_free  (log_command);
     }
 
   self->priv->mi_handlers = g_slist_prepend (self->priv->mi_handlers, handler);
 
-  GSWAT_DEBUG ("gdb mi command:%s",complete_command);
+  GSWAT_DEBUG (MISC, "gdb mi command:%s",complete_command);
   g_free (complete_command);
 
   return self->priv->gdb_sequence++;
@@ -2180,29 +2131,10 @@ gswat_gdb_debugger_send_cli_command (GSwatGdbDebugger* object,
 
   g_io_channel_flush (self->priv->gdb_in, NULL);
 
-  if (self->priv->tracing)
-    {
-      len = strlen (complete_command);
-      remaining = len;
-      do{
-	  gsize written;
-	  GIOStatus status;
-	  status = g_io_channel_write_chars (self->priv->gdb_trace,
-					     &complete_command[len-remaining],
-					     remaining,
-					     &written,
-					     NULL);
-	  if (status != G_IO_STATUS_NORMAL)
-	    {
-	      g_warning ("Problem writting to gdb trace file\n");
-	      break;
-	    }
-	  remaining -= written;
-      }while (remaining);
-      g_io_channel_flush (self->priv->gdb_trace, NULL);
-    }
+  if (gswat_debug_flags & GSWAT_DEBUG_GDB_TRACE)
+    gswat_log (complete_command);
 
-  GSWAT_DEBUG ("gdb cli command:%s", complete_command);
+  GSWAT_DEBUG (MISC, "gdb cli command:%s", complete_command);
 
   g_free (complete_command);
 

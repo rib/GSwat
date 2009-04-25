@@ -2,18 +2,18 @@
 /*
  * gdbmi.c
  * Copyright (C) Naba Kumar 2005 <naba@gnome.org>
- * 
+ *
  * gdbmi.c is free software.
- * 
+ *
  * You may redistribute it and/or modify it under the terms of the
  * GNU General Public License, as published by the Free Software
  * Foundation; either version 2, or (at your option) any later version.
- * 
+ *
  * gdbmi.c is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with main.c.  See the file "COPYING".  If not,
  * write to:  The Free Software Foundation, Inc.,
@@ -46,13 +46,19 @@ struct _GDBMIForeachHashData
 	gpointer user_data;
 };
 
+struct _GDBMIDumpState
+{
+	GString *string;
+        int indent_level;
+};
+
 static guint GDBMI_deleted_hash_value = 0;
 
 void
 gdbmi_value_free (GDBMIValue *val)
 {
 	g_return_if_fail (val != NULL);
-	
+
 	if (val->type == GDBMI_DATA_LITERAL)
 	{
 		g_string_free (val->data.literal, TRUE);
@@ -74,11 +80,11 @@ GDBMIValue *
 gdbmi_value_new (GDBMIDataType data_type, const gchar *name)
 {
 	GDBMIValue *val = g_new0 (GDBMIValue, 1);
-	
+
 	val->type = data_type;
 	if (name)
 		val->name = g_strdup (name);
-	
+
 	switch (data_type)
 	{
 		case GDBMI_DATA_HASH:
@@ -135,7 +141,7 @@ gint
 gdbmi_value_get_size (const GDBMIValue* val)
 {
 	g_return_val_if_fail (val != NULL, 0);
-	
+
 	if (val->type == GDBMI_DATA_LITERAL)
 	{
 		if (val->data.literal->str)
@@ -163,7 +169,7 @@ gdbmi_value_foreach (const GDBMIValue* val, GFunc func, gpointer user_data)
 {
 	g_return_if_fail (val != NULL);
 	g_return_if_fail (func != NULL);
-	
+
 	if (val->type == GDBMI_DATA_LIST)
 	{
 		g_queue_foreach (val->data.list, func, user_data);
@@ -171,7 +177,7 @@ gdbmi_value_foreach (const GDBMIValue* val, GFunc func, gpointer user_data)
 	else if (val->type == GDBMI_DATA_HASH)
 	{
 		struct _GDBMIForeachHashData hash_data = {NULL, NULL};
-		
+
 		hash_data.user_callback = func;
 		hash_data.user_data = user_data;
 		g_hash_table_foreach (val->data.hash, (GHFunc)gdbmi_value_hash_foreach,
@@ -235,7 +241,7 @@ gdbmi_value_hash_lookup (const GDBMIValue* val, const gchar *key)
 	g_return_val_if_fail (val != NULL, NULL);
 	g_return_val_if_fail (key != NULL, NULL);
 	g_return_val_if_fail (val->type == GDBMI_DATA_HASH, NULL);
-	
+
 	return g_hash_table_lookup (val->data.hash, key);
 }
 
@@ -246,7 +252,7 @@ gdbmi_value_list_append (GDBMIValue* val, GDBMIValue *value)
 	g_return_if_fail (val != NULL);
 	g_return_if_fail (value != NULL);
 	g_return_if_fail (val->type == GDBMI_DATA_LIST);
-	
+
 	g_queue_push_tail (val->data.list, value);
 }
 
@@ -255,7 +261,7 @@ gdbmi_value_list_get_nth (const GDBMIValue* val, gint idx)
 {
 	g_return_val_if_fail (val != NULL, NULL);
 	g_return_val_if_fail (val->type == GDBMI_DATA_LIST, NULL);
-	
+
 	if (idx >= 0)
 		return g_queue_peek_nth (val->data.list, idx);
 	else
@@ -263,56 +269,63 @@ gdbmi_value_list_get_nth (const GDBMIValue* val, gint idx)
 }
 
 static void
-gdbmi_value_dump_foreach (const GDBMIValue *val, gpointer indent_level)
+gdbmi_value_dump_foreach (const GDBMIValue *val, gpointer data)
 {
-	gdbmi_value_dump (val, GPOINTER_TO_INT (indent_level));
+	struct _GDBMIDumpState *state = data;
+	gdbmi_value_dump (state->string, val, state->indent_level);
 }
 
 void
-gdbmi_value_dump (const GDBMIValue *val, gint indent_level)
+gdbmi_value_dump (GString *string, const GDBMIValue *val, gint indent_level)
 {
 	gint i, next_indent;
-	
+	struct _GDBMIDumpState state;
+
+	GString *dump = g_string_new ("");
+
 	g_return_if_fail (val != NULL);
-	
+
 	for (i = 0; i < indent_level; i++)
-		printf (" ");
-	
+		g_string_append (string, " ");
+
 	next_indent = indent_level + GDBMI_DUMP_INDENT_SIZE;
+	state.string = string;
+	state.indent_level = next_indent;
 	if (val->type == GDBMI_DATA_LITERAL)
 	{
 		gchar *v;
-		
+
 		v = g_strescape (val->data.literal->str, NULL);
 		if (val->name)
-			printf ("%s = \"%s\",\n", val->name, v);
+			g_string_append_printf (string, "%s = \"%s\",\n",
+						val->name, v);
 		else
-			printf ("\"%s\",\n", v);
+			g_string_append_printf (string, "\"%s\",\n", v);
 		g_free (v);
 	}
 	else if (val->type == GDBMI_DATA_LIST)
 	{
 		if (val->name)
-			printf ("%s = [\n", val->name);
+			g_string_append_printf (string, "%s = [\n", val->name);
 		else
-			printf ("[\n");
+			g_string_append (string, "[\n");
 		gdbmi_value_foreach (val, (GFunc)gdbmi_value_dump_foreach,
-							 GINT_TO_POINTER (next_indent));
+				     &state);
 		for (i = 0; i < indent_level; i++)
-			printf (" ");
-		printf ("],\n");
+			g_string_append (string, " ");
+		g_string_append (string, "],\n");
 	}
 	else if (val->type == GDBMI_DATA_HASH)
 	{
 		if (val->name)
-			printf ("%s = {\n", val->name);
+			g_string_append_printf (string, "%s = {\n", val->name);
 		else
-			printf ("{\n");
+			g_string_append (string, "{\n");
 		gdbmi_value_foreach (val, (GFunc)gdbmi_value_dump_foreach,
-							 GINT_TO_POINTER (next_indent));
+				     &state);
 		for (i = 0; i < indent_level; i++)
-			printf (" ");
-		printf ("},\n");
+			g_string_append (string, " ");
+		g_string_append (string, "},\n");
 	}
 }
 
@@ -320,7 +333,7 @@ static GDBMIValue*
 gdbmi_value_parse_real (gchar **ptr)
 {
 	GDBMIValue *val = NULL;
-	
+
 	if (**ptr == '\0')
 	{
 		/* End of stream */
@@ -334,7 +347,7 @@ gdbmi_value_parse_real (gchar **ptr)
 		gchar *p;
 		gchar *value, *compressed_value;
 		gint i;
-		
+
 		*ptr = g_utf8_next_char (*ptr);
 		escaped = FALSE;
 		buff = g_string_new ("");
@@ -360,7 +373,7 @@ gdbmi_value_parse_real (gchar **ptr)
 		}
 		/* Get pass the closing quote */
 		*ptr = g_utf8_next_char (*ptr);
-		
+
 		value = g_string_free (buff, FALSE);
 		compressed_value = g_strcompress (value);
 		val = gdbmi_value_literal_new (NULL, compressed_value);
@@ -372,7 +385,7 @@ gdbmi_value_parse_real (gchar **ptr)
 		/* Value is assignment */
 		gchar *name;
 		gchar *p;
-		
+
 		/* Get assignment name */
 		p = *ptr;
 		while (**ptr != '=')
@@ -385,10 +398,10 @@ gdbmi_value_parse_real (gchar **ptr)
 			*ptr = g_utf8_next_char (*ptr);
 		}
 		name = g_strndup (p, *ptr - p);
-		
+
 		/* Skip pass assignment operator */
 		*ptr = g_utf8_next_char (*ptr);
-		
+
 		/* Retrieve assignment value */
 		val = gdbmi_value_parse_real (ptr);
 		if (val)
@@ -405,7 +418,7 @@ gdbmi_value_parse_real (gchar **ptr)
 	{
 		/* Value is hash */
 		gboolean error = FALSE;
-		
+
 		*ptr = g_utf8_next_char (*ptr);
 		val = gdbmi_value_new (GDBMI_DATA_HASH, NULL);
 		while (**ptr != '}')
@@ -436,7 +449,7 @@ gdbmi_value_parse_real (gchar **ptr)
 			}
 			gdbmi_value_hash_insert (val, gdbmi_value_get_name (element),
 									 element);
-			
+
 			/* Get pass the comma separator */
 			if (**ptr == ',')
 				*ptr = g_utf8_next_char (*ptr);
@@ -453,7 +466,7 @@ gdbmi_value_parse_real (gchar **ptr)
 	{
 		/* Value is list */
 		gboolean error = FALSE;
-		
+
 		*ptr = g_utf8_next_char (*ptr);
 		val = gdbmi_value_new (GDBMI_DATA_LIST, NULL);
 		while (**ptr != ']')
@@ -475,7 +488,7 @@ gdbmi_value_parse_real (gchar **ptr)
 				break;
 			}
 			gdbmi_value_list_append (val, element);
-			
+
 			/* Get pass the comma separator */
 			if (**ptr == ',')
 				*ptr = g_utf8_next_char (*ptr);
@@ -501,15 +514,15 @@ gdbmi_value_parse (const gchar *message)
 {
 	GDBMIValue *val;
 	gchar *msg, *ptr;
-	
+
 	g_return_val_if_fail (message != NULL, NULL);
-	
+
 	if (strcasecmp(message, "^error") == 0)
 	{
 		g_warning ("GDB reported error without any error message");
 		return NULL; /* No message */
 	}
-	
+
 	val = NULL;
 	if (strchr (message, ','))
 	{
