@@ -5,7 +5,7 @@ AC_PREREQ(2.59)
 dnl ================================================================
 dnl Version number definitions
 dnl ================================================================
-#Note these macros were nabbed from glib and I don't fully understand
+# Note these macros were nabbed from glib and I don't fully understand
 # them! I tried to reference the libtool docs and as you can tell from
 # my comments below I could not make much sense of it all. (Any help
 # would be appreciated :-)
@@ -176,20 +176,9 @@ GNOME_DOC_INIT
 dnl ================================================================
 dnl Check for dependency packages.
 dnl ================================================================
-#TODO once we have seperated out the gui code for gswat-session.c
-# we will be able to remove most of these deps.
 PKG_CHECK_MODULES(LIBGSWAT_DEP, [
 		  glib-2.0 >= 2.16
-                  gio-2.0
-		  gthread-2.0
                   libxml-2.0
-])
-
-PKG_CHECK_MODULES(GSWAT_SERVER_DEP, [
-		  glib-2.0 >= 2.2
-])
-PKG_CHECK_MODULES(GSWAT_PTRACE_STUB_DEP, [
-		  glib-2.0 >= 2.2
 ])
 
 
@@ -222,10 +211,6 @@ AC_SUBST(EXTRA_CFLAGS)
 AC_SUBST(EXTRA_CPPFLAGS)
 AC_SUBST(LIBGSWAT_DEP_CFLAGS)
 AC_SUBST(LIBGSWAT_DEP_LIBS)
-AC_SUBST(GSWAT_SERVER_DEP_LIBS)
-AC_SUBST(GSWAT_SERVER_DEP_CFLAGS)
-AC_SUBST(GSWAT_PTRACE_STUB_DEP_LIBS)
-AC_SUBST(GSWAT_PTRACE_STUB_DEP_CFLAGS)
 
 
 dnl ================================================================
