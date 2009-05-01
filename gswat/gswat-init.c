@@ -18,9 +18,10 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with GSwat.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <config.h>
 
 #include <glib.h>
-#include <glib/gi18n.h>
+#include <glib/gi18n-lib.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/types.h>

@@ -18,6 +18,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with GSwat.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,7 +31,7 @@
 #include <ctype.h>
 #include <poll.h>
 #include <gio/gio.h>
-#include <glib/gi18n.h>
+#include <glib/gi18n-lib.h>
 
 #include "gswat-utils.h"
 #include "gswat-session.h"
