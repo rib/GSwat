@@ -384,11 +384,11 @@ gswat_debuggable_restart (GSwatDebuggable* object)
   g_object_unref (object);
 }
 
-guint
+GSwatDebuggableState
 gswat_debuggable_get_state (GSwatDebuggable* object)
 {
   GSwatDebuggableIface *debuggable;
-  guint ret;
+  GSwatDebuggableState ret;
 
   g_return_val_if_fail (GSWAT_IS_DEBUGGABLE (object), 0);
   debuggable = GSWAT_DEBUGGABLE_GET_IFACE (object);

@@ -114,6 +114,8 @@ struct _GSwatGdbDebuggerPrivate
   gchar                   *current_source_uri;
   gint                    current_line;
 
+  /* Where to look for source code */
+  GList                   *paths;
 
   GList                   *breakpoints;
   /* gchar                   *source_uri; */
@@ -233,11 +235,6 @@ static void process_gdb_mi_oob_stopped_record (GSwatGdbDebugger *self,
 static void process_gdb_mi_stream_record (GSwatGdbDebugger *self,
 					  gulong token,
 					  GString *record_str);
-static void process_frame (const GDBMIValue *val, GSwatDebuggableFrame *frame);
-static gchar *uri_from_filename (const gchar *filename);
-static void set_source_location (GSwatGdbDebugger *self,
-				 const gchar *source_uri,
-				 gint line);
 static void synchronous_update_stack (GSwatGdbDebugger *self);
 static void kick_asynchronous_locals_update (GSwatGdbDebugger *self);
 static void
@@ -1233,6 +1230,194 @@ gdb_mi_get_result_record_type (GString *record_str)
 
 }
 
+GFile *
+path_and_list_to_gfile (GFile *path, GList *components)
+{
+  GList *l;
+  GFile *tmp;
+  char *url;
+
+  g_object_ref (path);
+
+  for (l = components; l; l = l->next)
+    {
+      char *child = l->data;
+      tmp = g_file_get_child (path, child);
+      g_object_unref (path);
+      path = tmp;
+    }
+
+  return path;
+}
+
+/* This iterativly reduces the filenames ancestry looking for a
+ * relative match under the given path. E.g. given the filename
+ * /build/foo/bar/test.c and path /src/bar it will try:
+ *   /src/bar/build/foo/bar/test.c and
+ *   /src/bar/foo/bar/test.c and
+ *   /src/bar/bar/test.c
+ *   /src/bar/test.c
+ */
+static char *
+fuzzy_find_file_in_path (const char *filename, GFile *path)
+{
+  GFile *parent = g_file_new_for_path (filename);
+  GList *components = NULL;
+  GList *l;
+
+  do
+    {
+      GFile *tmp;
+      char *basename = g_file_get_basename (parent);
+      components = g_list_prepend (components, basename);
+      tmp = g_file_get_parent (parent);
+      g_object_unref (parent);
+      parent = tmp;
+    }
+  while (parent);
+
+  for (l = components; l; l = l->next)
+    {
+      GFile *file = path_and_list_to_gfile (path, l);
+      if (g_file_query_exists (file, NULL))
+        {
+          char *uri = g_file_get_uri (file);
+          g_object_unref (file);
+          return uri;
+        }
+    }
+  g_list_foreach (components, (GFunc)g_free, NULL);
+  g_list_free (components);
+
+  return NULL;
+}
+
+GList *
+gswat_gdb_debugger_get_search_paths (GSwatGdbDebugger *self)
+{
+  GList *l, *copy = NULL;
+  for (l = self->priv->paths; l; l = l->next)
+    copy = g_list_prepend (copy, g_strdup (l->data));
+  return copy;
+}
+
+void
+gswat_gdb_debugger_set_search_paths (GSwatGdbDebugger *self,
+                                     const GList *paths)
+{
+  const GList *l;
+  GList *copy = NULL;
+  if (self->priv->paths)
+    g_list_foreach (self->priv->paths, (GFunc)g_free, NULL);
+  for (l = paths; l; l = l->next)
+    copy = g_list_prepend (copy, g_strdup (l->data));
+  self->priv->paths = copy;
+}
+
+static gchar *
+gswat_gdb_debugger_get_uri_from_filename (GSwatGdbDebugger *self,
+                                          const gchar *filename)
+{
+  GString *local_path;
+  gchar *cwd, *uri;
+  GFile *file;
+  GList *l;
+
+  if (filename == NULL)
+    return NULL;
+
+  file = g_file_new_for_path (filename);
+  if (g_file_query_exists (file, NULL))
+    {
+      uri = g_file_get_uri (file);
+      g_object_unref (file);
+      return uri;
+    }
+
+  for (l = self->priv->paths; l; l = l->next)
+    {
+      uri = fuzzy_find_file_in_path (filename, l->data);
+      if (uri)
+        return uri;
+    }
+
+  file = g_file_new_for_path  (filename);
+  uri = g_file_get_uri  (file);
+  g_object_unref  (file);
+  return uri;
+}
+
+static void
+process_frame (GSwatGdbDebugger *self,
+               const GDBMIValue *val,
+               GSwatDebuggableFrame *frame)
+{
+  const GDBMIValue *file_val, *line_val, *frame_val;
+  const GDBMIValue *level_val, *address_val, *func_val;
+  const gchar *file_str;
+
+  g_return_if_fail (val != NULL);
+
+  frame_val = gdbmi_value_hash_lookup (val, "frame");
+  if (!frame_val)
+    frame_val = val;
+
+  level_val = gdbmi_value_hash_lookup (frame_val, "level");
+  if (level_val)
+    {
+      const gchar *level_str;
+      level_str = gdbmi_value_literal_get (level_val);
+      frame->level = strtol (level_str, NULL, 10);
+    }
+  else
+    frame->level = 0;
+
+  file_val = gdbmi_value_hash_lookup (frame_val, "fullname");
+  if (!file_val)
+    {
+      file_val = gdbmi_value_hash_lookup (frame_val, "file");
+    }
+  if (file_val)
+    {
+      gchar *source_uri;
+      file_str = gdbmi_value_literal_get (file_val);
+      source_uri = gswat_gdb_debugger_get_uri_from_filename (self, file_str);
+      frame->source_uri = source_uri;
+    }
+  else
+    frame->source_uri=NULL;
+
+
+  line_val = gdbmi_value_hash_lookup (frame_val, "line");
+  if (line_val)
+    {
+      const gchar *line_str;
+      line_str = gdbmi_value_literal_get (line_val);
+      frame->line = strtol (line_str, NULL, 10);
+    }
+  else
+    frame->line = 0;
+
+  address_val = gdbmi_value_hash_lookup (frame_val, "addr");
+  if (address_val)
+    {
+      const gchar *address_str;
+      address_str = gdbmi_value_literal_get (address_val);
+      frame->address = strtoul (address_str, NULL, 16);
+    }
+
+
+  func_val = gdbmi_value_hash_lookup (frame_val, "func");
+  if (func_val)
+    {
+      const gchar *func_str;
+      func_str = gdbmi_value_literal_get (func_val);
+      frame->function = g_strdup (func_str);
+    }
+
+  frame->arguments = NULL;
+}
+
 static void
 process_gdb_mi_oob_record (GSwatGdbDebugger *self,
 			   gulong token,
@@ -1306,6 +1491,39 @@ process_gdb_mi_oob_record (GSwatGdbDebugger *self,
 }
 
 static void
+set_source_location (GSwatGdbDebugger *self,
+		     const gchar *source_uri,
+		     gint line)
+{
+  if (source_uri && self->priv->current_source_uri
+      && strcmp (source_uri,
+		 self->priv->current_source_uri) != 0)
+    {
+      g_free (self->priv->current_source_uri);
+      self->priv->current_source_uri = g_strdup (source_uri);
+      g_object_notify (G_OBJECT (self), "source-uri");
+    }
+  else if (source_uri || self->priv->current_source_uri)
+    {
+      g_free (self->priv->current_source_uri);
+      if (source_uri)
+	{
+	  self->priv->current_source_uri = g_strdup (source_uri);
+	}
+      else
+	{
+	  self->priv->current_source_uri = NULL;
+	}
+      g_object_notify (G_OBJECT (self), "source-uri");
+    }
+  if (line != self->priv->current_line)
+    {
+      self->priv->current_line = line;
+      g_object_notify (G_OBJECT (self), "source-line");
+    }
+}
+
+static void
 process_gdb_mi_oob_stopped_record (GSwatGdbDebugger *self,
 				   GSwatGdbMIRecord *record)
 {
@@ -1373,7 +1591,7 @@ process_gdb_mi_oob_stopped_record (GSwatGdbDebugger *self,
       gdb_debugger_set_frame (GSWAT_DEBUGGABLE (self), 0);
 
       frame = g_new (GSwatDebuggableFrame, 1);
-      process_frame (val, frame);
+      process_frame (self, val, frame);
       set_source_location (self, frame->source_uri, frame->line);
       gswat_debuggable_frame_free (frame);
 
@@ -1401,162 +1619,6 @@ process_gdb_mi_stream_record (GSwatGdbDebugger *self,
 			      GString *record_str)
 {
   GSWAT_DEBUG (MISC, "%s", record_str->str);
-}
-
-static void
-process_frame (const GDBMIValue *val, GSwatDebuggableFrame *frame)
-{
-  const GDBMIValue *file_val, *line_val, *frame_val;
-  const GDBMIValue *level_val, *address_val, *func_val;
-  const gchar *file_str;
-
-  g_return_if_fail (val != NULL);
-
-  frame_val = gdbmi_value_hash_lookup (val, "frame");
-  if (!frame_val)
-    {
-      frame_val = val;
-    }
-
-
-  level_val = gdbmi_value_hash_lookup (frame_val, "level");
-  if (level_val)
-    {
-      const gchar *level_str;
-      level_str = gdbmi_value_literal_get (level_val);
-      frame->level = strtol (level_str, NULL, 10);
-    }
-  else
-    {
-      frame->level = 0;
-    }
-
-
-  file_val = gdbmi_value_hash_lookup (frame_val, "fullname");
-  if (!file_val)
-    {
-      file_val = gdbmi_value_hash_lookup (frame_val, "file");
-    }
-  if (file_val)
-    {
-      gchar *source_uri;
-      file_str = gdbmi_value_literal_get (file_val);
-      source_uri = uri_from_filename (file_str);
-      frame->source_uri = source_uri;
-    }
-  else
-    {
-      frame->source_uri=NULL;
-    }
-
-
-  line_val = gdbmi_value_hash_lookup (frame_val, "line");
-  if (line_val)
-    {
-      const gchar *line_str;
-      line_str = gdbmi_value_literal_get (line_val);
-      frame->line = strtol (line_str, NULL, 10);
-    }
-  else
-    {
-      frame->line = 0;
-    }
-
-
-  address_val = gdbmi_value_hash_lookup (frame_val, "addr");
-  if (address_val)
-    {
-      const gchar *address_str;
-      address_str = gdbmi_value_literal_get (address_val);
-      frame->address = strtoul (address_str, NULL, 16);
-    }
-
-
-  func_val = gdbmi_value_hash_lookup (frame_val, "func");
-  if (func_val)
-    {
-      const gchar *func_str;
-      func_str = gdbmi_value_literal_get (func_val);
-      frame->function = g_strdup (func_str);
-    }
-
-  frame->arguments = NULL;
-}
-
-static gchar *
-uri_from_filename (const gchar *filename)
-{
-  GString *local_path;
-  gchar *cwd, *uri;
-  GFile *file;
-
-  if (filename == NULL)
-    {
-      return NULL;
-    }
-
-  local_path = g_string_new ("");
-
-  if (filename[0] != '/')
-    {
-      cwd = g_get_current_dir ();
-      local_path = g_string_append (local_path, cwd);
-      g_free (cwd);
-      local_path = g_string_append (local_path, "/");
-    }
-  /* FIXME - if we arn't given an absolute
-   * path, then we need to iterate though
-   * gdb's $dir to figure out the correct
-   * path
-   */
-  local_path = g_string_append (local_path, filename);
-
-  /* FIXME - hacky bolt on of gio */
-  file = g_file_new_for_path  (local_path->str);
-  uri = g_file_get_uri  (file);
-  g_object_unref  (file);
-
-  g_string_free (local_path, TRUE);
-
-  if (!uri)
-    {
-      g_warning ("Could not create uri for file=\"%s\"", filename);
-    }
-
-  return uri;
-}
-
-static void
-set_source_location (GSwatGdbDebugger *self,
-		     const gchar *source_uri,
-		     gint line)
-{
-  if (source_uri && self->priv->current_source_uri
-      && strcmp (source_uri,
-		 self->priv->current_source_uri) != 0)
-    {
-      g_free (self->priv->current_source_uri);
-      self->priv->current_source_uri = g_strdup (source_uri);
-      g_object_notify (G_OBJECT (self), "source-uri");
-    }
-  else if (source_uri || self->priv->current_source_uri)
-    {
-      g_free (self->priv->current_source_uri);
-      if (source_uri)
-	{
-	  self->priv->current_source_uri = g_strdup (source_uri);
-	}
-      else
-	{
-	  self->priv->current_source_uri = NULL;
-	}
-      g_object_notify (G_OBJECT (self), "source-uri");
-    }
-  if (line != self->priv->current_line)
-    {
-      self->priv->current_line = line;
-      g_object_notify (G_OBJECT (self), "source-line");
-    }
 }
 
 /* TODO: Add a flush_ function that can take a locals_machine
@@ -1899,7 +1961,7 @@ async_stack_update_list_frames_mi_callback (GSwatGdbDebugger *self,
       frame = g_new0 (GSwatDebuggableFrame, 1);
       g_queue_push_tail (stack_machine->new_stack, frame);
 
-      process_frame (frame_val, frame);
+      process_frame (self, frame_val, frame);
 
       g_assert (frame->level == n);
 
@@ -2330,7 +2392,8 @@ break_insert_mi_callback (GSwatGdbDebugger *self,
 
   literal_val = gdbmi_value_hash_lookup (bkpt_val, "fullname");
   literal = gdbmi_value_literal_get (literal_val);
-  breakpoint->source_uri = uri_from_filename (literal);
+  breakpoint->source_uri =
+    gswat_gdb_debugger_get_uri_from_filename (self, literal);
 
   literal_val = gdbmi_value_hash_lookup (bkpt_val, "line");
   literal = gdbmi_value_literal_get (literal_val);
@@ -2564,7 +2627,7 @@ gswat_gdb_debugger_get_source_line (GSwatDebuggable *object)
   return self->priv->current_line;
 }
 
-static guint
+static GSwatDebuggableState
 gswat_gdb_debugger_get_state (GSwatDebuggable *object)
 {
   GSwatGdbDebugger *self;
