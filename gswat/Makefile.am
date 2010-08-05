@@ -19,9 +19,9 @@ libgswat_@GSWAT_API_VERSION@_la_SOURCES = \
 
 libgswat_@GSWAT_API_VERSION@_la_LIBADD = @LIBGSWAT_DEP_LIBS@
 libgswat_@GSWAT_API_VERSION@_la_LDFLAGS = -no-undefined
-libgswat_@GSWAT_API_VERSION@_la_CFLAGS = @LIBGSWAT_DEP_CFLAGS@
-# TODO once we seperate out the ui code from gswat-session.c then
-# lots of these defines can go away.
+libgswat_@GSWAT_API_VERSION@_la_CFLAGS = \
+    @LIBGSWAT_DEP_CFLAGS@ \
+    @EXTRA_CFLAGS@
 libgswat_@GSWAT_API_VERSION@_la_CPPFLAGS = \
     -DSHARE_DIR=\"$(pkgdatadir)\" \
     -DGSWAT_LOCALEDIR=\""$(gswatlocaledir)"\" \
@@ -62,5 +62,5 @@ EXTRA_DIST = \
 #CLEANFILES =
 
 
-#DISTCLEANFILES = 
+#DISTCLEANFILES =
 

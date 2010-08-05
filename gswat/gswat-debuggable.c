@@ -451,14 +451,11 @@ gswat_debuggable_stack_free (GQueue *stack)
   GList *tmp;
 
   if (!stack)
-    {
-      return;
-    }
+    return;
 
   for (tmp=stack->head; tmp!=NULL; tmp=tmp->next)
-    {
-      gswat_debuggable_frame_free (tmp->data);
-    }
+    gswat_debuggable_frame_free (tmp->data);
+
   g_queue_free (stack);
 }
 
@@ -560,4 +557,55 @@ gswat_debuggable_set_frame (GSwatDebuggable* object, guint frame)
     }
   g_object_unref (object);
 }
+
+GList *
+gswat_debuggable_get_search_paths (GSwatDebuggable *object)
+{
+  GSwatDebuggableIface *debuggable;
+
+  g_return_val_if_fail (GSWAT_IS_DEBUGGABLE (object), NULL);
+  debuggable = GSWAT_DEBUGGABLE_GET_IFACE (object);
+
+  return debuggable->get_search_paths (object);
+}
+
+void
+gswat_debuggable_set_search_paths (GSwatDebuggable *object,
+                                   const GList *paths)
+{
+  GSwatDebuggableIface *debuggable;
+
+  g_return_if_fail (GSWAT_IS_DEBUGGABLE (object));
+  debuggable = GSWAT_DEBUGGABLE_GET_IFACE (object);
+
+  debuggable->set_search_paths (object, paths);
+}
+
+char *
+gswat_debuggable_get_uri_for_file (GSwatDebuggable *object,
+                                   const char *file)
+{
+  GSwatDebuggableIface *debuggable;
+
+  g_return_val_if_fail (GSWAT_IS_DEBUGGABLE (object), NULL);
+  debuggable = GSWAT_DEBUGGABLE_GET_IFACE (object);
+
+  return debuggable->get_uri_for_file (object, file);
+}
+
+#if 0
+void
+gswat_debuggable_foreach_path (GSwatDebuggable *object,
+                               const char *file,
+                               GSwatDebuggablePathCallback callback,
+                               void *user_data)
+{
+  g_return_if_fail (GSWAT_IS_DEBUGGABLE (object));
+  debuggable = GSWAT_DEBUGGABLE_GET_IFACE (object);
+
+  g_object_ref (object);
+  debuggable->foreach_path (object, file, callback, user_data);
+  g_object_unref (object);
+}
+#endif
 

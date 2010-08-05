@@ -635,7 +635,7 @@ gswat_session_manager_save_sessions (GSwatSessionManager *self)
   xmlNodePtr root;
   GList *tmp;
   gchar *file_name;
-  gchar *tmpfile;
+  gchar *tmp_file;
 
   doc = xmlNewDoc ( (const xmlChar *)"1.0");
   if  (doc == NULL)
@@ -654,15 +654,15 @@ gswat_session_manager_save_sessions (GSwatSessionManager *self)
     }
 
   file_name = self->priv->sessions_filename;
-  tmpfile = g_strdup_printf ("%sXXXXXX", file_name);
+  tmp_file = g_strdup_printf ("%sXXXXXX", file_name);
 
-  xmlSaveFormatFile (tmpfile, doc, 1);
+  xmlSaveFormatFile (tmp_file, doc, 1);
 
-  if (rename (tmpfile, file_name) == -1)
+  if (rename (tmp_file, file_name) == -1)
     {
       g_warning ("Failed to save session state to %s", file_name);
     }
-  g_free (tmpfile);
+  g_free (tmp_file);
 
   xmlFreeDoc (doc);
 }

@@ -74,6 +74,11 @@ struct _GSwatDebuggableIface
   GList *(*get_locals_list)(GSwatDebuggable *object);
   guint (*get_frame)(GSwatDebuggable *object);
   void (*set_frame)(GSwatDebuggable *object, guint frame);
+  GList *(*get_search_paths)(GSwatDebuggable *object);
+  void (*set_search_paths)(GSwatDebuggable *object,
+                           const GList *paths);
+  char *(*get_uri_for_file)(GSwatDebuggable *object,
+                            const char *file);
 };
 
 typedef enum {
@@ -129,6 +134,20 @@ void gswat_debuggable_free_breakpoints (GList *breakpoints);
 GList *gswat_debuggable_get_locals_list (GSwatDebuggable* object);
 guint gswat_debuggable_get_frame (GSwatDebuggable* object);
 void gswat_debuggable_set_frame (GSwatDebuggable* object, guint frame);
+GList *gswat_debuggable_get_search_paths (GSwatDebuggable *object);
+void gswat_debuggable_set_search_paths (GSwatDebuggable *object,
+                                        const GList *paths);
+char *gswat_debuggable_get_uri_for_file (GSwatDebuggable *object,
+                                         const char *file);
+#if 0
+typedef gboolean (*GSwatDebuggablePathCallback) (GSwatDebuggable *object,
+                                                 const char *uri,
+                                                 void *user_data);
+void gswat_debuggable_foreach_path (GSwatDebuggable *object,
+                                    const char *file,
+                                    GSwatDebuggablePathCallback callback,
+                                    void *user_data);
+#endif
 
 G_END_DECLS
 

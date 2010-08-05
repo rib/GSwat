@@ -254,18 +254,16 @@ gswat_session_set_property (GObject *object,
 static void
 gswat_session_init (GSwatSession *self)
 {
-  GTimeVal time;
+  GTimeVal access_time;
 
   self->priv = GSWAT_SESSION_GET_PRIVATE (self);
 
   self->priv->name = g_strdup ("Session0");
-
   self->priv->target_type = g_strdup ("Run Local");
-
   self->priv->working_dir = g_get_current_dir ();
 
-  g_get_current_time (&time);
-  self->priv->access_time = time.tv_sec;
+  g_get_current_time (&access_time);
+  self->priv->access_time = access_time.tv_sec;
 }
 
 GSwatSession*

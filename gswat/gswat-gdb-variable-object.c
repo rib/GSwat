@@ -861,7 +861,7 @@ gswat_gdb_variable_object_get_children (GSwatVariableObject *object)
 
       for (tmp=self->priv->children; tmp!=NULL; tmp=tmp->next)
 	{
-	  GSwatGdbVariableObject *variable_object = tmp->data;
+	  variable_object = tmp->data;
 
 	  if (strcmp (variable_object->priv->gdb_name, name_str) == 0)
 	    {
@@ -980,7 +980,7 @@ handle_changelist (GSwatGdbDebugger *gdb_debugger,
   GList *all_variables, *all_variables_copy;
   int i, changed_count;
   GList *tmp;
-  GDBMIValue *val;
+  const GDBMIValue *val;
   const GDBMIValue *changelist_val;
 
   all_variables = g_object_get_data (G_OBJECT (gdb_debugger),
@@ -994,7 +994,7 @@ handle_changelist (GSwatGdbDebugger *gdb_debugger,
   changed_count = gdbmi_value_get_size (changelist_val);
   for (i=0; i<changed_count; i++)
     {
-      const GDBMIValue *change_val, *val;
+      const GDBMIValue *change_val;
       const char *variable_gdb_name;
       GSwatGdbVariableObject *variable_object;
       gboolean found = FALSE;

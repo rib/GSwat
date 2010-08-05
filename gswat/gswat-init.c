@@ -22,11 +22,13 @@
 
 #include <glib.h>
 #include <glib/gi18n-lib.h>
+#include <glib-object.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <config.h>
 
@@ -148,10 +150,12 @@ gswat_log (const char *message)
     {
       ssize_t count = write (gswat_log_file, p, remaining);
       if (count == -1)
-	if (errno == EAGAIN || errno == EINTR)
-	  continue;
-	else
-	  break;
+        {
+          if (errno == EAGAIN || errno == EINTR)
+            continue;
+          else
+            break;
+        }
       remaining -= count;
       p += count;
     }

@@ -281,8 +281,6 @@ gdbmi_value_dump (GString *string, const GDBMIValue *val, gint indent_level)
 	gint i, next_indent;
 	struct _GDBMIDumpState state;
 
-	GString *dump = g_string_new ("");
-
 	g_return_if_fail (val != NULL);
 
 	for (i = 0; i < indent_level; i++)

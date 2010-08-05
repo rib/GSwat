@@ -135,10 +135,6 @@ guint gswat_gdb_debugger_get_interrupt_count (GSwatGdbDebugger *self);
 void gswat_gdb_debugger_request_address_breakpoint (GSwatDebuggable *object,
 						    unsigned long address);
 
-GList *gswat_gdb_debugger_get_search_paths (GSwatGdbDebugger *self);
-void gswat_gdb_debugger_set_search_paths (GSwatGdbDebugger *self,
-                                          const GList *paths);
-
 G_END_DECLS
 
 #endif /* GSWAT_GDB_DEBUGGER_H */
